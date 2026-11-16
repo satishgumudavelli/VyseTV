@@ -1,0 +1,19 @@
+scripts/install_linux.sh
+  s_88251d0eb8aa53::t_0f5de7ab73819f 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5cd6f8dd52551c0a1e6f2e442ef7703466468c43",
+  "prompts": {},
+  "sessions": {
+    "s_88251d0eb8aa53": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d81d188-ff2e-409d-b218-739937587d45",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
