@@ -1,0 +1,21 @@
+lib/mpv/player/player.dart
+  s_b71c0447c9b72c::t_4ac4fb58dc6629 3,427-428
+lib/main.dart
+  s_b71c0447c9b72c::t_4ac4fb58dc6629 37,60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e02e6d80fb30976cfb393ab32d636be76f095eab",
+  "prompts": {},
+  "sessions": {
+    "s_b71c0447c9b72c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8707cf88-bb57-4284-8a0e-2d719050f87e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
