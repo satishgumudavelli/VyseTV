@@ -1,0 +1,33 @@
+lib/widgets/media_rows.dart
+  s_b71c0447c9b72c::t_01ea280bd71e04 207
+lib/screens/shell.dart
+  s_b71c0447c9b72c::t_e41ca49ea05903 93-116,257-258,344,355,362,403,409
+android/app/src/main/AndroidManifest.xml
+  s_b71c0447c9b72c::t_da3b7c892f3a19 18-22,24
+  s_b71c0447c9b72c::t_5f2c14370fc58a 51
+lib/screens/home_page.dart
+  s_b71c0447c9b72c::t_01ea280bd71e04 108-109,111
+lib/widgets/common.dart
+  s_b71c0447c9b72c::t_01ea280bd71e04 13,18-20,38,61-64,66-68
+  s_b71c0447c9b72c::t_aa1bdd4a044123 65
+  s_b71c0447c9b72c::t_4e61d62c691963 44-45
+  s_b71c0447c9b72c::t_f815ed4f0c411f 29-30,34-37,39-42,46-54
+lib/widgets/hero_carousel.dart
+  s_b71c0447c9b72c::t_01ea280bd71e04 694
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7a954c855686d003297ddd73b762d905025aef6c",
+  "prompts": {},
+  "sessions": {
+    "s_b71c0447c9b72c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8707cf88-bb57-4284-8a0e-2d719050f87e",
+        "model": "unknown"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
