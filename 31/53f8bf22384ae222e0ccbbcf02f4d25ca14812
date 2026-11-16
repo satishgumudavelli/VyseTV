@@ -1,0 +1,23 @@
+lib/widgets/episode_explorer.dart
+  s_b71c0447c9b72c::t_3c25477ca86a19 217
+lib/screens/details_page.dart
+  s_b71c0447c9b72c::t_9303b4401637e7 755
+lib/screens/shell.dart
+  s_b71c0447c9b72c::t_b4b09b17596195 107,109-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3153f8bf22384ae222e0ccbbcf02f4d25ca14812",
+  "prompts": {},
+  "sessions": {
+    "s_b71c0447c9b72c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8707cf88-bb57-4284-8a0e-2d719050f87e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
