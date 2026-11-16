@@ -1,0 +1,19 @@
+.gitignore
+  s_88251d0eb8aa53::t_6396cc825ee11a 73-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fbaab1057ed4115fff0994f627ca6efbab95be51",
+  "prompts": {},
+  "sessions": {
+    "s_88251d0eb8aa53": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d81d188-ff2e-409d-b218-739937587d45",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
