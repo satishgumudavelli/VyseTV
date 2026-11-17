@@ -1,0 +1,32 @@
+lib/screens/audiobook_player_page.dart
+  s_b71c0447c9b72c::t_6c729c800d8414 53-54
+lib/screens/portal_browser_player.dart
+  s_b71c0447c9b72c::t_6c729c800d8414 257-258
+lib/screens/music_player_page.dart
+  s_b71c0447c9b72c::t_6c729c800d8414 52-53
+lib/mpv/player/platform/player_android.dart
+  s_b71c0447c9b72c::t_28eba654479cdb 503-504,508-516
+  s_b71c0447c9b72c::t_0e681b7df69288 41-44,358-372,505-507,536-547
+lib/screens/player_page.dart
+  s_b71c0447c9b72c::t_a6625ac25e7be0 3326-3328
+android/app/src/main/AndroidManifest.xml
+  s_b71c0447c9b72c::t_0b4e36e0252aba 24
+lib/screens/live_tv_player_page.dart
+  s_b71c0447c9b72c::t_6c729c800d8414 215-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c7a150503688693733bfe523afa6bb85373b404c",
+  "prompts": {},
+  "sessions": {
+    "s_b71c0447c9b72c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8707cf88-bb57-4284-8a0e-2d719050f87e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
