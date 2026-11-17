@@ -1,0 +1,19 @@
+lib/screens/details_page.dart
+  s_b71c0447c9b72c::t_ec03dd81173990 684-707
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "72a507553bbc7f0946b23b01c7ebb48ba8c41875",
+  "prompts": {},
+  "sessions": {
+    "s_b71c0447c9b72c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8707cf88-bb57-4284-8a0e-2d719050f87e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
