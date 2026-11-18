@@ -1,8 +1,8 @@
-# Builds VyseTV with Plezy's player on every platform.
+# Builds VyseTV on every platform.
 #
-# Flutter stays pinned to 3.47.1: Windows needs Plezy's patched engine
+# Flutter stays pinned to 3.47.1: Windows needs the patched engine
 # (flutter-plezy windows-v3.47.1+2), which only matches that SDK.
-# libmpv comes from Plezy's mpv-build releases, pinned in mpv-build.lock.json
+# libmpv comes from the mpv-build releases, pinned in mpv-build.lock.json
 # (Android/Windows/Linux) and the Xcode projects (MPVKit for iOS/macOS).
 
 name: Build
@@ -56,7 +56,7 @@ jobs:
           echo "Building: ${pick:-nothing}"
           has() { case " $pick " in *" all "*|*" $1 "*) return 0 ;; esac; return 1; }
           # Flutter's stable channel has no ARM64 Linux download; the same version
-          # is taken from its source instead (channel master), as Plezy does.
+          # is taken from its source instead (channel master), as upstream does.
           x64='{"arch":"x64","runner":"ubuntu-24.04","channel":"stable","triplet":"x86_64-linux-gnu","appimage":"x86_64"}'
           arm64='{"arch":"arm64","runner":"ubuntu-24.04-arm","channel":"master","triplet":"aarch64-linux-gnu","appimage":"aarch64"}'
           list=""
@@ -101,7 +101,7 @@ jobs:
           channel: ${{ matrix.channel }}
           cache: true
 
-      - name: Fetch Plezy's libmpv
+      - name: Fetch libmpv (mpv-build)
         run: python3 scripts/fetch_linux_libmpv.py --dest libmpv-prefix
 
       # The real server addresses are not in the repository. A build made here gets the
@@ -115,7 +115,7 @@ jobs:
           PKG_CONFIG_PATH: ${{ github.workspace }}/libmpv-prefix/lib/pkgconfig:${{ github.workspace }}/libmpv-prefix/lib/${{ matrix.triplet }}/pkgconfig
         run: flutter build linux --release
 
-      # libmpv and everything it links travel with the app (Plezy's packaging).
+      # libmpv and everything it links travel with the app (upstream's packaging).
       - name: Bundle libmpv
         run: |
           B=build/linux/${{ matrix.arch }}/release/bundle
@@ -157,7 +157,7 @@ jobs:
             chmod 755 build/linux/${{ matrix.arch }}/release/bundle/lib/torrserver
           fi
 
-      # One file with everything in it (Plezy's packaging): the bundle above,
+      # One file with everything in it (upstream's packaging): the bundle above,
       # libmpv, the torrent engine and every library that can travel.
       # appimagetool and the runtime it embeds are pinned and checksummed.
       - name: Build the AppImage
@@ -189,8 +189,8 @@ jobs:
           path: VyseTV-${{ matrix.appimage }}.AppImage
           retention-days: 2 # a private repository has 500 MB for these
 
-  # macos-26: Plezy's player uses APIs from the Xcode 26 SDK
-  # (CALayer.preferredDynamicRange), the same runner Plezy builds on.
+  # macos-26: the player uses APIs from the Xcode 26 SDK
+  # (CALayer.preferredDynamicRange), the same runner upstream builds on.
   # One app that runs on both Intel and Apple silicon Macs (a universal build),
   # in a disk image you drag to Applications. It is not signed with an Apple
   # developer certificate: the first time, right-click the app and choose Open.
@@ -261,7 +261,7 @@ jobs:
             case "$a" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "::warning::Built for '$a' only: ${f#"$APP"/}" ;; esac
           done
       # upload-artifact breaks the symlinks and executable bits inside an .app,
-      # so it travels inside a disk image (Plezy's packaging).
+      # so it travels inside a disk image (upstream's packaging).
       - name: Make the disk image
         run: |
           mkdir -p dmg-staging
@@ -373,9 +373,9 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      # Plezy's DirectComposition engine: without it the video stays hidden
+      # The DirectComposition engine: without it the video stays hidden
       # behind the UI (the CMake install step refuses a stock engine).
-      - name: Install Plezy's patched Windows engine
+      - name: Install the patched Windows engine (flutter-plezy)
         shell: pwsh
         run: |
           flutter precache --windows

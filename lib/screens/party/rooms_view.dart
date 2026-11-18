@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/nav.dart';
 import '../../core/theme.dart';
-import '../../data/account.dart';
+import '../../data/account/account.dart';
 import '../../data/party/friends.dart';
 import '../../data/party/rooms.dart';
 import '../../widgets/common.dart';

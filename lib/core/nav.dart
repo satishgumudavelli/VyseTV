@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../data/anilist.dart';
-import '../data/discover.dart';
-import '../data/tmdb.dart';
-import '../screens/details_page.dart';
-import '../screens/discover_page.dart';
-import '../screens/person_page.dart';
+import '../data/anime/anilist.dart';
+import '../data/catalog/discover.dart';
+import '../data/catalog/tmdb.dart';
+import '../dpad/covered_route_focus_boundary.dart';
+import '../screens/details/details_page.dart';
+import '../screens/discover/discover_page.dart';
+import '../screens/details/person_page.dart';
 
 /// The app's own navigator, under every tab's: full-screen pages (the player) open here, and
 /// what floats over every page (the mini player, the mini chat) sits in its overlay.
@@ -33,7 +34,8 @@ class ShellRoute<T> extends PageRouteBuilder<T> {
       : super(
           transitionDuration: const Duration(milliseconds: 560),
           reverseTransitionDuration: const Duration(milliseconds: 420),
-          pageBuilder: (_, _, _) => child,
+          // while another page is over this one, nothing in it can take focus (R7)
+          pageBuilder: (_, _, _) => CoveredRouteFocusBoundary(child: child),
           transitionsBuilder: (_, a, s, child) => _depth(a, s, child),
         );
 }

@@ -1,5 +1,5 @@
-import '../anilist.dart' show Anime;
-import '../tmdb.dart' show Media;
+import '../anime/anilist.dart' show Anime;
+import '../catalog/tmdb.dart' show Media;
 
 enum MediaKind { movie, show, anime }
 

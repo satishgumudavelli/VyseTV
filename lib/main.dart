@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'core/accent.dart';
-import 'data/account.dart';
-import 'data/account_sync.dart';
-import 'data/addons.dart' show Addons;
-import 'data/badges.dart' show Badges;
-import 'data/audiobook_player.dart' show AudiobookPlayer;
-import 'data/manga_library.dart' show MangaFavorites, MangaHistory;
+import 'data/account/account.dart';
+import 'data/account/account_sync.dart';
+import 'data/sources/addons.dart' show Addons;
+import 'data/sources/badges.dart' show Badges;
+import 'data/audiobooks/audiobook_player.dart' show AudiobookPlayer;
+import 'data/manga/manga_library.dart' show MangaFavorites, MangaHistory;
 import 'data/party/alerts.dart' show PartyAlerts;
 import 'data/party/dms.dart' show Dms;
 import 'data/party/friends.dart' show Friends;
@@ -17,12 +17,12 @@ import 'data/party/rooms.dart' show Rooms;
 import 'data/party/voice.dart' show Voice;
 import 'data/party/watch_party.dart' show WatchParty;
 import 'data/app_settings.dart';
-import 'data/tmdb.dart' show MyList;
-import 'data/downloads.dart';
-import 'data/torrents.dart' show Torrents;
+import 'data/catalog/tmdb.dart' show MyList;
+import 'data/downloads/downloads.dart';
+import 'data/sources/torrents.dart' show Torrents;
 import 'data/music/music_library.dart' show MusicLibrary;
-import 'data/debrid/debrid.dart' show Debrid;
-import 'data/watch_progress.dart';
+import 'data/sources/debrid/debrid.dart' show Debrid;
+import 'data/playback/watch_progress.dart';
 import 'data/trackers/tracker_hub.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -32,9 +32,13 @@ import 'package:window_manager/window_manager.dart';
 
 import 'core/layout.dart';
 import 'core/nav.dart' show rootNavigatorKey;
-import 'core/perf.dart';
+import 'core/logs/perf.dart';
 import 'core/theme.dart';
-import 'screens/intro_screen.dart';
+import 'dpad/dpad_root.dart';
+import 'dpad/input_mode_tracker.dart';
+import 'core/platform/device_performance.dart';
+import 'core/platform/platform_detector.dart' show PlatformDetector, TvDetectionService;
+import 'screens/shell/intro_screen.dart';
 import 'services/iptv/iptv_settings.dart';
 
 /// Phones: no status bar or navigation buttons. A swipe from the edge shows them for a moment
@@ -43,14 +47,28 @@ void _hideSystemBars() => SystemChrome.setEnabledSystemUIMode(SystemUiMode.immer
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Android TV and Google TV: known before anything is drawn, so the app opens in D-pad mode
+  // there, with the ring on its first control
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      await TvDetectionService.getInstance();
+    } catch (_) {}
+    // Upstream's lighter tier for weak boxes (a 32-bit system, or about 2 GB of memory): no glow
+    // round the focused control, focus moves at once instead of animating, smaller caches.
+    // It was in the app but never asked, so every TV got the full tier.
+    try {
+      await DevicePerformance.getInstance();
+    } catch (_) {}
+  }
   if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
     _hideSystemBars();
     SystemChrome.setSystemUIChangeCallback((barsShowing) async {
       if (barsShowing) Future.delayed(const Duration(seconds: 3), _hideSystemBars);
     });
     AppLifecycleListener(onResume: _hideSystemBars); // registers itself for the app's lifetime
-    // 90/120 Hz screens: Android otherwise keeps Flutter apps at 60 Hz
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    // 90/120 Hz screens: Android otherwise keeps Flutter apps at 60 Hz. (Not on a TV: asking
+    // for its fastest mode can switch the TV's picture mode as the app starts.)
+    if (defaultTargetPlatform == TargetPlatform.android && !PlatformDetector.isTV()) {
       try {
         await FlutterDisplayMode.setHighRefreshRate();
       } catch (_) {}
@@ -129,6 +147,15 @@ Future<void> main() async {
     if (isDesktopNative) {
       SystemChannels.skia.invokeMethod<void>('Skia.setResourceCacheMaxBytes', 1024 << 20);
     }
+  } else if (DevicePerformance.isReduced) {
+    // a weak box (see above): upstream's figure for them
+    cache.maximumSize = 400;
+    cache.maximumSizeBytes = 64 << 20;
+  } else if (PlatformDetector.isTV()) {
+    // TV boxes share little memory with the video decoder's 4K buffers. Upstream, which runs on
+    // them, keeps 64 to 128 MB; half of a phone's here.
+    cache.maximumSize = 500;
+    cache.maximumSizeBytes = 128 << 20;
   } else {
     cache.maximumSizeBytes = 256 << 20;
   }
@@ -156,17 +183,24 @@ Future<void> main() async {
 }
 
 class VyseApp extends StatelessWidget {
-  const VyseApp({super.key});
+  const VyseApp({super.key, this.home = const IntroScreen()});
 
+  /// The first page: the intro, which leads to the shell. Tests start further in.
+  final Widget home;
+
+  // InputModeTracker knows whether a remote (or the keyboard's arrows) or a pointer is in
+  // charge. Focus is only ever drawn for the first; a mouse or a finger sees no change.
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'VyseTV',
-        navigatorKey: rootNavigatorKey,
-        debugShowCheckedModeBanner: false,
-        theme: buildVyseTheme(),
-        scrollBehavior: const VyseScrollBehavior(),
-        home: const IntroScreen(),
-        builder: (context, child) => MacFullScreenScope(child: withThemeAccent(child)),
+  Widget build(BuildContext context) => InputModeTracker(
+        child: MaterialApp(
+          title: 'VyseTV',
+          navigatorKey: rootNavigatorKey,
+          debugShowCheckedModeBanner: false,
+          theme: buildVyseTheme(),
+          scrollBehavior: const VyseScrollBehavior(),
+          home: home,
+          builder: (context, child) => MacFullScreenScope(child: withThemeAccent(DpadRoot(onBack: () => rootNavigatorKey.currentState?.maybePop(), child: child ?? const SizedBox.shrink()))),
+        ),
       );
 }
 

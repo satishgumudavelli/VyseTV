@@ -309,7 +309,7 @@ class MpvPlayerCore: MpvPlayerCoreBase {
     // layers and the hidden frame has reached the screen. On macOS 27,
     // pulling a visible sample-buffer layer out while its video receiver is
     // torn down can stop the display for good: WindowServer's watchdog
-    // fires and the Mac panics (plezy#2823).
+    // fires and the Mac panics (upstream issue 2823).
     setContainerHidden(true)
     let container = containerLayer
     let layer = videoLayer
@@ -502,8 +502,8 @@ extension MpvPlayerCore {
   /// origin is bottom-left.
   func vyseSetVideoRect(_ rect: CGRect) {
     guard let bounds = window?.contentView?.bounds else { return }
-    // Full screen: Plezy's own path (follow the content view), so full-screen playback
-    // is exactly Plezy's. Only a smaller rect (a tile) gets an explicit frame, and it
+    // Full screen: upstream's own path (follow the content view), so full-screen playback
+    // is exactly upstream's. Only a smaller rect (a tile) gets an explicit frame, and it
     // is remembered so later refreshes keep it (see updateFrame).
     let fillsWindow =
       abs(rect.minX) < 1 && abs(rect.minY) < 1 && abs(rect.width - bounds.width) < 1

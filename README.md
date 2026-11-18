@@ -39,6 +39,7 @@ This is the source code of VyseTV, a free app for Windows, Android, macOS, Linux
   - [Party](#party)
   - [Tracking](#tracking)
   - [Updates](#updates)
+  - [Using a remote or a controller](#using-a-remote-or-a-controller)
 - [Platforms](#platforms)
 - [What stays on your device](#what-stays-on-your-device)
 - [Building from source](#building-from-source)
@@ -95,7 +96,7 @@ The catalogue comes from TMDB. Home opens with a spotlight, then what's popular 
 
 <p align="center"><img src="branding/screenshots/player.webp" alt="The player, with chapter marks on the seek bar and format badges above it" width="100%"></p>
 
-The player is mpv, through the player that [Plezy](https://github.com/edde746/plezy) built around it. It is the part of the app the most work went into, and it is meant for the files other players stutter on.
+The player is built on mpv. It is the part of the app the most work went into, and it is meant for the files other players stutter on.
 
 - **Real HDR.** 4K HDR is shown as HDR on an HDR screen and mapped to SDR on one that isn't.
 - **Lossless surround, up to 7.1.** TrueHD, DTS-HD and Atmos are passed straight through to a receiver or soundbar.
@@ -147,7 +148,7 @@ From the player you can save what is playing and watch it later without a connec
 
 ### Your own servers
 
-Plex, Jellyfin and Emby get their own section, side by side, on top of Plezy's server engine. Sign in to a server and its libraries are browsable and playable in the same player. You choose who marks things watched: the server by itself, or VyseTV by asking.
+Plex, Jellyfin and Emby get their own section, side by side. Sign in to a server and its libraries are browsable and playable in the same player. You choose who marks things watched: the server by itself, or VyseTV by asking.
 
 ### Party
 
@@ -186,6 +187,17 @@ The app checks for a new version when it starts and offers it once per start.
 - **iOS:** opens the download link.
 
 The list of versions is signed. A copy of the app only believes a list that carries a valid signature from the release key, and it checks every download against the SHA-256 the list gives. More under [Making a release](#making-a-release).
+
+### Using a remote or a controller
+
+The whole app works with the arrow keys, Enter and Escape, so a keyboard, a remote that sends arrow keys or a game controller can do everything a mouse does. Press an arrow and a ring shows where you are. Move the mouse or touch the screen and the ring goes away.
+
+- **Arrows** move the ring. **Enter** (A on a controller) presses what it is on. Holding Enter does what a long press or a right click does, such as removing a card from Continue watching.
+- **Escape** (Back on a remote, B on a controller) goes back one step at a time: it closes what is open, leaves the page, then goes to the navbar and to Home. Holding it down is still one step.
+- **Tabs** change when you press Enter on them, not as the ring passes over them. Coming back up from what a tab shows lands on that tab.
+- **In the player**, Left and Right seek while the controls are hidden, and Up, Down or Enter bring the controls up with the ring on Play. If Skip intro or the next episode card is showing, Enter takes it instead. With the ring on the controls the arrows move between them, and Escape hides them again. A remote's media keys work too.
+- **In a text box** the arrows move the caret and leave the box at the ends of the text. Escape leaves the box; in a search box it clears the text first.
+- **In Party**, Enter on a message opens its menu, and holding Enter on the talk button talks for as long as you hold it. A room's video is one stop on the room's page: Enter makes it fill the window, and Escape brings it back.
 
 ## Platforms
 
@@ -344,7 +356,9 @@ Three things run on a server, and the app talks to them:
 - **Voice:** [LiveKit](https://livekit.io/). The app asks the account server for a short-lived token and then connects to LiveKit directly.
 - **The live relay:** a small program that holds one live TV connection and shares it with a room.
 
-None of that is in this repository: not the official server's address, not its code, not its configuration. A build made from this source starts without a server. To give it one, run your own (PocketBase for accounts and Party, LiveKit for voice) and put its address in `lib/data/server_config.dart`, the file you made from the example next to it. Git ignores that file, so your address stays on your machine too.
+The code for all three has its own repository, [vyseserver](https://gitlab.com/ayman707-ux/vyseserver): the PocketBase hooks and migrations, the admin page, the voice setup and the relay's source.
+
+What is not published anywhere is the official server itself: not its address, not its keys, not its data. A build made from this source starts without a server. To give it one, set up your own from that repository and put its address in `lib/data/server_config.dart`, the file you made from the example next to it. Git ignores that file, so your address stays on your machine too.
 
 Everything that isn't Party works without an account and without that server: browsing, playing, sources, live TV, music, downloads, trackers and your own servers.
 
@@ -352,8 +366,8 @@ Everything that isn't Party works without an account and without that server: br
 
 You're welcome to. Three things to change first, so your build stands on its own:
 
-1. **The account server.** You need your own. The official one is not in the source and is not there for other builds to use: it is one small machine, paid for out of my pocket. Set `accountServer` in `lib/data/server_config.dart`, or leave it empty and ship without accounts and Party.
-2. **The update check.** Set `updateListAddresses` in the same file to where your own list is published, and replace the public key in `lib/data/update_signature.dart` with the public half of your own ECDSA P-256 key. `scripts/make_update.py` writes and signs the list. Left empty, the app never looks for an update.
+1. **The account server.** You need your own. The official one is not in the source and is not there for other builds to use: it is one small machine, paid for out of my pocket. Everything needed to run one is in the [vyseserver](https://gitlab.com/ayman707-ux/vyseserver) repository. Set `accountServer` in `lib/data/server_config.dart`, or leave it empty and ship without accounts and Party.
+2. **The update check.** Set `updateListAddresses` in the same file to where your own list is published, and replace the public key in `lib/data/updates/update_signature.dart` with the public half of your own ECDSA P-256 key. `scripts/make_update.py` writes and signs the list. Left empty, the app never looks for an update.
 3. **The name and the icon.** The code is GPL. The name VyseTV and the helmet are how people recognise the official builds, so give your fork its own.
 
 ## How the code is laid out
@@ -361,31 +375,32 @@ You're welcome to. Three things to change first, so your build stands on its own
 ```
 lib/
   main.dart            start-up
-  core/                theme, layout rules, navigation, the trouble logs
+  core/                theme, layout rules, navigation
+    logs/                the trouble logs
+    platform/            which device this is (TV, phone, desktop) and how strong it is
   data/                everything the screens ask for
-    account.dart         the account server client
     server_config.example.dart   where a build's own server addresses go
-    tmdb.dart            the catalogue
-    sources.dart         a playable stream, and the list of where to ask
-    film_sources/        built-in film and TV sources
-    anime_sources.dart   built-in anime sources
-    addons.dart          Stremio addons
-    torrents.dart        the P2P engine's driver
-    debrid/              the five debrid providers
-    downloads.dart       saving for offline
-    stream_proxy.dart    the local relay
+    app_settings.dart    the settings
     net.dart             the HTTP client that gets through blocked DNS
-    live_tv.dart, live_guide.dart, sports_schedule.dart, match_finder.dart
-    music/, music_player.dart
+    account/             the account server client and what it keeps in step
+    catalog/             TMDB and its genres
+    sources/             a playable stream and where to ask for one: Stremio addons,
+                         the built-in film sources, torrents, Knaben, the debrid providers
+    playback/            watch progress, intro timings, the local relay, audio focus
+    subtitles/           finding, decoding and styling subtitles
+    anime/  manga/  music/  audiobooks/  live_tv/  downloads/
     party/               friends, messages, rooms, voice, watching together
     trackers/            AniList, Simkl, Trakt, the outbox
-    updater.dart, update_signature.dart
-  media_servers/       Plex, Jellyfin and Emby in VyseTV's own pages
+    updates/             the update check and its signature
+  dpad/                TV remote and keyboard navigation: where an arrow key goes, the focus ring
+  media_servers/       Plex, Jellyfin and Emby: VyseTV's side on top, the server engine
+                       underneath (media/, models/, services/, utils/, support/)
   mpv/                 the Dart side of the player
-  plezy/               Plezy's server engine, used by media_servers/
-  screens/             one file or folder per page
+  screens/             one folder per section (home, details, player, live_tv, party, ...),
+                         with the widgets only that section uses
+  widgets/             shared pieces of interface; dialogs/ holds the shared pop-ups
   services/, models/   the IPTV, manga, music and audiobook backends
-  widgets/             shared pieces of interface
+  utils/               the search ranking those backends use
 packages/
   torrserver_flutter/        the torrent engine and its binaries
   screen_brightness_windows/ an empty stand-in (see below)
@@ -395,7 +410,8 @@ windows/installer/     the Inno Setup script
 windows/tool/          the patched-engine installer
 linux/runner/mpv/      the Linux player, with the texture fallback
 linux/packaging/       AppImage scripts
-android/.../plezy/     the Android player
+android/.../com/vyse/player/   the Android player
+android/libass/        the subtitle renderer for the Android fallback player
 ios/, macos/           the Apple players (Runner/MpvPlayer)
 scripts/               release helpers
 assets/                fonts, shaders, sounds, logos
@@ -404,7 +420,7 @@ branding/              the mark and the screenshots on this page
 
 Notes for anyone reading the code:
 
-- Code that came from Plezy is kept close to the original so it can be compared and updated. What VyseTV added on top is marked with "VyseTV" in the file: `vyse_extras.dart`, `vyse_video.dart`, the `extras/` folder, the Linux texture fallback.
+- Code adapted from Plezy (see Credits) is kept close to the original so it can be compared and updated. Comments call that project "upstream". What VyseTV added on top is marked with "VyseTV" in the file: `vyse_extras.dart`, `vyse_video.dart`, the `extras/` folder, the Linux texture fallback.
 - `packages/screen_brightness_windows` is deliberately empty. The real plugin changes monitor brightness over DDC/CI, and on at least one monitor that restarted the screen. The stand-in keeps the dependency happy and does nothing.
 - User-facing text is plain on purpose: short, specific, no exclamation marks. Keep it that way if you add any.
 - On phones, sheets and pop-ups open on the root navigator. Otherwise the bottom bar covers them.
@@ -438,7 +454,7 @@ Merge requests are welcome. Small and focused ones get looked at soonest.
 
 VyseTV stands on a lot of other people's work.
 
-- **[Plezy](https://github.com/edde746/plezy)** (GPL-3.0), by edde746. The player and the media server engine come from it: the Dart player in `lib/mpv`, the native players for every platform, and `lib/plezy`. VyseTV is not affiliated with Plezy and doesn't use its name or logo.
+- **[Plezy](https://github.com/edde746/plezy)** (GPL-3.0), by edde746. VyseTV's player, its Plex, Jellyfin and Emby engine and the base of its TV remote navigation are adapted from Plezy: the Dart player in `lib/mpv`, the native players for every platform, the engine under `lib/media_servers`, and the files in `lib/dpad` that say they come from upstream. Comments in the code call it "upstream". VyseTV is not affiliated with Plezy and doesn't use its name or logo.
 - **[flutter-plezy](https://github.com/edde746/flutter-plezy)**, the patched Flutter engine for Windows, and **[mpv-build](https://github.com/edde746/mpv-build)**, the libmpv builds the players link against.
 - **[mpv](https://mpv.io/)**, **FFmpeg** and **libass**, which do the actual playing.
 - **[TorrServer](https://github.com/YouROK/TorrServer)** (GPL-3.0), by YouROK: the torrent engine.

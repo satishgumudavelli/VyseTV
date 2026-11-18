@@ -2,11 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
-import '../data/audio_focus.dart';
-import '../data/audiobook_player.dart';
-import '../data/music_player.dart';
+import '../data/app_settings.dart';
+import '../data/playback/audio_focus.dart';
+import '../data/audiobooks/audiobook_player.dart';
+import '../data/music/music_player.dart';
 import '../models/audiobook/audiobook_model.dart';
-import '../screens/audiobook_player_page.dart';
+import '../dpad/dpad_seek.dart';
+import '../core/platform/platform_detector.dart' show PlatformDetector;
+import '../screens/audiobooks/audiobook_player_page.dart';
 import 'common.dart';
 import 'media_rows.dart';
 import 'music_widgets.dart';
@@ -26,14 +29,24 @@ class SeekBar extends StatefulWidget {
 class _SeekBarState extends State<SeekBar> {
   double? _drag;
 
+  // D-pad: the bar is one focus stop (DpadSeekStop). Left and Right seek by a step (further
+  // when held), Up and Down move on. The slider inside is a mouse's.
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<Duration>(
+  Widget build(BuildContext context) => DpadSeekStop(
+        position: () => widget.position.value,
+        duration: () => widget.duration.value,
+        onSeek: (to) => widget.onSeek(to),
+        stepSeconds: () => AppSettings.seekSeconds.value,
+        builder: _bar,
+      );
+
+  Widget _bar(BuildContext context, Duration? sentTo) => ValueListenableBuilder<Duration>(
         valueListenable: widget.duration,
         builder: (context, total, _) => ValueListenableBuilder<Duration>(
           valueListenable: widget.position,
           builder: (context, pos, _) {
             final max = total.inMilliseconds.toDouble().clamp(1.0, double.infinity);
-            final value = (_drag ?? pos.inMilliseconds.toDouble()).clamp(0.0, max);
+            final value = (_drag ?? sentTo?.inMilliseconds.toDouble() ?? pos.inMilliseconds.toDouble()).clamp(0.0, max);
             final left = Duration(milliseconds: (max - value).round());
             const style = TextStyle(fontSize: 11.5, color: VyseColors.textDim, fontFeatures: [FontFeature.tabularFigures()]);
             return Column(children: [
@@ -172,15 +185,45 @@ class ActiveMiniPlayer extends StatelessWidget {
             final showBook = book && (identical(owner, AudiobookPlayer.instance) || !music);
             return AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
-              child: showBook ? const _BookMiniBar(key: ValueKey('book')) : const MiniPlayer(key: ValueKey('music')),
+              child: showBook ? const BookMiniBar(key: ValueKey('book')) : const MiniPlayer(key: ValueKey('music')),
             );
           },
         ),
       );
 }
 
-class _BookMiniBar extends StatelessWidget {
-  const _BookMiniBar({super.key});
+/// On a TV no bar floats over the pages (there it could not be put away). Music and
+/// Audiobooks show what is playing at the top of their own page instead, while something is:
+/// OK on it opens the full player (the cover and the seek bar), its buttons pause, skip and
+/// close. Elsewhere this is nothing.
+class TvNowPlaying extends StatelessWidget {
+  const TvNowPlaying({super.key, required this.books});
+
+  /// The book (Audiobooks' page), else the song (Music's).
+  final bool books;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformDetector.isTV()) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: books ? AudiobookPlayer.instance : MusicPlayer.instance,
+      builder: (context, _) {
+        final on = books ? AudiobookPlayer.instance.book != null : MusicPlayer.instance.current != null;
+        if (!on) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 620), child: books ? const BookMiniBar() : const MiniPlayer()),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class BookMiniBar extends StatelessWidget {
+  const BookMiniBar({super.key});
 
   @override
   Widget build(BuildContext context) {

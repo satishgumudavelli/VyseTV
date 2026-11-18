@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # build-appimage.sh — Wrap a resolved Linux bundle into an AppImage.
-# (From Plezy's linux/packaging/build-appimage.sh, without its update feed.)
+# (From upstream's linux/packaging/build-appimage.sh, without its update feed.)
 #
 # Usage: build-appimage.sh <bundle-dir> <x64|arm64> <output-dir>
 #

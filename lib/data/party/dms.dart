@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 
-import '../account.dart';
+import '../account/account.dart';
 import 'friends.dart';
 import 'party.dart';
 

@@ -108,7 +108,7 @@ NativeRenderTeardownOperations ProductionTeardownOperations() {
   };
 }
 
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
 NativeRenderTeardownOperations*& TestTeardownOperationsOverride() {
   static NativeRenderTeardownOperations* operations = nullptr;
   return operations;
@@ -147,7 +147,7 @@ class NativeRenderTeardownQueue {
   NativeRenderTeardownQueue() : worker_([this]() { Run(); }) {}
 
   void Run() {
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
     const NativeRenderTeardownOperations operations =
         TestTeardownOperationsOverride() ? *TestTeardownOperationsOverride() : ProductionTeardownOperations();
 #else
@@ -199,7 +199,7 @@ bool IsSoftwareGlRenderer(const char* renderer) {
 
 }  // namespace
 
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
 void ConfigureNativeRenderTeardownQueueForTesting(NativeRenderTeardownOperations operations) {
   auto*& configured = TestTeardownOperationsOverride();
   if (configured) {
@@ -348,7 +348,7 @@ bool MpvPlayer::Initialize() {
     return false;
   }
 
-  plezy::mpv_common::ApplyCommonStartupOptions(mpv_, audio_only_);
+  vyse::mpv_common::ApplyCommonStartupOptions(mpv_, audio_only_);
   mpv_set_option_string(mpv_, "terminal", "no");
 
   if (!audio_only_) {
@@ -368,7 +368,7 @@ bool MpvPlayer::Initialize() {
     // Declared by vo_gpu_next only, so inert for the render API this player
     // runs. Set anyway so the startup value agrees with what a later
     // `hdr-enabled` write puts here through SetHDREnabled.
-    mpv_set_option_string(mpv_, "target-colorspace-hint", plezy::mpv_common::TargetColorspaceHint(hdr_enabled_));
+    mpv_set_option_string(mpv_, "target-colorspace-hint", vyse::mpv_common::TargetColorspaceHint(hdr_enabled_));
   }
 
   // Default to info-level logging. The vaapi hwdec probe and the "Using
@@ -729,7 +729,7 @@ void MpvPlayer::Dispose() {
   // plane render thread makes it current (RenderToSurface) and the plugin's
   // teardown posts an unbind there before draining the thread ahead of this
   // call. This main-thread release covers the two paths that still bind it
-  // here - the PLEZY_PLANE_RENDER_MAIN_THREAD inline fallback, and a context
+  // here - the VYSE_PLANE_RENDER_MAIN_THREAD inline fallback, and a context
   // created but never rendered with, where InitRenderContextForSurface's own
   // unbind failed. An EGLContext can be current to at most one thread, so
   // handing it to the teardown worker while it is still bound here makes the
@@ -775,7 +775,7 @@ void MpvPlayer::CommandAsync(const std::vector<std::string>& args, CommandCallba
     return;
   }
 
-  plezy::mpv_common::SubmitCommandAsync(mpv_, pending_requests_, args, std::move(callback));
+  vyse::mpv_common::SubmitCommandAsync(mpv_, pending_requests_, args, std::move(callback));
 }
 
 void MpvPlayer::SetProperty(const std::string& name, const std::string& value) {
@@ -783,7 +783,7 @@ void MpvPlayer::SetProperty(const std::string& name, const std::string& value) {
 }
 
 void MpvPlayer::SetPropertyAsync(const std::string& name, const std::string& value, StatusCallback callback) {
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
   // Ahead of the handle check: a substituted writer stands in for the core, so
   // the absence of a real one is not a reason to refuse the write.
   if (test_property_write_) {
@@ -797,10 +797,10 @@ void MpvPlayer::SetPropertyAsync(const std::string& name, const std::string& val
   }
 
   if (name == "hdr-enabled") {
-    SetHDREnabled(plezy::mpv_common::ParseEnabledFlag(value), std::move(callback));
+    SetHDREnabled(vyse::mpv_common::ParseEnabledFlag(value), std::move(callback));
     return;
   }
-  plezy::mpv_common::SubmitSetPropertyAsync(
+  vyse::mpv_common::SubmitSetPropertyAsync(
       mpv_, pending_requests_, name, value, [this, name, value, cb = std::move(callback)](int error) mutable {
         // Native-side attribution for the same failure the platform channel
         // reports: the HDR transaction's property writes never reach the
@@ -810,8 +810,8 @@ void MpvPlayer::SetPropertyAsync(const std::string& name, const std::string& val
         // in a property value stays bounded.
         if (error < 0 && !disposed_) {
           std::string logged = value;
-          if (logged.size() > plezy::mpv_common::kSetPropertyErrorDescriptionLimit) {
-            logged.resize(plezy::mpv_common::kSetPropertyErrorDescriptionLimit);
+          if (logged.size() > vyse::mpv_common::kSetPropertyErrorDescriptionLimit) {
+            logged.resize(vyse::mpv_common::kSetPropertyErrorDescriptionLimit);
           }
           g_warning("MPV: setProperty '%s'='%s' failed: %s", name.c_str(), logged.c_str(), mpv_error_string(error));
         }
@@ -824,7 +824,7 @@ void MpvPlayer::SetPropertyAsync(const std::string& name, double value, StatusCa
     if (callback) callback(MPV_ERROR_UNINITIALIZED);
     return;
   }
-  plezy::mpv_common::SubmitSetPropertyAsync(
+  vyse::mpv_common::SubmitSetPropertyAsync(
       mpv_, pending_requests_, name, value, [this, name, value, cb = std::move(callback)](int error) mutable {
         // Same native-side attribution as the string path: these writes come
         // from the runner itself, so nothing else would name the property.
@@ -865,7 +865,7 @@ void MpvPlayer::SetSourceMetadataCallback(SourceMetadataCallback callback) {
 }
 
 void MpvPlayer::GetPropertyAsync(const std::string& name, GetPropertyCallback callback) {
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
   if (test_property_read_) {
     test_property_read_(name, std::move(callback));
     return;
@@ -876,7 +876,7 @@ void MpvPlayer::GetPropertyAsync(const std::string& name, GetPropertyCallback ca
     return;
   }
 
-  plezy::mpv_common::SubmitGetPropertyAsync(mpv_, pending_requests_, name, std::move(callback));
+  vyse::mpv_common::SubmitGetPropertyAsync(mpv_, pending_requests_, name, std::move(callback));
 }
 
 void MpvPlayer::ObserveProperty(const std::string& name, const std::string& format, int id) {
@@ -1050,7 +1050,7 @@ void MpvPlayer::RemoveTrackedSources() {
 }
 
 bool MpvPlayer::ProcessEvents() {
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
   // The substituted wait stands in for the core; see SetPropertyAsync.
   const bool has_events = test_event_wait_ || mpv_;
 #else
@@ -1060,7 +1060,7 @@ bool MpvPlayer::ProcessEvents() {
 
   bool running = true;
   while (true) {
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
     mpv_event* event = test_event_wait_ ? test_event_wait_() : mpv_wait_event(mpv_, 0);
 #else
     mpv_event* event = mpv_wait_event(mpv_, 0);
@@ -1075,7 +1075,7 @@ bool MpvPlayer::ProcessEvents() {
     // The pass already drains to MPV_EVENT_NONE, which is the drain the hold
     // needs; see ErrorEndFileHold. A hold that reaches its limit is released
     // there and the rest of the pass is delivered as it comes.
-    const bool began_hold = plezy::mpv_common::IsErrorEndFile(event) && held_events_.Begin();
+    const bool began_hold = vyse::mpv_common::IsErrorEndFile(event) && held_events_.Begin();
     HandleMpvEvent(event);
     if (!began_hold && held_events_.CountDequeued()) ReleaseHeldEvents();
   }
@@ -1111,11 +1111,11 @@ void MpvPlayer::TryAudioReload(const char* reason, int attempt, uint64_t request
 }
 
 void MpvPlayer::MaybeRunAudioRecovery() {
-  const auto action = audio_recovery_.NextReload(plezy::mpv_common::AudioRecoveryState::Clock::now());
-  if (action.reason == plezy::mpv_common::AudioReloadReason::kNone) {
+  const auto action = audio_recovery_.NextReload(vyse::mpv_common::AudioRecoveryState::Clock::now());
+  if (action.reason == vyse::mpv_common::AudioReloadReason::kNone) {
     return;
   }
-  if (action.reason == plezy::mpv_common::AudioReloadReason::kGiveUp) {
+  if (action.reason == vyse::mpv_common::AudioReloadReason::kGiveUp) {
     // audio-fallback-to-null means the core will never end the file over a
     // dead device itself, so the outcome is produced here: stop, and let the
     // END_FILE handler report it as the AO_INIT_FAILED error Dart handles.
@@ -1124,7 +1124,7 @@ void MpvPlayer::MaybeRunAudioRecovery() {
     Command({"stop"});
     return;
   }
-  const char* reason = action.reason == plezy::mpv_common::AudioReloadReason::kResume ? "resume" : "null-fallback";
+  const char* reason = action.reason == vyse::mpv_common::AudioReloadReason::kResume ? "resume" : "null-fallback";
   TryAudioReload(reason, action.attempt, action.request_generation);
   if (action.exhausted) {
     LogRecovery("audio recovery budget exhausted; ending playback if this reload fails");
@@ -1137,7 +1137,7 @@ void MpvPlayer::EnsureAudioRecoveryTimer() {
 }
 
 void MpvPlayer::HandleMpvEvent(mpv_event* event) {
-  if (plezy::mpv_common::DispatchReplyEvent(
+  if (vyse::mpv_common::DispatchReplyEvent(
           pending_requests_, event, [](const char* value) { return SanitizeUtf8(value); })) {
     return;
   }
@@ -1163,7 +1163,7 @@ void MpvPlayer::HandleMpvEvent(mpv_event* event) {
     case MPV_EVENT_PROPERTY_CHANGE: {
       auto* prop = static_cast<mpv_event_property*>(event->data);
       if (!prop || !prop->name) break;
-      mpv_node node = plezy::mpv_common::ExtractPropertyNode(prop);
+      mpv_node node = vyse::mpv_common::ExtractPropertyNode(prop);
 
       // This runner's own observation, which nothing on the Dart side asked
       // for and nothing there is waiting on. mpv delivers one event per
@@ -1179,7 +1179,7 @@ void MpvPlayer::HandleMpvEvent(mpv_event* event) {
         break;
       }
 
-      const auto notice = plezy::mpv_common::ObserveAudioRecoveryProperty(audio_recovery_, event, prop);
+      const auto notice = vyse::mpv_common::ObserveAudioRecoveryProperty(audio_recovery_, event, prop);
       if (notice.message) LogRecovery(notice.message);
       // Recovery runs off a GLib timer here, so newly queued work has to arm it.
       if (notice.scheduled_work) EnsureAudioRecoveryTimer();
@@ -1217,7 +1217,7 @@ void MpvPlayer::HandleMpvEvent(mpv_event* event) {
         fl_value_set_string_take(data, "error", fl_value_new_int(error));
         fl_value_set_string_take(data, "message", fl_value_new_string(SanitizeUtf8(mpv_error_string(error)).c_str()));
         if (audio_output_failed) {
-          fl_value_set_string_take(data, "cause", fl_value_new_string(plezy::mpv_common::kAudioOutputFailedCause));
+          fl_value_set_string_take(data, "cause", fl_value_new_string(vyse::mpv_common::kAudioOutputFailedCause));
         }
       }
       SendEvent("end-file", data);
@@ -1257,7 +1257,7 @@ void MpvPlayer::HandleMpvEvent(mpv_event* event) {
         const bool has_position = error >= 0 && ParseSeconds(value, &seconds);
         SendPlaybackRestartEvent(has_source_id, source_id, has_position ? &seconds : nullptr);
       };
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
       if (test_property_read_) {
         ++pending_restart_positions_;
         test_property_read_("time-pos", std::move(on_position));
@@ -1269,7 +1269,7 @@ void MpvPlayer::HandleMpvEvent(mpv_event* event) {
         break;
       }
       ++pending_restart_positions_;
-      plezy::mpv_common::SubmitGetPropertyAsync(mpv_, pending_requests_, "time-pos", std::move(on_position));
+      vyse::mpv_common::SubmitGetPropertyAsync(mpv_, pending_requests_, "time-pos", std::move(on_position));
       break;
     }
     default:
@@ -1307,10 +1307,10 @@ struct FlValueNodeBuilder {
 
 }  // namespace
 
-FlValue* MpvPlayer::NodeToFlValue(mpv_node* node) { return plezy::mpv_common::ConvertNode<FlValueNodeBuilder>(node); }
+FlValue* MpvPlayer::NodeToFlValue(mpv_node* node) { return vyse::mpv_common::ConvertNode<FlValueNodeBuilder>(node); }
 
-FlValue* MpvPlayer::NodeToFlValue(mpv_node* node, plezy::mpv_common::NodeConversionBudget* budget) {
-  return plezy::mpv_common::ConvertNode<FlValueNodeBuilder>(node, 0, budget);
+FlValue* MpvPlayer::NodeToFlValue(mpv_node* node, vyse::mpv_common::NodeConversionBudget* budget) {
+  return vyse::mpv_common::ConvertNode<FlValueNodeBuilder>(node, 0, budget);
 }
 
 void MpvPlayer::SendPropertyChange(const char* name, mpv_node* data) {
@@ -1414,7 +1414,7 @@ void MpvPlayer::ApplyPropertySequence(
   }
   const PropertyChange& change = (*changes)[index];
   SetPropertyAsync(change.name, change.value, [this, changes, index, cb = std::move(callback)](int error) mutable {
-    if (plezy::mpv_common::SetPropertyStatusSucceeded(error)) {
+    if (vyse::mpv_common::SetPropertyStatusSucceeded(error)) {
       ApplyPropertySequence(changes, index + 1, std::move(cb));
       return;
     }
@@ -1438,7 +1438,7 @@ void MpvPlayer::RollbackPropertySequence(
   const PropertyChange& change = (*changes)[index];
   SetPropertyAsync(
       change.name, change.rollback, [this, changes, index, failure, cb = std::move(callback)](int error) mutable {
-        if (plezy::mpv_common::SetPropertyStatusSucceeded(error)) {
+        if (vyse::mpv_common::SetPropertyStatusSucceeded(error)) {
           RollbackPropertySequence(changes, index, failure, std::move(cb));
           return;
         }
@@ -1484,7 +1484,7 @@ void MpvPlayer::ForceSdrOutput(size_t index, int failure, StatusCallback callbac
     return;
   }
   SetPropertyAsync(kResetOrder[index], "auto", [this, index, failure, cb = std::move(callback)](int error) mutable {
-    if (plezy::mpv_common::SetPropertyStatusSucceeded(error)) {
+    if (vyse::mpv_common::SetPropertyStatusSucceeded(error)) {
       // Recorded as it lands, not once the whole reset is through. Recording
       // only at the end would leave the cache naming the pre-reset curve for
       // every property that did move if a later one is refused, and the no-op
@@ -1513,7 +1513,7 @@ void MpvPlayer::ForceSdrOutput(size_t index, int failure, StatusCallback callbac
 }
 
 bool MpvPlayer::CanCommandOutputProperties() const {
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
   // The substituted writer is the core here; see SetPropertyAsync, which routes
   // to it ahead of the same handle check.
   if (test_property_write_) return true;
@@ -1521,7 +1521,7 @@ bool MpvPlayer::CanCommandOutputProperties() const {
   return !disposed_ && mpv_ != nullptr;
 }
 
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
 void MpvPlayer::ConfigurePropertyWritesForTesting(PropertyWriteForTesting writer) {
   test_property_write_ = std::move(writer);
 }
@@ -1702,7 +1702,7 @@ void MpvPlayer::RunPendingHdrOutput() {
   changes->push_back({"tone-mapping", operator_name, applied_tone_mapping_});
   changes->push_back({"target-peak", peak, applied_target_peak_});
   ApplyPropertySequence(changes, 0, [this, changes, callback = std::move(request.callback)](int error) {
-    const bool ok = plezy::mpv_common::SetPropertyStatusSucceeded(error);
+    const bool ok = vyse::mpv_common::SetPropertyStatusSucceeded(error);
     // Only a fully applied set becomes the new rollback target; a failed one was
     // already unwound, and the unwinding updated these itself if it had to force
     // SDR.
@@ -1737,9 +1737,9 @@ void MpvPlayer::RunPendingHdrOutput() {
 
 void MpvPlayer::SetHDREnabled(bool enabled, StatusCallback callback) {
   SetPropertyAsync(
-      "target-colorspace-hint", plezy::mpv_common::TargetColorspaceHint(enabled),
+      "target-colorspace-hint", vyse::mpv_common::TargetColorspaceHint(enabled),
       [this, enabled, callback = std::move(callback)](int error) mutable {
-        if (plezy::mpv_common::SetPropertyStatusSucceeded(error) && !disposed_) {
+        if (vyse::mpv_common::SetPropertyStatusSucceeded(error) && !disposed_) {
           hdr_enabled_ = enabled;
         }
         if (callback) callback(error);

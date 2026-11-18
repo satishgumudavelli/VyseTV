@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'platform/platform_detector.dart' show PlatformDetector;
 
 bool get isDesktopNative =>
     !kIsWeb &&
@@ -25,6 +26,10 @@ class MacFullScreenScope extends InheritedNotifier<ValueNotifier<bool>> {
 }
 
 enum FormFactor { phone, tablet, desktop }
+
+/// Whether players show a volume control and remember a volume of their own. Not on a TV: its
+/// remote sets the volume, and a player there plays at full volume.
+bool get playersHaveVolume => !PlatformDetector.isTV();
 
 /// Pages that need the whole phone screen (chats, rooms) raise this while open; the phone's
 /// bottom tab bar stays hidden while it's above zero.

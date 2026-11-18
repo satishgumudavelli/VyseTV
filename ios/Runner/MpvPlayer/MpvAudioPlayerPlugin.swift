@@ -6,7 +6,7 @@
 
 /// Flutter plugin for the dedicated audio-only mpv core (music playback).
 ///
-/// Registers `com.plezy/mpv_audio_player` + `/events` and delegates all
+/// Registers `vyse/mpv_audio_player` + `/events` and delegates all
 /// generic property/command/observe traffic to the shared [MpvPluginShared]
 /// handlers. There is no render layer, so the visual hooks are no-ops and
 /// `setVisible`/`updateFrame` succeed without doing anything. Shared across
@@ -28,13 +28,13 @@ class MpvAudioPlayerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, MpvPl
   // MARK: - FlutterPlugin Registration
 
   static func register(with registrar: FlutterPluginRegistrar) {
-    register(with: registrar, channel: "com.plezy/mpv_audio_player")
+    register(with: registrar, channel: "vyse/mpv_audio_player")
   }
 
   /// VyseTV: a second audio-only core (audiobooks), so music and audiobooks each
   /// keep their own loaded track.
   static func registerSecondary(with registrar: FlutterPluginRegistrar) {
-    register(with: registrar, channel: "com.plezy/mpv_audio_player_2")
+    register(with: registrar, channel: "vyse/mpv_audio_player_2")
   }
 
   private static func register(with registrar: FlutterPluginRegistrar, channel: String) {

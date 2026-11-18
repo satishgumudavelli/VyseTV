@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../account.dart';
-import '../tmdb.dart' show Media;
+import '../account/account.dart';
+import '../catalog/tmdb.dart' show Media;
 import 'live_upload.dart';
 import 'watch_party.dart';
 

@@ -4,6 +4,8 @@ import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/party/rooms.dart';
 import '../../data/party/voice.dart';
+import '../../dpad/dpad_seek.dart';
+import '../../dpad/input_mode_tracker.dart';
 import '../../widgets/common.dart';
 import 'party_widgets.dart' show PartyAvatar, showPartyProfile, showReportDialog;
 
@@ -83,6 +85,15 @@ class _MemberMenuState extends State<_MemberMenu> {
     action();
   }
 
+  void _toggleMute() {
+    if (_volume == 0) {
+      _set(_before == 0 ? 1 : _before);
+    } else {
+      _before = _volume;
+      _set(0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final m = widget.member;
@@ -129,20 +140,18 @@ class _MemberMenuState extends State<_MemberMenu> {
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: .04), borderRadius: BorderRadius.circular(14)),
             child: Row(
               children: [
-                IconButton(
-                  tooltip: muted ? 'Unmute for you' : 'Mute for you',
-                  onPressed: () {
-                    if (muted) {
-                      _set(_before == 0 ? 1 : _before);
-                    } else {
-                      _before = _volume;
-                      _set(0);
-                    }
-                  },
-                  icon: Icon(
-                    muted ? Icons.volume_off_rounded : (_volume < .6 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
-                    size: 21,
-                    color: muted ? _red : VyseColors.text,
+                // (with a D-pad the slider beside it is the stop: Left and Right are their
+                // volume, and OK on it does what this button does)
+                ExcludeFocus(
+                  excluding: InputModeTracker.isKeyboardMode(context),
+                  child: IconButton(
+                    tooltip: muted ? 'Unmute for you' : 'Mute for you',
+                    onPressed: _toggleMute,
+                    icon: Icon(
+                      muted ? Icons.volume_off_rounded : (_volume < .6 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
+                      size: 21,
+                      color: muted ? _red : VyseColors.text,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -156,7 +165,15 @@ class _MemberMenuState extends State<_MemberMenu> {
                       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
                       overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
                     ),
-                    child: Slider(value: _volume.clamp(0, 2), max: 2, onChanged: _set),
+                    child: DpadSlider(
+                      value: _volume.clamp(0, 2).toDouble(),
+                      max: 2,
+                      step: .1,
+                      onChanged: _set,
+                      onSelect: _toggleMute,
+                      focusInset: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      child: Slider(value: _volume.clamp(0, 2), max: 2, onChanged: _set),
+                    ),
                   ),
                 ),
                 Pressable(

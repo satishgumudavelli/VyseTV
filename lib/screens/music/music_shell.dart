@@ -7,11 +7,16 @@ import '../../core/nav.dart';
 import '../../core/theme.dart';
 import '../../data/music/music_library.dart';
 import '../../data/music/yt_music.dart';
-import '../../data/music_player.dart';
+import '../../data/music/music_player.dart';
+import '../../dpad/covered_route_focus_boundary.dart';
+import '../../dpad/dpad_root.dart' show DpadBackScope, DpadReturnObserver;
+import '../../dpad/dpad_seek.dart';
+import '../../dpad/dpad_traversal.dart';
+import '../../dpad/input_mode_tracker.dart';
 import '../../widgets/common.dart';
 import '../../widgets/music_widgets.dart';
-import '../music_detail_pages.dart' show openMusicPlayer;
-import '../music_page.dart';
+import 'music_detail_pages.dart' show openMusicPlayer;
+import 'music_page.dart';
 import 'music_pages.dart';
 import 'music_ui.dart';
 
@@ -50,7 +55,57 @@ class _MusicShellState extends State<MusicShell> {
   late final _observer = _Observer(() {
     if (mounted) setState(() {});
   });
+  // a page opened from the sidebar (or the search bar) gives focus back to it when it closes
+  final _returns = DpadReturnObserver();
   bool _queue = false;
+
+  // D-pad. Music's own frame is five places: its sidebar, the search bar, the page beside the
+  // sidebar (which has pages of its own), the queue when it is open, and the player bar along
+  // the bottom. Arrows stay inside each; at its edge they cross to the one next to it and
+  // land where you last were there. Off the sidebar's left edge is the app's own navbar.
+  late final DpadRegionNode _sideRegion = DpadRegionNode(debugLabel: 'music sidebar', onExit: (d) => switch (d) {
+        TraversalDirection.right => _into(_pageRegion) || _into(_topRegion),
+        TraversalDirection.down => _toBar(_sideRegion),
+        _ => false,
+      });
+  late final DpadRegionNode _topRegion = DpadRegionNode(debugLabel: 'music search', onExit: (d) => switch (d) {
+        TraversalDirection.down => _into(_pageRegion) || _toBar(_topRegion),
+        TraversalDirection.left => _into(_sideRegion),
+        TraversalDirection.right => _into(_queueRegion),
+        _ => false,
+      });
+  late final DpadRegionNode _pageRegion = DpadRegionNode(debugLabel: 'music page', onExit: (d) => switch (d) {
+        TraversalDirection.left => _into(_sideRegion),
+        TraversalDirection.up => _into(_topRegion),
+        TraversalDirection.down => _toBar(_pageRegion),
+        TraversalDirection.right => _into(_queueRegion),
+      });
+  late final DpadRegionNode _queueRegion = DpadRegionNode(debugLabel: 'music queue', onExit: (d) => switch (d) {
+        TraversalDirection.left => _into(_pageRegion) || _into(_topRegion),
+        TraversalDirection.down => _toBar(_queueRegion),
+        _ => false,
+      });
+  late final DpadRegionNode _barRegion = DpadRegionNode(debugLabel: 'music bar', onExit: (d) => d == TraversalDirection.up && (_into(_aboveBar ?? _pageRegion) || _into(_pageRegion) || _into(_sideRegion)));
+  DpadRegionNode? _aboveBar; // where Up from the player bar returns to
+
+  /// Into [region], on what was last focused there, if it is on screen with something to focus.
+  bool _into(DpadRegionNode region) => region.context != null && Dpad.stopsUnder(region).isNotEmpty && Dpad.enter(region);
+
+  bool _toBar(DpadRegionNode from) {
+    if (!_into(_barRegion)) return false;
+    _aboveBar = from;
+    return true;
+  }
+
+  /// Back goes back one of Music's own pages first, then closes the queue.
+  bool _back() {
+    final nav = _nav.currentState;
+    if (nav != null && nav.canPop()) {
+      nav.pop();
+      return true;
+    }
+    return false;
+  }
 
   @override
   void initState() {
@@ -61,6 +116,9 @@ class _MusicShellState extends State<MusicShell> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_key);
+    for (final region in [_sideRegion, _topRegion, _pageRegion, _queueRegion, _barRegion]) {
+      region.dispose();
+    }
     _query.dispose();
     _text.dispose();
     _searchFocus.dispose();
@@ -93,33 +151,47 @@ class _MusicShellState extends State<MusicShell> {
         _text.text = q;
         _search(q);
       },
-      child: ColoredBox(
+      child: DpadBackScope(
+       onBack: _back,
+       child: ColoredBox(
         color: const Color(0xFF07080D),
         child: Column(children: [
           Expanded(
             child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              _Sidebar(top: top, open: (page) => _nav.currentState?.push(ShellRoute(child: page))),
+              DpadRegion(node: _sideRegion, child: _Sidebar(top: top, open: (page) => _nav.currentState?.push(ShellRoute(child: page)))),
               Expanded(
                 child: Column(children: [
                   SizedBox(height: top + 10),
-                  _TopBar(
-                    canPop: _nav.currentState?.canPop() ?? false,
-                    onBack: () => _nav.currentState?.maybePop(),
-                    controller: _text,
-                    focus: _searchFocus,
-                    onChanged: (q) {
-                      if (q.trim().isEmpty) _search('');
-                    },
-                    onSubmit: _search,
+                  DpadRegion(
+                    node: _topRegion,
+                    child: _TopBar(
+                      canPop: _nav.currentState?.canPop() ?? false,
+                      onBack: () => _nav.currentState?.maybePop(),
+                      controller: _text,
+                      focus: _searchFocus,
+                      onChanged: (q) {
+                        if (q.trim().isEmpty) _search('');
+                      },
+                      onSubmit: _search,
+                    ),
                   ),
                   Expanded(
                     child: ClipRect(
                       child: LayoutFrame(
                         inset: 30,
-                        child: Navigator(
-                          key: _nav,
-                          observers: [_observer],
-                          onGenerateRoute: (_) => PageRouteBuilder(pageBuilder: (_, _, _) => const MusicPage(embedded: true)),
+                        // Music starts on its page (not on the sidebar's first button, which
+                        // is nearer the top-left corner)
+                        child: DpadStart(
+                          child: DpadRegion(
+                            node: _pageRegion,
+                            child: Navigator(
+                              key: _nav,
+                              observers: [_observer, _returns],
+                              // (while one of Music's own pages is over it, nothing on Music's home can take
+                              // focus: R7, as for every page the shell opens)
+                              onGenerateRoute: (_) => PageRouteBuilder(pageBuilder: (_, _, _) => const CoveredRouteFocusBoundary(child: MusicPage(embedded: true))),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -129,12 +201,13 @@ class _MusicShellState extends State<MusicShell> {
               AnimatedSize(
                 duration: const Duration(milliseconds: 280),
                 curve: Curves.easeOutCubic,
-                child: _queue ? _QueuePanel(top: top, onClose: () => setState(() => _queue = false)) : const SizedBox(width: 0),
+                child: _queue ? DpadRegion(node: _queueRegion, child: _QueuePanel(top: top, onClose: () => setState(() => _queue = false))) : const SizedBox(width: 0),
               ),
             ]),
           ),
-          MusicBar(queueOpen: _queue, onQueue: () => setState(() => _queue = !_queue)),
+          DpadRegion(node: _barRegion, child: MusicBar(queueOpen: _queue, onQueue: () => setState(() => _queue = !_queue))),
         ]),
+       ),
       ),
     );
   }
@@ -659,7 +732,13 @@ class MusicBar extends StatelessWidget {
                               inactiveTrackColor: Colors.white24,
                               thumbColor: Colors.white,
                             ),
-                            child: Slider(value: p.volume.clamp(0, 100), max: 100, onChanged: p.setVolume),
+                            // A mouse's slider. A D-pad passes it over: it sits between two
+                            // buttons and would keep Left and Right. The full player has a
+                            // volume slider a D-pad can use.
+                            child: ExcludeFocus(
+                              excluding: InputModeTracker.isKeyboardMode(context),
+                              child: Slider(value: p.volume.clamp(0, 100), max: 100, onChanged: p.setVolume),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -705,8 +784,22 @@ class _Progress extends StatefulWidget {
 class _ProgressState extends State<_Progress> {
   double? _drag;
 
+  // D-pad: one focus stop. Left and Right seek five seconds (further when held), Up and Down
+  // move on.
   @override
   Widget build(BuildContext context) {
+    final p = MusicPlayer.instance;
+    return DpadSeekStop(
+      position: () => p.position.value,
+      duration: () => p.duration.value,
+      onSeek: (to) => p.seek(to),
+      stepSeconds: () => 5,
+      focusInset: const EdgeInsets.symmetric(horizontal: 2, vertical: -4),
+      builder: _bar,
+    );
+  }
+
+  Widget _bar(BuildContext context, Duration? sentTo) {
     final p = MusicPlayer.instance;
     return ValueListenableBuilder<Duration>(
       valueListenable: p.duration,
@@ -714,7 +807,7 @@ class _ProgressState extends State<_Progress> {
         valueListenable: p.position,
         builder: (context, pos, _) {
           final total = dur.inMilliseconds.toDouble();
-          final at = _drag ?? (total <= 0 ? 0.0 : (pos.inMilliseconds / total).clamp(0.0, 1.0));
+          final at = _drag ?? (total <= 0 ? 0.0 : ((sentTo ?? pos).inMilliseconds / total).clamp(0.0, 1.0));
           const time = TextStyle(fontSize: 11.5, color: VyseColors.textFaint, fontFeatures: [FontFeature.tabularFigures()]);
           return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             SizedBox(width: 44, child: Text(fmtClock(Duration(milliseconds: (at * total).round())), textAlign: TextAlign.right, style: time)),

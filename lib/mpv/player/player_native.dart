@@ -34,8 +34,8 @@ class PlayerNative extends PlayerBase {
   /// sessions, gpu-next for software ones (see
   /// MpvPlayerCore.initialVideoOutput; #2010). Other platforms ignore it.
   PlayerNative({this._hardwareDecoding = true})
-    : methodChannel = const MethodChannel('com.plezy/mpv_player'),
-      eventChannel = const EventChannel('com.plezy/mpv_player/events'),
+    : methodChannel = const MethodChannel('vyse/mpv_player'),
+      eventChannel = const EventChannel('vyse/mpv_player/events'),
       audioOnly = false;
 
   /// Audio-only player on the dedicated music channels/core (see
@@ -44,12 +44,12 @@ class PlayerNative extends PlayerBase {
   /// display-mode handling.
   ///
   /// VyseTV: [secondary] uses the second audio core
-  /// (`com.plezy/mpv_audio_player_2`), so audiobooks keep their own loaded
+  /// (`vyse/mpv_audio_player_2`), so audiobooks keep their own loaded
   /// track next to music's.
   PlayerNative.audio({bool secondary = false})
-    : methodChannel = MethodChannel(secondary ? 'com.plezy/mpv_audio_player_2' : 'com.plezy/mpv_audio_player'),
+    : methodChannel = MethodChannel(secondary ? 'vyse/mpv_audio_player_2' : 'vyse/mpv_audio_player'),
       eventChannel = EventChannel(
-        secondary ? 'com.plezy/mpv_audio_player_2/events' : 'com.plezy/mpv_audio_player/events',
+        secondary ? 'vyse/mpv_audio_player_2/events' : 'vyse/mpv_audio_player/events',
       ),
       audioOnly = true,
       _hardwareDecoding = true;
@@ -119,7 +119,7 @@ class PlayerNative extends PlayerBase {
     final cached = _cachedHeapSizeMB;
     if (cached != null) return cached;
     try {
-      const channel = MethodChannel('com.plezy/mpv_player');
+      const channel = MethodChannel('vyse/mpv_player');
       final result = await channel.invokeMethod<int>('getHeapSize');
       if (result != null && result > 0) _cachedHeapSizeMB = result;
       return result ?? 0;
@@ -235,6 +235,13 @@ class PlayerNative extends PlayerBase {
   // VideoPlayerScreen._initializePlayer) share one `invoke('initialize')`.
   // Two concurrent invokes on Android caused MpvPlayerPlugin.handleInitialize
   // to dispose-and-recreate the in-flight core, hanging playback (#930).
+  /// VyseTV: the hardware decoders mpv is asked for (see [_doInitialize]), as upstream asks.
+  static String get _hardwareDecoder => Platform.isAndroid
+      ? 'mediacodec,mediacodec-copy'
+      : (Platform.isIOS || Platform.isMacOS)
+          ? 'videotoolbox'
+          : 'auto';
+
   Future<void>? _initFuture;
   Future<void> _audioStateTail = Future<void>.value();
   String _requestedLogLevel = 'warn';
@@ -317,6 +324,17 @@ class PlayerNative extends PlayerBase {
         await observeProperty('demuxer-cache-state', _nodeFormat);
         await observeProperty('audio-device-list', _nodeFormat);
         await observeProperty('audio-device', 'string');
+        // VyseTV: hardware decoding. Upstream asks for it from its own player screen
+        // (_getHwdecValue in video_player_screen.dart), which VyseTV does not use, so
+        // until this every video here was decoded in software: unnoticed on a desktop
+        // processor, a few frames a second on a TV box. MediaCodec on Android, straight
+        // to the video plane through the fork's vo=mediacodec (mediacodec-copy is the
+        // only hardware path below API 26); VideoToolbox on Apple (its native core sets
+        // it as well); auto elsewhere (D3D11 on Windows). A file the hardware cannot
+        // decode is decoded in software, as before. Direct invoke, as above.
+        if (_hardwareDecoding) {
+          await invoke('setProperty', {'name': 'hwdec', 'value': _hardwareDecoder});
+        }
       }
 
       if (_nativeCoreUnavailable) throw StateError('Player was disposed during initialization');

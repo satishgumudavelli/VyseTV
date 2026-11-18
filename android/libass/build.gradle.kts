@@ -8,13 +8,13 @@ plugins {
 }
 
 android {
-  namespace = "com.edde746.plezy.libass"
+  namespace = "com.vyse.libass"
   compileSdk = 36
   // Matches the app's latest stable NDK so every project-owned native library
   // is built with the same 16 KB page-size-capable libc++ toolchain. That copy
   // is NOT what ships: the app packages the mpv-android AAR's copy with top
   // merge priority (see app/build.gradle.kts packaging { jniLibs } + sourceSets).
-  ndkVersion = "28.2.13676358" // VyseTV: installed NDK (Plezy pins 29.0.14206865)
+  ndkVersion = "28.2.13676358" // VyseTV: installed NDK (upstream pins 29.0.14206865)
 
   defaultConfig {
     minSdk = 21
@@ -40,7 +40,7 @@ android {
   externalNativeBuild {
     cmake {
       path = file("src/main/cpp/CMakeLists.txt")
-      version = "3.22.1" // VyseTV: installed CMake (Plezy pins 4.1.2); CMakeLists needs >= 3.22.1
+      version = "3.22.1" // VyseTV: installed CMake (upstream pins 4.1.2); CMakeLists needs >= 3.22.1
     }
   }
 }

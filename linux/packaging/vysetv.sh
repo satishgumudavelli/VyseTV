@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wrapper script for VyseTV (from Plezy). Works for both:
+# Wrapper script for VyseTV (from upstream). Works for both:
 #   - Portable tarball (run from extracted directory)
 #   - System packages (/usr/bin/vysetv -> /opt/vysetv/)
 

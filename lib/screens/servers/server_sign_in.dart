@@ -18,6 +18,7 @@ Future<bool> showServerSignIn(BuildContext context, {MediaBackend? backend, Disc
   if (Layout.isPhone(context)) {
     added = await showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true, // over the navbar, not under it
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: const Color(0xFF0B0D16),

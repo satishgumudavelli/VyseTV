@@ -1,8 +1,8 @@
 // Pure-C frame packer behind the JNI atlas render entry point (AssKt.c).
 // Kept free of JNI/Android includes so desktop test harnesses can compile the
 // exact shipped packing/composite logic against a host libass build.
-#ifndef PLEZY_ASS_PACK_H
-#define PLEZY_ASS_PACK_H
+#ifndef VYSE_ASS_PACK_H
+#define VYSE_ASS_PACK_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -54,4 +54,4 @@ int ass_pack_frame(
     ASS_Image* image, uint8_t* atlasPixels, size_t atlasCap, int atlasMaxW, int atlasMaxH, float* vertices,
     size_t vertexCap, AssPackResult* out);
 
-#endif  // PLEZY_ASS_PACK_H
+#endif  // VYSE_ASS_PACK_H

@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
-import '../../data/account.dart';
+import '../../data/account/account.dart';
 import '../../data/party/friends.dart';
 import '../../data/party/party.dart';
 import '../../widgets/common.dart';

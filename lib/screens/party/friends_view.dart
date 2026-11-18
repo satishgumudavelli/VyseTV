@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
-import '../../data/account.dart';
+import '../../data/account/account.dart';
 import '../../data/party/dms.dart';
 import '../../data/party/friends.dart';
 import '../../data/party/party.dart';
+import '../../dpad/dpad_traversal.dart';
 import '../../widgets/common.dart';
 import 'dm_page.dart';
 import 'party_widgets.dart';
@@ -48,7 +49,8 @@ class _PartyFriendsAreaState extends State<PartyFriendsArea> {
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: Row(
+            // the tabs: one row to a D-pad, entered on the tab that is showing
+            child: DpadRail(child: Row(
               children: [
                 _TabPill(
                   label: 'Messages',
@@ -69,7 +71,7 @@ class _PartyFriendsAreaState extends State<PartyFriendsArea> {
                 _TabPill(label: 'Blocked', selected: tab == _Tab.blocked, onTap: () => setState(() => _tab = _Tab.blocked)),
                 _TabPill(label: 'Add friend', accent: true, selected: tab == _Tab.add, onTap: () => setState(() => _tab = _Tab.add)),
               ],
-            ),
+            )),
           ),
           const SizedBox(height: 16),
           AnimatedSwitcher(
@@ -132,6 +134,7 @@ class _TabPill extends StatelessWidget {
     padding: const EdgeInsets.only(right: 6),
     child: Pressable(
       onTap: onTap,
+      autofocusFallback: selected, // where a D-pad comes into the row of tabs
       builder: (context, hovered, _) => AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

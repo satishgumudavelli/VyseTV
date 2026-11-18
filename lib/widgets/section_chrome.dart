@@ -2,11 +2,14 @@ import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../core/layout.dart';
 import '../core/theme.dart';
+import '../dpad/dpad_root.dart' show backBindings;
+import '../dpad/dpad_traversal.dart';
+import '../dpad/input_mode_tracker.dart';
 import 'common.dart';
+import 'voice_search.dart';
 
 /// Shared furniture for the Manga / Music / Audiobooks / Live TV tabs: the warm glow behind the
 /// header, the title block, a search field, filter chips and empty states.
@@ -193,9 +196,14 @@ class _VyseSearchFieldState extends State<VyseSearchField> {
             const SizedBox(width: 12),
             Expanded(
               child: CallbackShortcuts(
-                bindings: {
-                  const SingleActivator(LogicalKeyboardKey.escape): () => hasText ? _clear() : _focus.unfocus(),
-                },
+                // Back (Escape, a remote's Back, a controller's B): clears the text, then leaves the box
+                bindings: backBindings(() {
+                  if (hasText) {
+                    _clear();
+                  } else if (InputModeTracker.currentMode != InputMode.keyboard || !Dpad.stepOut(_focus)) {
+                    _focus.unfocus();
+                  }
+                }),
                 child: TextField(
                   controller: widget.controller,
                   focusNode: _focus,
@@ -219,6 +227,8 @@ class _VyseSearchFieldState extends State<VyseSearchField> {
               child: Pressable(
                 onTap: _clear,
                 tooltip: 'Clear (Esc)',
+                // scaled to nothing while the box is empty: not a stop then
+                focusable: hasText,
                 builder: (context, hovered, _) => AnimatedContainer(
                   duration: const Duration(milliseconds: 140),
                   width: 26,
@@ -228,6 +238,11 @@ class _VyseSearchFieldState extends State<VyseSearchField> {
                 ),
               ),
             ),
+            // on a TV: say what to look for
+            if (VoiceSearch.offered) ...[
+              const SizedBox(width: 8),
+              VoiceSearchButton(controller: widget.controller, onHeard: widget.onSubmit, prompt: widget.hint),
+            ],
           ]),
         ),
       ),
@@ -237,15 +252,21 @@ class _VyseSearchFieldState extends State<VyseSearchField> {
 
 /// Discover's sort pill: solid white when selected, bare text that lifts on hover otherwise.
 class FilterChipPill extends StatelessWidget {
-  const FilterChipPill({super.key, required this.label, required this.selected, required this.onTap, this.icon});
+  const FilterChipPill({super.key, required this.label, required this.selected, required this.onTap, this.icon, this.tab = false});
   final String label;
   final bool selected;
   final VoidCallback onTap;
   final IconData? icon;
 
+  /// This chip is one of a page's tabs: with a D-pad the page starts on the selected one
+  /// (unless something on the page is marked as its start), and coming up into the row of
+  /// tabs lands on it. Wrap the row in a `DpadRail`.
+  final bool tab;
+
   @override
   Widget build(BuildContext context) => Pressable(
         onTap: onTap,
+        autofocusFallback: tab && selected,
         builder: (context, hovered, pressed) {
           final fg = selected ? Colors.black : (hovered ? VyseColors.text : VyseColors.textDim);
           return AnimatedScale(

@@ -1,6 +1,6 @@
-// VyseTV: picture effects for Plezy's mpv player — upscaling shaders and
+// VyseTV: picture effects for the mpv player — upscaling shaders and
 // ambient lighting. Shader chains and the ambient-lighting shader generator are
-// from Plezy (edde746/plezy, GPL-3.0: shader_asset_loader.dart,
+// from upstream (GPL-3.0: shader_asset_loader.dart,
 // shader_service.dart, ambient_lighting_service.dart). The shader files in
 // assets/shaders are MIT (Anime4K by bloc97; ArtCNN by Joao Chrisostomo and
 // Kacper Michajłow; NVIDIA Image Scaling).
@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/platform/platform_detector.dart';
 import '../player/player.dart';
 
 /// An upscaling preset: mpv GLSL shaders run in order on every frame.
@@ -25,10 +26,11 @@ class Upscaler {
   bool get isOff => files.isEmpty;
 
   static const off = Upscaler('none', 'Off', "mpv's own scaling", []);
+  static const nvscaler = Upscaler('nvscaler', 'NVIDIA Image Scaling', 'Sharper upscale · light on the GPU', ['nvscaler/NVScaler.glsl']);
 
   static const all = [
     off,
-    Upscaler('nvscaler', 'NVIDIA Image Scaling', 'Sharper upscale · light on the GPU', ['nvscaler/NVScaler.glsl']),
+    nvscaler,
     Upscaler('artcnn', 'ArtCNN', 'Anime & art · neural upscale', ['artcnn/ArtCNN_C4F16.glsl']),
     Upscaler('artcnn_hq', 'ArtCNN · high quality', 'Anime & art · needs a strong GPU', ['artcnn/ArtCNN_C4F32.glsl']),
     Upscaler('anime4k', 'Anime4K', 'Anime · restores lines', ['anime4k/Anime4K_Clamp_Highlights.glsl', 'anime4k/Anime4K_Restore_CNN_M.glsl']),
@@ -39,6 +41,18 @@ class Upscaler {
   ];
 
   static Upscaler byId(String id) => all.firstWhere((u) => u.id == id, orElse: () => off);
+
+  /// What this device offers. A TV gets Off and NVIDIA Image Scaling only: on a TV's graphics
+  /// chip the neural ones lagged, shook the picture or crashed the app (Anime4K's high quality
+  /// did), while NVIDIA's ran smoothly (testers, 2026-11-17). Desktops keep them all.
+  static List<Upscaler> get offered => TvDetectionService.isTVSync() ? const [off, nvscaler] : all;
+
+  /// The upscaler [id] stands for here: one this device does not offer (picked before a TV
+  /// stopped offering it, or a setting carried over) is Off.
+  static Upscaler chosen(String id) {
+    final u = byId(id);
+    return offered.contains(u) ? u : off;
+  }
 }
 
 /// Applies an [Upscaler] and ambient lighting to one player. Calls are queued, so a quick
@@ -51,6 +65,15 @@ class PictureEffects {
   String? _ambientPath;
   bool _ambientOn = false;
 
+  /// What mpv was last given: the upscaler, and the picture's shape when ambient lighting is
+  /// on. A call that would give it the same again does nothing. (Android's player moves the
+  /// picture between the video plane and the GPU renderer whenever the shader list goes empty
+  /// or stops being empty, and the picture jumps each time. The player page calls this every
+  /// time mpv reports the picture's size, which it does again whenever a source opens, as
+  /// switching to another language's server does: with an upscaler on, the picture shook.)
+  String? _applied;
+  Upscaler? _appliedUpscaler;
+
   /// Rebuilds mpv's shader chain: the upscaler's shaders, then ambient lighting last.
   /// [videoAspect] (width / height) is needed for ambient lighting; without it, it stays off.
   Future<void> apply({required Upscaler upscaler, required bool ambient, double? videoAspect}) {
@@ -59,13 +82,22 @@ class PictureEffects {
 
   Future<void> _apply(Upscaler upscaler, bool ambient, double? videoAspect) async {
     // NVIDIA Image Scaling is an SDR filter: on HDR it only crushes the picture, so skip it there.
+    // (While mpv can't say, between files or as its output is rebuilt, the last answer stands.)
     var chosen = upscaler;
     if (upscaler.id == 'nvscaler') {
-      final peak = double.tryParse(await _safeGet('video-params/sig-peak') ?? '') ?? 1;
-      if (peak > 1) chosen = Upscaler.off;
+      final peak = double.tryParse(await _safeGet('video-params/sig-peak') ?? '');
+      if (peak == null) {
+        if (_appliedUpscaler != null && (_appliedUpscaler!.isOff || _appliedUpscaler!.id == upscaler.id)) chosen = _appliedUpscaler!;
+      } else if (peak > 1) {
+        chosen = Upscaler.off;
+      }
     }
-    final files = <String>[for (final f in chosen.files) await _extract(f)];
     final wantAmbient = ambient && videoAspect != null && videoAspect > 0;
+    final state = '${chosen.id}|${wantAmbient ? videoAspect.toStringAsFixed(3) : '-'}';
+    if (state == _applied) return;
+    _applied = state;
+    _appliedUpscaler = chosen;
+    final files = <String>[for (final f in chosen.files) await _extract(f)];
 
     // Leaving ambient: letterbox first, so dropping the shader is invisible.
     if (_ambientOn && !wantAmbient) {
@@ -73,14 +105,20 @@ class PictureEffects {
       await _safeSet('sub-video-rect-aspect', 'no');
       _ambientOn = false;
     }
-    await _safeCommand(['change-list', 'glsl-shaders', 'clr', '']);
-    for (final f in files) {
-      await _safeCommand(['change-list', 'glsl-shaders', 'append', f]);
-    }
     if (wantAmbient) {
-      // Subtitles stay on the picture, not in the glowing bars (a Plezy mpv patch).
+      // Subtitles stay on the picture, not in the glowing bars (an upstream mpv patch).
       await _safeSet('sub-video-rect-aspect', videoAspect.toString());
-      await _safeCommand(['change-list', 'glsl-shaders', 'append', _ambientPath ??= await _writeAmbientShader()]);
+      files.add(_ambientPath ??= await _writeAmbientShader());
+    }
+    // The whole list in one go. Emptied first and filled after, it sent Android's player off
+    // the GPU renderer and back.
+    if (files.isEmpty) {
+      await _safeCommand(['change-list', 'glsl-shaders', 'clr', '']);
+    } else {
+      // (a list of paths: ':' between them, ';' on Windows)
+      await _safeCommand(['change-list', 'glsl-shaders', 'set', files.join(Platform.isWindows ? ';' : ':')]);
+    }
+    if (wantAmbient && !_ambientOn) {
       await _safeSet('keepaspect', 'no');
       _ambientOn = true;
     }
@@ -118,7 +156,7 @@ class PictureEffects {
     return file.path;
   }
 
-  // ── ambient lighting (Plezy's generator) ──
+  // ── ambient lighting (upstream's generator) ──
   //
   // `keepaspect=no` makes mpv scale the frame to the whole window; the shader then draws the
   // sharp picture centred at its own aspect over a blurred, dimmed copy of its edges. It reads

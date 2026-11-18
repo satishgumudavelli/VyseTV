@@ -58,7 +58,7 @@ export 'models.dart';
 export 'video.dart';
 export 'vyse_video.dart'; // VyseTV: Video + hole punch
 
-// VyseTV extras on top of Plezy's player
+// VyseTV extras on top of the player
 export 'extras/display_match.dart';
 export 'extras/external_player.dart';
 export 'extras/picture_effects.dart';

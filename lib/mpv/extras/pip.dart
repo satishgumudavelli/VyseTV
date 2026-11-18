@@ -1,7 +1,7 @@
-// VyseTV: picture-in-picture for Plezy's player.
+// VyseTV: picture-in-picture for the player.
 //
 // Android, iOS and macOS use the system's own picture-in-picture through the
-// `com.plezy/pip` channel (MainActivity.kt on Android, Plezy's MpvPlayerPlugin
+// `vyse/pip` channel (MainActivity.kt on Android, upstream's MpvPlayerPlugin
 // + MpvPipController on Apple). Windows and Linux have no system PiP, so the app
 // window itself becomes the small player: borderless, always on top, in the
 // corner of the screen, draggable; it goes back to how it was on exit.
@@ -14,7 +14,7 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 abstract final class Pip {
-  static const _channel = MethodChannel('com.plezy/pip');
+  static const _channel = MethodChannel('vyse/pip');
 
   /// True while the video is in picture-in-picture (system PiP, or the desktop mini player).
   static final active = ValueNotifier(false);

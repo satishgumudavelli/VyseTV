@@ -11,7 +11,7 @@
 #include "flutter/generated_plugin_registrant.h"
 #include "mpv/mpv_plugin.h"
 
-// Plezy's player: on Wayland the video is a wl_subsurface stacked *below* this
+// The player: on Wayland the video is a wl_subsurface stacked *below* this
 // window, so the window needs an alpha channel and Flutter must not paint an
 // opaque background over it. On X11 the player draws into a Flutter texture
 // instead (mpv/vyse_texture_fallback.h), so the window stays as it was.
@@ -105,7 +105,7 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
-  // Plezy's mpv player: video (Wayland plane, or a texture on X11) and two
+  // The mpv player: video (Wayland plane, or a texture on X11) and two
   // audio-only cores (music, audiobooks).
   mpv_plugin_register_with_registrar(fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(view), "MpvPlugin"));
   mpv_audio_plugin_register_with_registrar(

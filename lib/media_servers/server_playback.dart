@@ -9,21 +9,21 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 
-import '../data/intro_db.dart' show Segment, SegmentKind;
-import '../data/outside_play.dart';
-import '../data/sources.dart' show StreamSource;
-import '../data/subtitles.dart' as sub;
-import '../data/tmdb.dart' show Media, Season;
-import '../plezy/media/media_item.dart';
-import '../plezy/media/media_kind.dart';
-import '../plezy/media/media_server_client.dart';
-import '../plezy/services/playback_initialization_types.dart';
-import '../screens/player_episodes.dart' show EpisodeInfo, EpisodeStore;
-import '../screens/player_page.dart' show PlayerEpisode;
+import '../data/playback/intro_db.dart' show Segment, SegmentKind;
+import '../data/playback/outside_play.dart';
+import '../data/sources/sources.dart' show StreamSource;
+import '../data/subtitles/subtitles.dart' as sub;
+import '../data/catalog/tmdb.dart' show Media, Season;
+import 'media/media_item.dart';
+import 'media/media_kind.dart';
+import 'media/media_server_client.dart';
+import 'services/playback_initialization_types.dart';
+import '../screens/player/player_episodes.dart' show EpisodeInfo, EpisodeStore;
+import '../screens/player/player_page.dart' show PlayerEpisode;
 import 'media_servers.dart';
 import 'watched_rule.dart';
 
-export '../data/outside_play.dart' show ServerStream;
+export '../data/playback/outside_play.dart' show ServerStream;
 
 class ServerPlayback implements OutsidePlayback {
   ServerPlayback._(this.server, this.client, this.media, this.episode, this._movie, this.episodes, this._fromStart);

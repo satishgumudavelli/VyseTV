@@ -63,7 +63,7 @@ struct NativeRenderTeardownOperations {
 // later retry, and |handle| is never terminated while any resource remains.
 bool TryReleaseNativeRenderTeardown(NativeRenderTeardownBatch& batch, const NativeRenderTeardownOperations& operations);
 
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
 // Focused-test boundary for exercising the process-lifetime teardown queue
 // without invoking real EGL or libmpv resources.
 void ConfigureNativeRenderTeardownQueueForTesting(NativeRenderTeardownOperations operations);
@@ -129,9 +129,9 @@ class MpvPlayer {
   void Command(const std::vector<std::string>& args);
 
   /// Callback types for async mpv requests.
-  using StatusCallback = plezy::mpv_common::StatusCallback;
-  using CommandCallback = plezy::mpv_common::CommandCallback;
-  using GetPropertyCallback = plezy::mpv_common::GetPropertyCallback;
+  using StatusCallback = vyse::mpv_common::StatusCallback;
+  using CommandCallback = vyse::mpv_common::CommandCallback;
+  using GetPropertyCallback = vyse::mpv_common::GetPropertyCallback;
 
   /// Executes an mpv command asynchronously to prevent UI blocking.
   void CommandAsync(const std::vector<std::string>& args, CommandCallback callback);
@@ -187,7 +187,7 @@ class MpvPlayer {
   /// compositor so it has nothing left to do.
   void SetHdrOutput(SourceTransfer transfer, uint32_t target_peak_nits, HdrOutputCallback callback);
 
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
   /// Focused-test boundary for the output-colour-space transaction above.
   ///
   /// The whole ladder — apply, unwind, force SDR — is control flow over one
@@ -439,7 +439,7 @@ class MpvPlayer {
 
   /// Helper to convert mpv_node to FlValue, bounded by the shared node budget.
   ::_FlValue* NodeToFlValue(mpv_node* node);
-  ::_FlValue* NodeToFlValue(mpv_node* node, plezy::mpv_common::NodeConversionBudget* budget);
+  ::_FlValue* NodeToFlValue(mpv_node* node, vyse::mpv_common::NodeConversionBudget* budget);
 
   const bool audio_only_;
   mpv_handle* mpv_ = nullptr;
@@ -476,7 +476,7 @@ class MpvPlayer {
   // thread rather than on an mpv worker.
   bool hdr_sequence_in_flight_ = false;
   std::deque<HdrOutputRequest> hdr_queue_;
-#ifdef PLEZY_MPV_PLAYER_LIFECYCLE_TEST
+#ifdef VYSE_MPV_PLAYER_LIFECYCLE_TEST
   // The substituted property-write, property-read and event-wait primitives;
   // empty in every build that has a real core to talk to. See
   // ConfigurePropertyWritesForTesting, ConfigurePropertyReadsForTesting and
@@ -513,19 +513,19 @@ class MpvPlayer {
   RedrawCallback redraw_callback_;
   SourceMetadataCallback source_metadata_callback_;
   std::mutex callback_mutex_;
-  plezy::mpv_common::AudioRecoveryState audio_recovery_;
+  vyse::mpv_common::AudioRecoveryState audio_recovery_;
   // Set when audio recovery gave up and stopped playback itself; the END_FILE
   // that stop produces is then reported as the AO_INIT_FAILED error the core
   // would have raised without audio-fallback-to-null. Main-context thread
   // only: the recovery timer and event dispatch both run there.
   bool audio_output_failed_ = false;
-  plezy::mpv_common::AsyncRequestRegistry pending_requests_;
-  plezy::mpv_common::PropertyObservationRegistry observed_properties_;
+  vyse::mpv_common::AsyncRequestRegistry pending_requests_;
+  vyse::mpv_common::PropertyObservationRegistry observed_properties_;
   // What an error END_FILE's pass holds back until the pass is over, so the log
   // lines explaining the failure reach Dart first (see ErrorEndFileHold). Each
   // entry owns a reference. GLib main context only, like ProcessEvents, and
   // empty between passes.
-  plezy::mpv_common::ErrorEndFileHold<::_FlValue*> held_events_;
+  vyse::mpv_common::ErrorEndFileHold<::_FlValue*> held_events_;
   // The playlist entry whose START_FILE event was most recently dequeued.
   // Payload construction consumes this value synchronously, before any
   // EventChannel fanout can outlive the corresponding mpv event.

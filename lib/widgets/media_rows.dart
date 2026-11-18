@@ -7,8 +7,10 @@ import 'package:flutter/material.dart';
 import '../core/layout.dart';
 import '../core/nav.dart';
 import '../core/theme.dart';
-import '../data/discover.dart';
-import '../data/tmdb.dart';
+import '../data/catalog/discover.dart';
+import '../data/catalog/tmdb.dart';
+import '../dpad/dpad_reveal.dart';
+import '../dpad/dpad_traversal.dart';
 import 'common.dart';
 
 const _cardRadius = 7.0;
@@ -64,7 +66,10 @@ class _ShelfState<T> extends State<Shelf<T>> {
     final inset = Layout.inset(context);
     final phone = Layout.isPhone(context);
 
-    return Padding(
+    // D-pad: the row and its heading come into view together, and the row is a rail (focus
+    // moves along it, and comes back to where it was).
+    return DpadRevealBlock(
+      child: Padding(
       padding: EdgeInsets.only(bottom: phone ? 22 : 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,7 +94,8 @@ class _ShelfState<T> extends State<Shelf<T>> {
                   behavior: ScrollConfiguration.of(context).copyWith(
                     dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad, PointerDeviceKind.stylus},
                   ),
-                  child: ListView.separated(
+                  child: DpadRail(
+                    child: ListView.separated(
                     controller: _scroll,
                     scrollDirection: Axis.horizontal,
                     padding: EdgeInsets.fromLTRB(inset, 4, phone ? 16 : 40, 4),
@@ -108,11 +114,13 @@ class _ShelfState<T> extends State<Shelf<T>> {
                             ),
                     ),
                   ),
+                  ),
                 );
               },
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -157,9 +165,12 @@ class _Chevron extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
+  // Paging arrows are for a mouse. A D-pad pages a row by moving along it, so it passes these
+  // over: two fewer stops above every row.
   @override
   Widget build(BuildContext context) => Pressable(
     onTap: onTap,
+    focusable: false,
     builder: (context, hovered, pressed) => AnimatedContainer(
       duration: const Duration(milliseconds: 140),
       width: 26,
@@ -196,15 +207,20 @@ class _RowError extends StatelessWidget {
 
 /// Crisp white outline on hover, image brightens a touch. No zoom, no glow.
 class OutlineCard extends StatelessWidget {
-  const OutlineCard({super.key, required this.label, required this.builder, this.radius = _cardRadius, this.onTap});
+  const OutlineCard({super.key, required this.label, required this.builder, this.radius = _cardRadius, this.onTap, this.onLongPress});
   final String label;
   final double radius;
   final Widget Function(bool hovered) builder;
   final VoidCallback? onTap;
 
+  /// What holding OK (or the Menu key) does on this card: its menu, or its remove.
+  final VoidCallback? onLongPress;
+
   @override
   Widget build(BuildContext context) => Pressable(
     onTap: onTap ?? () => comingSoon(context, label),
+    onLongPress: onLongPress,
+    focusScale: 1.03,
     builder: (context, hovered, pressed) => AnimatedScale(
       scale: pressed ? .98 : 1,
       duration: const Duration(milliseconds: 120),
@@ -522,7 +538,8 @@ class GenreGrid extends StatelessWidget {
     const gap = 12.0;
     final genres = homeGenres.take(cols * 2).toList();
 
-    return Padding(
+    return DpadRevealBlock(
+      child: Padding(
       padding: EdgeInsets.only(bottom: ff == FormFactor.phone ? 22 : 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -553,6 +570,7 @@ class GenreGrid extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

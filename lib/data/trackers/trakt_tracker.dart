@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../anilist.dart' show AnimeExtras;
+import '../anime/anilist.dart' show AnimeExtras;
 import '../net.dart';
 import 'media_ref.dart';
 import 'rate_gate.dart';

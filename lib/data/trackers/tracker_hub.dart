@@ -4,10 +4,10 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../anilist.dart' show Anime;
+import '../anime/anilist.dart' show Anime;
 import '../app_settings.dart';
-import '../tmdb.dart' show Media, MyList;
-import '../watch_progress.dart';
+import '../catalog/tmdb.dart' show Media, MyList;
+import '../playback/watch_progress.dart';
 import 'anilist_tracker.dart';
 import 'library_import.dart';
 import 'loopback_auth.dart';

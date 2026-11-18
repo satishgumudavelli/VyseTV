@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 
 import '../core/layout.dart';
 import '../core/nav.dart';
-import '../core/perf.dart';
+import '../core/logs/perf.dart';
 import '../core/theme.dart';
-import '../data/tmdb.dart';
-import '../screens/player_page.dart';
+import '../data/catalog/tmdb.dart';
+import '../screens/player/player_page.dart';
+
 import '../data/trackers/tracker_hub.dart';
+import '../core/platform/platform_detector.dart' show PlatformDetector;
 import 'common.dart';
 
 const _ease = Curves.easeInOutCubic;
@@ -236,17 +238,20 @@ class _Backdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
-    duration: const Duration(milliseconds: 1000),
+    // (a TV: a shorter fade, with no zoom: see _Drift)
+    duration: Duration(milliseconds: _still ? 500 : 1000),
     switchInCurve: Curves.easeOut,
     switchOutCurve: Curves.easeIn,
     // New slide fades in while settling from a slight zoom. (A full-screen blur here looked
     // nice but cost a whole extra render pass per frame, which stutters on high-refresh screens.)
     transitionBuilder: (child, a) => FadeTransition(
       opacity: a,
-      child: ScaleTransition(
-        scale: Tween(begin: 1.04, end: 1.0).animate(a),
-        child: child,
-      ),
+      child: _still
+          ? child
+          : ScaleTransition(
+              scale: Tween(begin: 1.04, end: 1.0).animate(a),
+              child: child,
+            ),
     ),
     layoutBuilder: (current, previous) =>
         Stack(fit: StackFit.expand, children: [...previous, ?current]),
@@ -276,7 +281,13 @@ int screenDecodeWidth(BuildContext context) {
   return (mq.size.width * mq.devicePixelRatio).round().clamp(640, 3840);
 }
 
-/// Barely-there slow push-in so the frame never feels frozen.
+/// Whether the hero's picture holds still: on a TV. Its slow push-in redrew the whole screen
+/// every frame for as long as Home was open, and a TV's graphics chip pays for that twice (the
+/// app is drawn into a texture over the video, then composited again): testers found the app
+/// slow on TVs where their other apps ran smoothly.
+bool get _still => PlatformDetector.isTV();
+
+/// Barely-there slow push-in so the frame never feels frozen (not on a TV: see [_still]).
 class _Drift extends StatelessWidget {
   const _Drift({super.key, required this.url, this.alignment = const Alignment(.5, -.4)});
   final String? url;
@@ -285,6 +296,19 @@ class _Drift extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (url == null) return const ColoredBox(color: VyseColors.surface);
+    final image = RepaintBoundary(
+      child: CachedNetworkImage(
+        imageUrl: url!,
+        fit: BoxFit.cover,
+        alignment: alignment,
+        memCacheWidth: screenDecodeWidth(context),
+        filterQuality: FilterQuality.low,
+        fadeInDuration: const Duration(milliseconds: 400),
+        placeholder: (_, _) => const ColoredBox(color: VyseColors.bg),
+        errorWidget: (_, _, _) => const ColoredBox(color: VyseColors.surface),
+      ),
+    );
+    if (_still) return image;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 1.0, end: 1.05),
       duration: const Duration(seconds: 20),
@@ -294,18 +318,7 @@ class _Drift extends StatelessWidget {
         child: child,
       ),
       // The image is painted once into its own layer; the push-in just transforms that layer.
-      child: RepaintBoundary(
-        child: CachedNetworkImage(
-          imageUrl: url!,
-          fit: BoxFit.cover,
-          alignment: alignment,
-          memCacheWidth: screenDecodeWidth(context),
-          filterQuality: FilterQuality.low,
-          fadeInDuration: const Duration(milliseconds: 400),
-          placeholder: (_, _) => const ColoredBox(color: VyseColors.bg),
-          errorWidget: (_, _, _) => const ColoredBox(color: VyseColors.surface),
-        ),
-      ),
+      child: image,
     );
   }
 }
@@ -782,6 +795,9 @@ class _Dots extends StatelessWidget {
       for (var i = 0; i < count; i++)
         Pressable(
           onTap: () => onTap(i),
+          // Eight 4-pixel stops would be in the way of every trip down the page. With a D-pad
+          // the slides are browsed in the spotlight (Up from the hero), as its hints say.
+          focusable: false,
           builder: (context, hovered, _) => Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2.5, vertical: 6),
             child: AnimatedContainer(

@@ -9,12 +9,12 @@ project(runner LANGUAGES CXX)
 add_executable(${BINARY_NAME}
   "main.cc"
   "my_application.cc"
-  # Plezy's player (linux/runner/mpv, from edde746/plezy)
+  # The player (linux/runner/mpv)
   "mpv/mpv_player.cc"
   "mpv/mpv_plugin.cc"
   "mpv/plane_render_executor.cc"
   "mpv/wayland_video_surface.cc"
-  # VyseTV: X11 sessions, where Plezy's Wayland plane is refused
+  # VyseTV: X11 sessions, where upstream's Wayland plane is refused
   "mpv/vyse_texture_fallback.cc"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
 )
@@ -27,7 +27,7 @@ target_compile_features(${BINARY_NAME} PRIVATE cxx_std_17)
 # Add preprocessor definitions for the application ID.
 add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 
-# libmpv comes from Plezy's mpv-build release (scripts/fetch_linux_libmpv.py);
+# libmpv comes from the mpv-build release (scripts/fetch_linux_libmpv.py);
 # point PKG_CONFIG_PATH at its prefix. A distro libmpv works too, but drops
 # hardware decoding to vaapi-copy on the Wayland plane.
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)

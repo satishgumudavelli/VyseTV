@@ -36,7 +36,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
-# simdutf (UTF-8 validation for mpv strings), from Plezy's runner CMake.
+# simdutf (UTF-8 validation for mpv strings), from upstream's runner CMake.
 add_library(simdutf STATIC "${simdutf_SOURCE_DIR}/simdutf.cpp")
 target_include_directories(simdutf PUBLIC "${simdutf_SOURCE_DIR}")
 target_compile_features(simdutf PUBLIC cxx_std_17)

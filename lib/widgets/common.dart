@@ -7,14 +7,76 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme.dart';
+import '../dpad/dpad_traversal.dart' show DpadLoading;
+import '../dpad/focus_theme.dart';
+import '../dpad/focusable_wrapper.dart';
+import '../dpad/input_mode_tracker.dart';
 
 /// Hover + press state for any tappable surface, with a pointer cursor.
+///
+/// It is also what a D-pad lands on: every enabled Pressable is a focus stop. In D-pad mode
+/// (a remote, a controller, the keyboard's arrows) the focused one wears the app's ring, OK
+/// does what a tap does, and [builder] is told it is hovered, so whatever a control shows
+/// under the mouse it shows under focus too. With a mouse or a finger in charge none of this
+/// is seen or does anything.
 class Pressable extends StatefulWidget {
-  const Pressable({super.key, required this.builder, this.onTap, this.tooltip});
+  const Pressable({
+    super.key,
+    required this.builder,
+    this.onTap,
+    this.tooltip,
+    this.onLongPress,
+    this.focusNode,
+    this.autofocus = false,
+    this.autofocusFallback = false,
+    this.railEntry = false,
+    this.focusable = true,
+    this.focusRadius,
+    this.focusScale = 1,
+    this.focusInset = EdgeInsets.zero,
+    this.focusGlow = true,
+  });
 
   final Widget Function(BuildContext context, bool hovered, bool pressed) builder;
   final VoidCallback? onTap;
   final String? tooltip;
+
+  /// What holding OK, or the Menu key, does: give it whatever a long press or a right click on
+  /// this control does. Keys only; pointer gestures stay with whoever handles them now.
+  final VoidCallback? onLongPress;
+
+  /// To move focus here from code. Left alone, the Pressable keeps its own.
+  final FocusNode? focusNode;
+
+  /// Take focus when first shown, if nothing else has it.
+  final bool autofocus;
+
+  /// Where a D-pad lands when the page opens and nothing on it has [autofocus]: the selected
+  /// tab of a tab strip, whose content may name a better place.
+  final bool autofocusFallback;
+
+  /// Where a D-pad lands when it comes into this control's row from across it (the showing tab
+  /// of a strip of tabs), on a page that starts somewhere else. Needs a DpadRail round the row.
+  final bool railEntry;
+
+  /// False for something a D-pad should pass over (a decoration that happens to take taps, a
+  /// button that is on screen but hidden). With no [onTap] it is passed over anyway.
+  final bool focusable;
+
+  /// The ring's corner radius. Left out, the ring takes the shape of what [builder] draws
+  /// (a pill, a circle, a card).
+  final double? focusRadius;
+
+  /// How much the control grows while focused (1 = not at all; cards use about 1.03). Paint
+  /// only: nothing around it moves.
+  final double focusScale;
+
+  /// How far inside the control's edges the ring sits; negative draws it outside, for a
+  /// control with no room of its own (a text link).
+  final EdgeInsets focusInset;
+
+  /// The soft glow around the ring.
+  final bool focusGlow;
 
   @override
   State<Pressable> createState() => _PressableState();
@@ -23,23 +85,60 @@ class Pressable extends StatefulWidget {
 class _PressableState extends State<Pressable> {
   bool _hovered = false;
   bool _pressed = false;
+  bool _focused = false;
+  Timer? _keyPress;
+
+  @override
+  void dispose() {
+    _keyPress?.cancel();
+    super.dispose();
+  }
+
+  /// OK was pressed: the pressed look for a moment, as under a finger, then the tap.
+  void _select() {
+    _keyPress?.cancel();
+    setState(() => _pressed = true);
+    _keyPress = Timer(const Duration(milliseconds: 110), () {
+      if (mounted) setState(() => _pressed = false);
+    });
+    widget.onTap?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
-    Widget child = MouseRegion(
-      cursor: widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() {
-        _hovered = false;
-        _pressed = false;
-      }),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onTap,
-        child: widget.builder(context, _hovered, _pressed),
+    // focus only shows, and only counts as hover, while a D-pad is in charge
+    final focusShown = _focused && InputModeTracker.isKeyboardMode(context);
+    Widget child = FocusableWrapper(
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
+      autofocusFallback: widget.autofocusFallback,
+      railEntry: widget.railEntry,
+      canRequestFocus: widget.focusable && (widget.onTap != null || widget.onLongPress != null),
+      onSelect: widget.onTap == null ? null : _select,
+      onLongPress: widget.onLongPress,
+      enableLongPress: widget.onLongPress != null,
+      onFocusChange: (focused) => setState(() => _focused = focused),
+      borderRadius: widget.focusRadius ?? FocusTheme.defaultBorderRadius,
+      matchChildShape: widget.focusRadius == null,
+      disableScale: widget.focusScale == 1,
+      focusScale: widget.focusScale,
+      focusInset: widget.focusInset,
+      useFocusGlow: widget.focusGlow,
+      child: MouseRegion(
+        cursor: widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() {
+          _hovered = false;
+          _pressed = false;
+        }),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTap: widget.onTap,
+          child: widget.builder(context, _hovered || focusShown, _pressed),
+        ),
       ),
     );
     if (widget.tooltip != null) child = Tooltip(message: widget.tooltip!, child: child);
@@ -219,7 +318,7 @@ class Glass extends StatelessWidget {
   final double blur;
   final Color borderColor;
 
-  /// The no-blur look (as on Android). For panels over the video: Plezy's player draws it on a
+  /// The no-blur look (as on Android). For panels over the video: the player draws it on a
   /// native surface behind Flutter, where a BackdropFilter can't see it.
   final bool solid;
 
@@ -339,21 +438,25 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
+  // (marked as loading for a D-pad: a first focus waits for what this stands in for, rather
+  // than going to a control further down the page)
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _c,
-        child: widget.child,
-        builder: (_, child) => ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) {
-            final dx = bounds.width * 3 * _c.value - bounds.width;
-            return LinearGradient(
-              colors: const [VyseColors.surface, VyseColors.surfaceHi, VyseColors.surface],
-              stops: const [.35, .5, .65],
-              transform: _Slide(dx),
-            ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height));
-          },
-          child: child,
+  Widget build(BuildContext context) => DpadLoading(
+        child: AnimatedBuilder(
+          animation: _c,
+          child: widget.child,
+          builder: (_, child) => ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (bounds) {
+              final dx = bounds.width * 3 * _c.value - bounds.width;
+              return LinearGradient(
+                colors: const [VyseColors.surface, VyseColors.surfaceHi, VyseColors.surface],
+                stops: const [.35, .5, .65],
+                transform: _Slide(dx),
+              ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height));
+            },
+            child: child,
+          ),
         ),
       );
 }

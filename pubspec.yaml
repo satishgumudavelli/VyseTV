@@ -34,13 +34,13 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  # Plezy's player (lib/mpv) needs these
+  # The player (lib/mpv) needs these
   audioplayers: ^6.5.1 # party alert tones (keeps them off the mpv cores)
   collection: ^1.18.0
   freezed_annotation: ^3.1.0
   path: ^1.9.0
   screen_retriever: ^0.2.2 # desktop mini player (picture-in-picture) placement
-  # Plex / Jellyfin / Emby (lib/plezy, from Plezy)
+  # Plex / Jellyfin / Emby (lib/media_servers, from upstream)
   clock: ^1.1.2
   connectivity_plus: ^7.3.1
   device_info_plus: ^12.4.0
@@ -66,6 +66,8 @@ dependencies:
   shared_preferences: ^2.3.3
   crypto: ^3.0.5
   pointycastle: 4.0.0
+  # Edit on your phone: the QR code a TV shows
+  qr_flutter: ^4.1.0
   screen_brightness: ^2.1.11
   pocketbase: ^0.25.3
   livekit_client: 2.13.2
@@ -128,11 +130,11 @@ flutter:
     - assets/logos/
     - assets/avatars/
     - assets/sounds/
-    # upscaling shaders for Plezy's player (MIT: Anime4K by bloc97, ArtCNN, NVIDIA Image Scaling)
+    # upscaling shaders for the player (MIT: Anime4K by bloc97, ArtCNN, NVIDIA Image Scaling)
     - assets/shaders/anime4k/
     - assets/shaders/artcnn/
     - assets/shaders/nvscaler/
-    # Go Noto (OFL, from Plezy): the default subtitle font; covers almost every script, and the
+    # Go Noto (OFL, from upstream): the default subtitle font; covers almost every script, and the
     # only fonts libass can reach on Android. The Hangul file fills in Korean syllables.
     - assets/fonts/
 

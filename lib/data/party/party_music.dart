@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../../models/music/music_track.dart';
-import '../music_player.dart';
-import '../tmdb.dart' show Media;
+import '../music/music_player.dart';
+import '../catalog/tmdb.dart' show Media;
 import 'watch_party.dart';
 
 /// Listening together in your room, on the watch party's channel: the host's music player reports

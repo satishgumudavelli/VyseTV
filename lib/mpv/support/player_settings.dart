@@ -1,5 +1,5 @@
-// VyseTV stand-ins for the two Plezy app settings the copied player reads
-// (Plezy's `SettingsService.subtitleRenderResolution` and
+// VyseTV stand-ins for the two upstream app settings the copied player reads
+// (upstream's `SettingsService.subtitleRenderResolution` and
 // `DevicePerformance.isLowEndHardware`). Set these before creating a Player.
 
 /// Resolution the Android subtitle plane renders at, relative to the screen.

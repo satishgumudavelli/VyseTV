@@ -8,10 +8,10 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // Plezy's player: a playback session (activated by the player when it starts),
+    // The player: a playback session (activated by the player when it starts),
     // and multichannel content so AirPods can offer Spatial Audio on 5.1/7.1.
     do {
-      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)  // same as Plezy
+      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)  // same as upstream
       try AVAudioSession.sharedInstance().setSupportsMultichannelContent(true)
     } catch {
       MpvLog.error("Failed to configure the audio session: \(error)")
@@ -22,7 +22,7 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    // Plezy's mpv player (Runner/MpvPlayer): video + PiP, and two audio-only cores
+    // The mpv player (Runner/MpvPlayer): video + PiP, and two audio-only cores
     // (music, audiobooks).
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "MpvPlayerPlugin") {
       MpvPlayerPlugin.register(with: registrar)

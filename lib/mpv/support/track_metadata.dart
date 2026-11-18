@@ -1,6 +1,6 @@
-// The two track-title helpers the copied player uses, lifted from Plezy's
-// `utils/track_label_builder.dart` (GPL-3.0, edde746/plezy) without the rest
-// of that file, which pulls in Plezy's translations and language tables.
+// The two track-title helpers the copied player uses, lifted from upstream's
+// `utils/track_label_builder.dart` (GPL-3.0) without the rest
+// of that file, which pulls in upstream's translations and language tables.
 
 String? cleanTrackMetadataValue(String? value) {
   if (value == null) return null;

@@ -107,7 +107,7 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
 
-  // Plezy's mpv player (video + music cores), see windows/runner/mpv/.
+  // The mpv player (video + music cores), see windows/runner/mpv/.
   MpvPlayerPluginRegisterWithRegistrar(flutter_controller_->engine()->GetRegistrarForPlugin("MpvPlayerPlugin"));
   MpvAudioPlayerPluginRegisterWithRegistrar(
       flutter_controller_->engine()->GetRegistrarForPlugin("MpvAudioPlayerPlugin"));

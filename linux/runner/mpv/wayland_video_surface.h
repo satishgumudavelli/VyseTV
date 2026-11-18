@@ -1,5 +1,5 @@
-#ifndef PLEZY_LINUX_MPV_WAYLAND_VIDEO_SURFACE_H_
-#define PLEZY_LINUX_MPV_WAYLAND_VIDEO_SURFACE_H_
+#ifndef VYSE_LINUX_MPV_WAYLAND_VIDEO_SURFACE_H_
+#define VYSE_LINUX_MPV_WAYLAND_VIDEO_SURFACE_H_
 
 #include <EGL/egl.h>
 #include <gtk/gtk.h>
@@ -503,4 +503,4 @@ class WaylandVideoSurface {
 
 }  // namespace mpv
 
-#endif  // PLEZY_LINUX_MPV_WAYLAND_VIDEO_SURFACE_H_
+#endif  // VYSE_LINUX_MPV_WAYLAND_VIDEO_SURFACE_H_

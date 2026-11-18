@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/party/watch_party.dart' show PartySong;
+import '../../dpad/dpad_seek.dart';
 import '../../widgets/common.dart';
 import 'party_widgets.dart' show PartyAvatar;
 
@@ -755,7 +756,14 @@ class _SeekState extends State<_Seek> {
             painter: _Line(widget.position, widget.duration, widget.tone, _drag, widget.thin ? 3 : (_drag != null ? 7 : 5), knob: widget.onSeek != null && !widget.thin),
           );
           if (widget.onSeek == null) return bar;
-          return MouseRegion(
+          // D-pad: one focus stop. Left and Right seek five seconds (further when held).
+          return DpadSeekStop(
+           position: () => widget.position.value,
+           duration: () => widget.duration.value,
+           onSeek: (to) => widget.onSeek?.call(to),
+           stepSeconds: () => 5,
+           focusInset: const EdgeInsets.symmetric(horizontal: -6, vertical: -4),
+           builder: (context, _) => MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -770,6 +778,7 @@ class _SeekState extends State<_Seek> {
               onHorizontalDragCancel: () => setState(() => _drag = null),
               child: bar,
             ),
+           ),
           );
         },
       ),
@@ -1153,7 +1162,13 @@ class _Volume extends StatelessWidget {
             overlayShape: SliderComponentShape.noOverlay,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5.5),
           ),
-          child: Slider(value: value.clamp(0, 100), max: 100, onChanged: onChanged),
+          child: DpadSlider(
+            value: value.clamp(0, 100).toDouble(),
+            max: 100,
+            step: 5,
+            onChanged: onChanged,
+            child: Slider(value: value.clamp(0, 100), max: 100, onChanged: onChanged),
+          ),
         ),
       ),
     ],

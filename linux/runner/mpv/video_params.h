@@ -1,5 +1,5 @@
-#ifndef PLEZY_LINUX_MPV_VIDEO_PARAMS_H_
-#define PLEZY_LINUX_MPV_VIDEO_PARAMS_H_
+#ifndef VYSE_LINUX_MPV_VIDEO_PARAMS_H_
+#define VYSE_LINUX_MPV_VIDEO_PARAMS_H_
 
 #include <mpv/client.h>
 
@@ -104,4 +104,4 @@ inline SourceHdrMetadata ParseSourceHdrMetadata(const mpv_node* params) {
 
 }  // namespace mpv
 
-#endif  // PLEZY_LINUX_MPV_VIDEO_PARAMS_H_
+#endif  // VYSE_LINUX_MPV_VIDEO_PARAMS_H_

@@ -1,6 +1,6 @@
-import '../account.dart';
+import '../account/account.dart';
 import '../music/music_library.dart';
-import '../tmdb.dart';
+import '../catalog/tmdb.dart';
 
 /// Someone's library as their Party profile shows it: their My List (films, shows, anime) and
 /// their music (liked songs, public playlists, saved albums and playlists, followed artists).

@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
-import '../../data/account.dart';
-import '../../data/music_player.dart';
+import '../../data/account/account.dart';
+import '../../data/music/music_player.dart';
 import '../../data/party/party.dart';
 import '../../data/party/party_music.dart';
 import '../../data/party/rooms.dart';
@@ -15,6 +15,7 @@ import '../../data/party/watch_party.dart';
 import '../../models/music/music_track.dart';
 import '../../services/music/music_service.dart';
 import '../../widgets/common.dart';
+import '../../widgets/voice_search.dart';
 import '../../widgets/music_widgets.dart';
 import 'party_music_view.dart';
 import 'party_strip.dart' show MicLeakPrompt;
@@ -166,8 +167,13 @@ class _PartyMusicRoomState extends State<PartyMusicRoom> {
       if (widget.full) {
         return CallbackShortcuts(
           bindings: {
-            const SingleActivator(LogicalKeyboardKey.escape): widget.onExpand,
+            // Back: Escape, a remote's Back, a controller's B. Held, it is still one Back.
+            const SingleActivator(LogicalKeyboardKey.escape, includeRepeats: false): widget.onExpand,
+            const SingleActivator(LogicalKeyboardKey.goBack, includeRepeats: false): widget.onExpand,
+            const SingleActivator(LogicalKeyboardKey.browserBack, includeRepeats: false): widget.onExpand,
+            const SingleActivator(LogicalKeyboardKey.gameButtonB, includeRepeats: false): widget.onExpand,
             const SingleActivator(LogicalKeyboardKey.space): _p.toggle,
+            const SingleActivator(LogicalKeyboardKey.mediaPlayPause, includeRepeats: false): _p.toggle,
           },
           child: Focus(autofocus: true, child: view),
         );
@@ -269,6 +275,7 @@ class _PickerState extends State<_Picker> {
             hintText: 'Search songs and artists',
             hintStyle: const TextStyle(color: VyseColors.textFaint),
             prefixIcon: const Icon(Icons.search_rounded, size: 20, color: VyseColors.textFaint),
+            suffixIcon: withVoiceSearch(null, controller: _text, onHeard: _changed, prompt: 'Search songs and artists'), // (a TV only)
             filled: true,
             fillColor: Colors.white.withValues(alpha: .06),
             contentPadding: const EdgeInsets.symmetric(vertical: 12),

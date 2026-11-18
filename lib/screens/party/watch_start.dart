@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../data/account.dart';
+import '../../data/account/account.dart';
 import '../../data/party/party.dart';
 import '../../data/party/rooms.dart';
 import '../../data/party/watch_party.dart';
-import '../../data/tmdb.dart' show Media;
-import '../../data/watch_progress.dart';
+import '../../data/catalog/tmdb.dart' show Media;
+import '../../data/playback/watch_progress.dart';
 import '../../widgets/common.dart';
 import 'rooms_view.dart' show openRoom;
 

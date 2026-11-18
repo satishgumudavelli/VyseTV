@@ -5,7 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:pocketbase/pocketbase.dart';
 
-import '../account.dart';
+import '../account/account.dart';
 import '../app_settings.dart';
 
 /// What other people see of an account in Party (the server's `profiles`, never the email).

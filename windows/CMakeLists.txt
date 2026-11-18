@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(vyse_tv LANGUAGES CXX)
 
-# ── Plezy player (libmpv, Vulkan loader, simdutf) ── copied from Plezy's windows/CMakeLists.txt
+# ── Player (libmpv, Vulkan loader, simdutf) ── copied from upstream's windows/CMakeLists.txt
 # libmpv comes from our unified build repository
 # (https://github.com/edde746/mpv-build), which publishes per-commit,
 # content-addressed dev packages in the classic mpv-dev shape:
@@ -100,7 +100,7 @@ FetchContent_Declare(
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(simdutf)
-# ── end Plezy player ──
+# ── end player ──
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
@@ -213,7 +213,7 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
 
-# ── Plezy player: libmpv + Vulkan loader next to the exe ──
+# ── Player: libmpv + Vulkan loader next to the exe ──
 # Always re-copied: every libmpv pin has the same size and archive timestamp, so
 # file(INSTALL) would otherwise keep a stale DLL (same idea as the app.so check).
 install(CODE "
@@ -226,7 +226,7 @@ install(FILES "${VULKAN_RT_DIR}/vulkan-1.dll" "${VULKAN_RT_DIR}/VulkanRT-License
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
-# ── Guard: the bundled flutter_windows.dll must be Plezy's patched DComp engine ──
+# ── Guard: the bundled flutter_windows.dll must be the patched DComp engine (flutter-plezy) ──
 # On a stock engine the video sits behind an opaque Flutter surface and is never
 # seen. `flutter upgrade` / `flutter precache --force` silently restore stock;
 # fix with: windows/tool/install-patched-engine.ps1
@@ -240,7 +240,7 @@ install(CODE "
     if(\"$<CONFIG>\" STREQUAL \"Profile\")
       message(WARNING \"flutter_windows.dll is the stock engine (Profile has no patched build): video will be hidden behind the UI.\")
     else()
-      message(FATAL_ERROR \"flutter_windows.dll is NOT Plezy's patched engine (hash \${_vyse_engine_hash}). Run windows/tool/install-patched-engine.ps1, then rebuild.\")
+      message(FATAL_ERROR \"flutter_windows.dll is NOT the patched flutter-plezy engine (hash \${_vyse_engine_hash}). Run windows/tool/install-patched-engine.ps1, then rebuild.\")
     endif()
   endif()
   " COMPONENT Runtime)

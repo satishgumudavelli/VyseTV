@@ -24,7 +24,7 @@
 // instances.
 void MpvPlayerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar);
 void MpvAudioPlayerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar);
-// VyseTV: second audio-only core (audiobooks), channel com.plezy/mpv_audio_player_2.
+// VyseTV: second audio-only core (audiobooks), channel vyse/mpv_audio_player_2.
 void MpvAudio2PlayerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar);
 
 namespace mpv {
@@ -35,11 +35,11 @@ class MpvPlayerPlugin : public flutter::Plugin {
   // |channel_name| + "/events". |audio_only| runs a windowless music core:
   // no child HWND, no display-mode handling (see MpvPlayer).
   static void RegisterWithRegistrar(
-      flutter::PluginRegistrarWindows* registrar, const std::string& channel_name = "com.plezy/mpv_player",
+      flutter::PluginRegistrarWindows* registrar, const std::string& channel_name = "vyse/mpv_player",
       bool audio_only = false);
 
   MpvPlayerPlugin(
-      flutter::PluginRegistrarWindows* registrar, const std::string& channel_name = "com.plezy/mpv_player",
+      flutter::PluginRegistrarWindows* registrar, const std::string& channel_name = "vyse/mpv_player",
       bool audio_only = false);
   virtual ~MpvPlayerPlugin();
 

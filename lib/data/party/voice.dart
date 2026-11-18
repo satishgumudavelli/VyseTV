@@ -7,7 +7,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' show Helper;
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../account.dart';
+import '../account/account.dart';
 import '../net.dart';
 import 'rooms.dart';
 import 'voice_background.dart';

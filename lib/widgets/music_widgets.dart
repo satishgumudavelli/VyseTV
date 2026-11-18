@@ -6,9 +6,9 @@ import '../core/accent.dart';
 import '../core/format.dart';
 import '../core/layout.dart';
 import '../core/theme.dart';
-import '../data/music_player.dart';
+import '../data/music/music_player.dart';
 import '../models/music/music_track.dart';
-import '../screens/music_detail_pages.dart';
+import '../screens/music/music_detail_pages.dart';
 import '../data/party/rooms.dart';
 import '../data/party/watch_party.dart';
 import '../screens/party/party_music_room.dart' show playInRoom;
@@ -121,6 +121,11 @@ class TrackRow extends StatelessWidget {
         final isCurrent = player.current?.id == track.id;
         return Pressable(
           onTap: () => isCurrent ? player.toggle() : player.playQueue(queue, start: index),
+          // holding OK (or the Menu key) opens the menu a right click opens, over the row
+          onLongPress: () {
+            final box = context.findRenderObject() as RenderBox;
+            showTrackMenu(context, track, box.localToGlobal(box.size.center(Offset.zero)), onRemove: onRemove);
+          },
           builder: (context, hovered, pressed) => GestureDetector(
             onSecondaryTapUp: (d) => showTrackMenu(context, track, d.globalPosition, onRemove: onRemove),
             child: AnimatedContainer(
@@ -343,6 +348,10 @@ class TrackCard extends StatelessWidget {
                 child: OutlineCard(
                   label: track.title,
                   onTap: play,
+                  onLongPress: () {
+                    final box = context.findRenderObject() as RenderBox;
+                    showTrackMenu(context, track, box.localToGlobal(box.size.center(Offset.zero)));
+                  },
                   builder: (hovered) => Stack(fit: StackFit.expand, children: [
                     NetImage(url: track.coverUrl, fallback: Icons.music_note_rounded),
                     IgnorePointer(

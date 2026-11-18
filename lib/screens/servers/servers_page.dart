@@ -8,11 +8,11 @@ import '../../core/nav.dart' show ShellRoute;
 import '../../core/theme.dart';
 import '../../media_servers/media_servers.dart';
 import '../../media_servers/server_playback.dart';
-import '../../plezy/media/media_hub.dart';
-import '../../plezy/media/media_item.dart';
-import '../../plezy/media/media_kind.dart';
-import '../../plezy/media/media_library.dart';
-import '../../plezy/media/media_server_client.dart';
+import '../../media_servers/media/media_hub.dart';
+import '../../media_servers/media/media_item.dart';
+import '../../media_servers/media/media_kind.dart';
+import '../../media_servers/media/media_library.dart';
+import '../../media_servers/media/media_server_client.dart';
 import '../../widgets/common.dart';
 import '../../widgets/media_rows.dart' show Shelf;
 import '../../widgets/page_scrollbar.dart';
@@ -935,6 +935,7 @@ Future<void> showServerAccounts(BuildContext context) {
   if (Layout.isPhone(context)) {
     return showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true, // over the navbar, not under it
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: const Color(0xFF0B0D16),

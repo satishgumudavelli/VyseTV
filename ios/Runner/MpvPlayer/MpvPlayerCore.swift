@@ -936,8 +936,8 @@ extension MpvPlayerCore {
   /// while the video is on an external display, which has its own geometry.
   func vyseSetVideoRect(_ rect: CGRect) {
     guard let window else { return }
-    // Full screen: Plezy's own path (follow the window), so full-screen playback is
-    // exactly Plezy's. Only a smaller rect (a tile) gets an explicit frame, and it is
+    // Full screen: upstream's own path (follow the window), so full-screen playback is
+    // exactly upstream's. Only a smaller rect (a tile) gets an explicit frame, and it is
     // remembered so later refreshes keep it (see updateFrame).
     let full = window.bounds
     let fillsWindow =

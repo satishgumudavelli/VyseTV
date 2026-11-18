@@ -7,7 +7,7 @@ import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/music/music_library.dart';
 import '../../data/music/yt_music.dart';
-import '../../data/music_player.dart';
+import '../../data/music/music_player.dart';
 import '../../models/music/music_track.dart';
 import '../../widgets/common.dart';
 import '../../widgets/media_rows.dart';

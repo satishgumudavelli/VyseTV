@@ -7,14 +7,14 @@ import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../media_servers/media_servers.dart';
 import '../../media_servers/server_playback.dart';
-import '../../plezy/media/media_item.dart';
-import '../../plezy/media/media_kind.dart';
-import '../../plezy/media/media_library.dart';
-import '../../plezy/media/media_server_client.dart';
+import '../../media_servers/media/media_item.dart';
+import '../../media_servers/media/media_kind.dart';
+import '../../media_servers/media/media_library.dart';
+import '../../media_servers/media/media_server_client.dart';
 import '../../widgets/common.dart';
 import '../../widgets/media_rows.dart' show OutlineCard;
 import '../../widgets/service_logos.dart';
-import '../player_page.dart';
+import '../player/player_page.dart';
 
 // ───────────────────────── Brands ─────────────────────────
 
@@ -277,6 +277,7 @@ class ServerWideCard extends StatelessWidget {
       child: OutlineCard(
         label: item.displayTitle,
         onTap: onTap,
+        onLongPress: onLongPress, // with a D-pad: hold OK, or the Menu key
         builder: (hovered) => Stack(
           fit: StackFit.expand,
           children: [

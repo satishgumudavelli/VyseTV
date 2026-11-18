@@ -1,12 +1,12 @@
-// VyseTV addition (not upstream Plezy).
+// VyseTV addition (not in upstream).
 //
-// Plezy's player draws the video on a native surface *behind* the Flutter
+// The player draws the video on a native surface *behind* the Flutter
 // window, so the video only shows where Flutter leaves pixels transparent.
-// Plezy only plays full screen on a transparent route, so that is enough
+// Upstream only plays full screen on a transparent route, so that is enough
 // there. VyseTV also shows video inside screens that paint their own
 // background (watch-party tiles, the room page's theater mode, the shell), so
 // this widget first clears ("punches") the pixels under the video, then lays
-// Plezy's [Video] on top. Controls drawn above it still paint normally.
+// Upstream's [Video] on top. Controls drawn above it still paint normally.
 //
 // On Linux X11 there is no native surface: mpv draws into a Flutter texture
 // (linux/runner/mpv/vyse_texture_fallback.h), shown here instead of the hole.
@@ -47,7 +47,7 @@ class _VyseVideoState extends State<VyseVideo> {
   StreamSubscription<void>? _restart;
   StreamSubscription<void>? _started;
 
-  /// Whether the current file has shown a frame. Plezy's [Video] paints its
+  /// Whether the current file has shown a frame. Upstream's [Video] paints its
   /// background (opaque) until it hears the next playback-restart; a Video
   /// mounted mid-playback (picture-in-picture, leaving it, a rebuilt page)
   /// would stay black until a seek. The player already knows: start from that.

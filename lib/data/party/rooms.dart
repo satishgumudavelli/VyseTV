@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 
-import '../account.dart';
+import '../account/account.dart';
 
 class RoomMember {
   const RoomMember({

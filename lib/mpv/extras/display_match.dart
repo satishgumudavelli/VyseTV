@@ -1,9 +1,9 @@
-// VyseTV: refresh-rate matching for Plezy's mpv player, so 23.976 fps film plays on a
+// VyseTV: refresh-rate matching for the mpv player, so 23.976 fps film plays on a
 // 23.976/24 Hz-family mode instead of juddering on 60 Hz. The mode choice
-// (findBestRefreshRate) and the Android decoder refresh follow Plezy
-// (edde746/plezy, GPL-3.0: display_mode_service.dart, display_matching.dart).
+// (findBestRefreshRate) and the Android decoder refresh follow upstream
+// (upstream, GPL-3.0: display_mode_service.dart, display_matching.dart).
 //
-// Windows switches the monitor with ChangeDisplaySettingsExW (Plezy's
+// Windows switches the monitor with ChangeDisplaySettingsExW (upstream's
 // display_mode_manager.cpp, standard Windows calls, no DDC/CI) and restores it
 // afterwards; Android asks the system for a matching display mode.
 // Off by default (AppSettings.matchRefreshRate).
@@ -18,7 +18,7 @@ class DisplayMatch {
   DisplayMatch(this._player);
   final Player _player;
 
-  static const _channel = MethodChannel('com.plezy/mpv_player');
+  static const _channel = MethodChannel('vyse/mpv_player');
 
   bool _windowsChanged = false;
   bool _androidChanged = false;
@@ -86,7 +86,7 @@ class DisplayMatch {
     return rate.toDouble();
   }
 
-  /// The lowest whole multiple of [fps] within 0.5% at the current resolution (Plezy's rule),
+  /// The lowest whole multiple of [fps] within 0.5% at the current resolution (upstream's rule),
   /// as the platform reported it; 0 when none fits.
   static num findBestRefreshRate(double fps, List<Map> modes, int width, int height) {
     if (fps <= 0) return 0;

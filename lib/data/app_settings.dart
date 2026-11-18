@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/platform/platform_detector.dart' show PlatformDetector;
 
 /// One look for the app: the accent shown on the Appearance cards and the ambient glow the shell
 /// lays over every page. [glow] null keeps each page's own haze untouched.
@@ -87,6 +88,9 @@ class AppSettings {
   static final autoplayRest = Setting<bool>('play.autoplayRest', true);
   static final autoSubtitles = Setting<bool>('play.autoSubs', true);
   static final seekSeconds = Setting<int>('play.seek', 10);
+  // Skip buttons the player doesn't offer (SegmentKind names, comma-separated: intro, recap,
+  // preview, credits); that part then just plays
+  static final skipButtonsOff = Setting<String>('play.skipOff', '');
   // P2P (torrent) sources: off until you allow them, since peers can see your IP address
   static final p2pStreaming = Setting<bool>('play.p2p', false);
 
@@ -111,7 +115,8 @@ class AppSettings {
 
   // Subtitles
   static final subtitleLanguage = Setting<String>('subs.lang', 'English');
-  static final subtitleSize = Setting<int>('subs.size', 28);
+  // (on a TV, read from across the room, they start larger; a size the user chose is kept)
+  static final subtitleSize = Setting<int>('subs.size', PlatformDetector.isTV() ? 44 : 28);
   static final subtitleColor = Setting<int>('subs.color', 0xFFFFFFFF);
   static final subtitleBackground = Setting<int>('subs.bg', 75);
   // How mpv/libass draws them (Settings > Subtitles). Tenths are stored as ints (25 = 2.5).
@@ -130,7 +135,7 @@ class AppSettings {
   static final subtitleOnPicture = Setting<bool>('subs.onPicture', false); // never in the black bars
   static final subtitleAss = Setting<String>('subs.ass', 'scale'); // styled subs: scale, force, strip
 
-  // Player (Plezy's mpv). `device.` keys describe this device's screen and speakers, so they stay
+  // Player (mpv). `device.` keys describe this device's screen and speakers, so they stay
   // here and never sync to the account (see [synced]).
   static final audioDelayMs = Setting<int>('device.audioDelay', 0); // lip-sync, + = audio later
   static final audioPassthrough = Setting<bool>('device.passthrough', false); // bitstream to a receiver
@@ -158,7 +163,7 @@ class AppSettings {
 
   static List<Setting<Object?>> get _all => [
         displayName, avatarUrl, avatarLabel, themeId, navOrder, navOff,
-        addons, streamingMode, autoNext, autoplayBest, autoplayOrder, autoplayRest, autoSubtitles, seekSeconds, p2pStreaming, sourceOrder, sourcesOff, trackAniList, trackRewatches, simklScrobble, simklList, simklHistory,
+        addons, streamingMode, autoNext, autoplayBest, autoplayOrder, autoplayRest, autoSubtitles, seekSeconds, skipButtonsOff, p2pStreaming, sourceOrder, sourcesOff, trackAniList, trackRewatches, simklScrobble, simklList, simklHistory,
         traktScrobble, traktList, traktHistory,
         subtitleLanguage, subtitleSize, subtitleColor,
         subtitleBackground, subtitleFont, subtitleBold, subtitleItalic, subtitleBackColor, subtitleOutline, subtitleOutlineColor,

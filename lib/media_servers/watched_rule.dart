@@ -1,4 +1,4 @@
-import '../plezy/media/watch_progress.dart';
+import 'media/watch_progress.dart';
 
 /// Who marks a film or episode watched once you're past the server's "watched" point: the
 /// server by itself, or VyseTV by asking.
@@ -7,7 +7,7 @@ import '../plezy/media/watch_progress.dart';
 /// one sitting go from before that point to at or past it. Asking on top counts the watch twice
 /// on Plex (a second Play History row, a view count of 2). So VyseTV only asks when the server
 /// never saw that happen: you resumed already past the point, or no report from before it got
-/// through. This is Plezy's rule (its #1740).
+/// through. This is upstream's rule (its #1740).
 class WatchedRule {
   WatchedRule(this.threshold);
 

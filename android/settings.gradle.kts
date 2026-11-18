@@ -25,5 +25,5 @@ plugins {
 }
 
 include(":app")
-// Plezy's libass renderer (used by the ExoPlayer fallback)
+// Upstream's libass renderer (used by the ExoPlayer fallback)
 include(":libass")

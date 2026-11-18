@@ -8,10 +8,11 @@ import '../../core/nav.dart';
 import '../../core/theme.dart';
 import '../../data/app_settings.dart';
 import '../../data/party/alerts.dart' show PartyMutes;
-import '../../data/account.dart';
+import '../../data/account/account.dart';
 import '../../data/party/dms.dart';
 import '../../data/party/friends.dart';
 import '../../data/party/party.dart';
+import '../../dpad/dpad_extras.dart';
 import '../../widgets/common.dart';
 import '../../widgets/section_chrome.dart';
 import 'party_widgets.dart';
@@ -675,7 +676,11 @@ class _Bubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          GestureDetector(
+          // with a D-pad a message is a stop and OK opens the menu a right click opens
+          DpadMenuStop(
+           onMenu: onMenu,
+           borderRadius: 18,
+           child: GestureDetector(
             onSecondaryTapDown: (d) => onMenu(d.globalPosition),
             onLongPressStart: (d) => onMenu(d.globalPosition),
             child: Tooltip(
@@ -700,6 +705,7 @@ class _Bubble extends StatelessWidget {
                 ),
               ),
             ),
+           ),
           ),
           if (status != null)
             Padding(

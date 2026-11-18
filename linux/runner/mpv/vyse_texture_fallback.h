@@ -1,9 +1,9 @@
 #ifndef VYSE_TEXTURE_FALLBACK_H_
 #define VYSE_TEXTURE_FALLBACK_H_
 
-// VyseTV addition (not upstream Plezy).
+// VyseTV addition (not in upstream).
 //
-// Plezy plays video only on a native Wayland plane under the Flutter window and
+// Upstream plays video only on a native Wayland plane under the Flutter window and
 // refuses every other session. Where the plane cannot come up (X11, or a
 // Wayland compositor that turns it down) VyseTV falls back to a Flutter
 // texture: SDR only and two extra copies per frame, but it plays.

@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/music/music_track.dart';
-import '../account_sync.dart';
+import '../account/account_sync.dart';
 import 'yt_music.dart';
 
 /// A YouTube Music song as the app's track (what the player, party and lists use).

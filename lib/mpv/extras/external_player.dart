@@ -1,6 +1,6 @@
 // VyseTV: hand the stream to another player app. Windows looks for the usual
-// players where they install; Android asks the system (Plezy's
-// ExternalPlayerChannel.kt, com.plezy/external_player). The stream URL is
+// players where they install; Android asks the system (upstream's
+// ExternalPlayerChannel.kt, vyse/external_player). The stream URL is
 // whatever VyseTV is playing — for torrents that's VyseTV's own local stream,
 // so VyseTV has to stay open (paused) while the other app plays.
 
@@ -16,7 +16,7 @@ class ExternalPlayer {
   final String? exe; // Windows: the program; null on Android (system chooser)
   final List<String> Function(String url, Duration start, String? title, Map<String, String> headers) _args;
 
-  static const _android = MethodChannel('com.plezy/external_player');
+  static const _android = MethodChannel('vyse/external_player');
 
   /// The players this device has.
   static Future<List<ExternalPlayer>> available() async {

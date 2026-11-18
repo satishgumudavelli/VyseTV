@@ -9,7 +9,7 @@ class MainFlutterWindow: NSWindow {
     UserDefaults.standard.set(false, forKey: "AppleMenuBarVisibleInFullscreen")
 
     let flutterViewController = FlutterViewController()
-    // Plezy's player: the video is a layer *behind* Flutter's. The window stays
+    // The player: the video is a layer *behind* Flutter's. The window stays
     // opaque (cheaper for WindowServer); Flutter is clear so the video shows.
     self.isOpaque = true
     self.backgroundColor = NSColor.black
@@ -19,7 +19,7 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
-    // Plezy's mpv player (Runner/MpvPlayer): video + PiP, and two audio-only
+    // The mpv player (Runner/MpvPlayer): video + PiP, and two audio-only
     // cores (music, audiobooks).
     MpvPlayerPlugin.register(with: flutterViewController.registrar(forPlugin: "MpvPlayerPlugin"))
     MpvAudioPlayerPlugin.register(with: flutterViewController.registrar(forPlugin: "MpvAudioPlayerPlugin"))
@@ -32,7 +32,7 @@ class MainFlutterWindow: NSWindow {
 }
 
 // The window's delegate is the window_manager plugin's object, and it leaves one question
-// unanswered: what full screen should hide. This answers it the way Plezy's own window does:
+// unanswered: what full screen should hide. This answers it the way upstream's own window does:
 // the menu bar, the title bar and the Dock all stay out of the way until the pointer goes to
 // the edge.
 extension WindowManager {

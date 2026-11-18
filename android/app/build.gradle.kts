@@ -6,8 +6,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// ── Plezy player: mpv-android AAR, FFmpeg headers, libdovi ──
-// Copied from Plezy's android/app/build.gradle.kts (edde746/plezy). Pins live in
+// ── Player: mpv-android AAR, FFmpeg headers, libdovi ──
+// Copied from upstream's android/app/build.gradle.kts. Pins live in
 // ../../mpv-build.lock.json and gradle/verification-metadata.xml.
 apply(from = rootProject.file("gradle/native-artifacts.gradle.kts"))
 
@@ -166,7 +166,7 @@ val prepareMpvFfmpegDevelopment = tasks.register("prepareMpvFfmpegDevelopment") 
       }
       File(includeDir, "libavutil/avconfig.h").writeText(
         """
-        |/* Generated for Plezy's little-endian Android ABIs. */
+        |/* Generated for upstream's little-endian Android ABIs. */
         |#ifndef AVUTIL_AVCONFIG_H
         |#define AVUTIL_AVCONFIG_H
         |#define AV_HAVE_BIGENDIAN 0
@@ -284,7 +284,7 @@ val downloadLibdovi = tasks.register("downloadLibdovi") {
     }
   }
 }
-// ── end Plezy player ──
+// ── end player ──
 
 android {
     namespace = "com.vyse.vyse_tv"
@@ -299,7 +299,7 @@ android {
     }
 
     defaultConfig {
-        // Plezy player native code (Dolby Vision bridge + Media3 FFmpeg audio adapter)
+        // Player native code (Dolby Vision bridge + Media3 FFmpeg audio adapter)
         externalNativeBuild {
             cmake {
                 arguments += listOf(
@@ -313,7 +313,7 @@ android {
         applicationId = "com.vyse.vyse_tv"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // Plezy's mpv-android AAR needs API 25 or newer
+        // Mpv-android AAR needs API 25 or newer
         minSdk = 25
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
@@ -329,14 +329,14 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-            // Plezy player: the mpv-android AAR's libc++ wins (see sourceSets below)
+            // Player: the mpv-android AAR's libc++ wins (see sourceSets below)
             pickFirsts.add("lib/*/libc++_shared.so")
         }
     }
 
     sourceSets {
         getByName("main") {
-            // Plezy player: project-scope jniLibs merge ahead of AARs, so the libc++
+            // Player: project-scope jniLibs merge ahead of AARs, so the libc++
             // libmpv was linked against always ships.
             jniLibs.srcDir(mpvLibcxxJniDir)
         }
@@ -345,7 +345,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1" // installed CMake (Plezy pins 4.1.2); CMakeLists needs >= 3.22.1
+            version = "3.22.1" // installed CMake (upstream pins 4.1.2); CMakeLists needs >= 3.22.1
         }
     }
 
@@ -368,7 +368,7 @@ flutter {
     source = "../.."
 }
 
-// Plezy player task wiring
+// Player task wiring
 tasks.matching { it.name.contains("CMake") || it.name.contains("externalNative") }.configureEach {
   dependsOn(downloadLibdovi, prepareMpvFfmpegDevelopment)
 }
@@ -385,12 +385,12 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders"
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
-    // ── Plezy player ──
+    // ── Player ──
     // mpv-build's mpv-android: libmpv, FFmpeg and the JNI glue (com.edde746.mpv)
     implementation(mpvAarDependency)
     mpvAarNatives(mpvAarDependency)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
-    // Media3 ExoPlayer (Plezy's opt-in fallback backend; the mpv core uses a few of its helpers)
+    // Media3 ExoPlayer (upstream's opt-in fallback backend; the mpv core uses a few of its helpers)
     implementation("androidx.media3:media3-decoder:$media3Version")
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")

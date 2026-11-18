@@ -1,4 +1,4 @@
-// Your own Plex, Jellyfin and Emby servers, on top of Plezy's server engine (lib/plezy).
+// Your own Plex, Jellyfin and Emby servers, on top of the server engine in this folder (media/, models/, services/, utils/).
 //
 // Accounts live in the system keychain (flutter_secure_storage) and never leave the device.
 // A Plex account brings every server it can reach (and its Plex Home profiles); a Jellyfin or
@@ -12,28 +12,28 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:uuid/uuid.dart';
 
-import '../plezy/connection/connection.dart';
-import '../plezy/exceptions/media_server_exceptions.dart';
-import '../plezy/media/ids.dart';
-import '../plezy/media/media_backend.dart';
-import '../plezy/media/media_browser_dialect.dart';
-import '../plezy/media/media_server_client.dart';
-import '../plezy/models/plex/plex_config.dart';
-import '../plezy/models/plex/plex_home_user.dart';
-import '../plezy/services/jellyfin_auth_header.dart';
-import '../plezy/services/jellyfin_auth_service.dart';
-import '../plezy/services/jellyfin_client.dart';
-import '../plezy/services/jellyfin_endpoint_discovery.dart';
-import '../plezy/services/jellyfin_lan_discovery_service.dart';
-import '../plezy/services/plex_auth_service.dart';
-import '../plezy/services/plex_client.dart';
-import '../plezy/utils/active_client_scope.dart';
-import '../plezy/utils/device_identity.dart';
+import 'models/connection.dart';
+import 'media/media_server_exceptions.dart';
+import 'media/ids.dart';
+import 'media/media_backend.dart';
+import 'media/media_browser_dialect.dart';
+import 'media/media_server_client.dart';
+import 'models/plex/plex_config.dart';
+import 'models/plex/plex_home_user.dart';
+import 'services/jellyfin_auth_header.dart';
+import 'services/jellyfin_auth_service.dart';
+import 'services/jellyfin_client.dart';
+import 'services/jellyfin_endpoint_discovery.dart';
+import 'services/jellyfin_lan_discovery_service.dart';
+import 'services/plex_auth_service.dart';
+import 'services/plex_client.dart';
+import 'utils/active_client_scope.dart';
+import 'utils/device_identity.dart';
 
-export '../plezy/media/media_backend.dart' show MediaBackend;
-export '../plezy/media/media_browser_dialect.dart' show MediaBrowserDialect;
-export '../plezy/models/plex/plex_home_user.dart' show PlexHomeUser;
-export '../plezy/services/jellyfin_lan_discovery_service.dart' show DiscoveredJellyfinServer;
+export 'media/media_backend.dart' show MediaBackend;
+export 'media/media_browser_dialect.dart' show MediaBrowserDialect;
+export 'models/plex/plex_home_user.dart' show PlexHomeUser;
+export 'services/jellyfin_lan_discovery_service.dart' show DiscoveredJellyfinServer;
 
 // ───────────────────────── Accounts ─────────────────────────
 

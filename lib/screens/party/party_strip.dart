@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme.dart';
-import '../../data/account.dart';
+import '../../data/account/account.dart';
 import '../../data/party/friends.dart';
 import '../../data/party/rooms.dart';
 import '../../data/party/voice.dart';
+import '../../dpad/dpad_extras.dart';
 import '../../widgets/common.dart';
 import 'party_widgets.dart' show PartyAvatar, dismissKeyboard;
 
@@ -111,10 +112,14 @@ class _PartyStripState extends State<PartyStrip> {
         children: [
           IgnorePointer(
             ignoring: !up,
-            child: AnimatedOpacity(
-              opacity: up ? 1 : 0,
-              duration: Duration(milliseconds: up ? 110 : 280),
-              child: _people(),
+            // (hidden with the player's controls: then nothing in it takes focus either)
+            child: ExcludeFocus(
+              excluding: !up,
+              child: AnimatedOpacity(
+                opacity: up ? 1 : 0,
+                duration: Duration(milliseconds: up ? 110 : 280),
+                child: _people(),
+              ),
             ),
           ),
           if (widget.touch)
@@ -394,12 +399,15 @@ class _Bubble extends StatelessWidget {
   );
 }
 
-/// Push to talk: hold to send your voice (mouse or finger).
+/// Push to talk: hold to send your voice (mouse or finger, or OK on a remote or a controller
+/// while focus is on it).
 class HoldToTalk extends StatelessWidget {
   const HoldToTalk({super.key});
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+  Widget build(BuildContext context) => DpadHoldStop(onHold: Voice.setTalking, child: _button(context));
+
+  Widget _button(BuildContext context) => ValueListenableBuilder<bool>(
     valueListenable: Voice.talking,
     builder: (context, on, _) => GestureDetector(
       behavior: HitTestBehavior.opaque,

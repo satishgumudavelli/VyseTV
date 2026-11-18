@@ -33,7 +33,7 @@ void mpv_plugin_register_with_registrar(FlPluginRegistrar* registrar);
 /// Registers the audio-only (music) plugin with Flutter.
 void mpv_audio_plugin_register_with_registrar(FlPluginRegistrar* registrar);
 
-// VyseTV: second audio-only core (audiobooks), channel com.plezy/mpv_audio_player_2.
+// VyseTV: second audio-only core (audiobooks), channel vyse/mpv_audio_player_2.
 void mpv_audio2_plugin_register_with_registrar(FlPluginRegistrar* registrar);
 
 G_END_DECLS

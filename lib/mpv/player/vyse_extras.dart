@@ -1,10 +1,10 @@
-// VyseTV additions to Plezy's player (not upstream).
+// VyseTV additions to the player (not in upstream).
 //
-// VyseTV's player page reads two things Plezy's streams don't carry: the
+// VyseTV's player page reads two things upstream's streams don't carry: the
 // current subtitle line as text (the subtitle sync panel and the optional
 // Flutter subtitle overlay) and the displayed video size. Both come from
-// plain mpv properties observed next to Plezy's own (`sub-text`,
-// `dwidth`/`dheight`). Kept in this one file so upstream merges of Plezy's
+// plain mpv properties observed next to upstream's own (`sub-text`,
+// `dwidth`/`dheight`). Kept in this one file so merges of upstream's
 // player only ever touch the three hook lines marked "VyseTV" in
 // player_base.dart.
 

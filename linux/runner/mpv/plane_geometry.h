@@ -1,5 +1,5 @@
-#ifndef PLEZY_LINUX_MPV_PLANE_GEOMETRY_H_
-#define PLEZY_LINUX_MPV_PLANE_GEOMETRY_H_
+#ifndef VYSE_LINUX_MPV_PLANE_GEOMETRY_H_
+#define VYSE_LINUX_MPV_PLANE_GEOMETRY_H_
 
 #include <cstdint>
 #include <limits>
@@ -108,4 +108,4 @@ inline int32_t PlaneSurfacePosition(int32_t position, int32_t scale, int32_t vie
 
 }  // namespace mpv
 
-#endif  // PLEZY_LINUX_MPV_PLANE_GEOMETRY_H_
+#endif  // VYSE_LINUX_MPV_PLANE_GEOMETRY_H_

@@ -7,7 +7,7 @@ import 'package:pocketbase/pocketbase.dart' show ClientException;
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
-import '../../data/account.dart';
+import '../../data/account/account.dart';
 import '../../data/app_settings.dart';
 import '../../data/party/alerts.dart' show PartyMutes;
 import '../../data/party/friends.dart';

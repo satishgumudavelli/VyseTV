@@ -8,19 +8,21 @@ import 'package:window_manager/window_manager.dart';
 import '../../core/layout.dart';
 import '../../core/nav.dart' show rootNavigatorKey;
 import '../../core/theme.dart';
-import '../../data/account.dart';
-import '../../data/anilist.dart';
+import '../../data/account/account.dart';
+import '../../data/anime/anilist.dart';
 import '../../data/party/alerts.dart' show PartyAlerts;
 import '../../data/party/friends.dart';
 import '../../data/party/party_live.dart';
 import '../../data/party/rooms.dart';
 import '../../data/party/voice.dart';
 import '../../data/party/watch_party.dart';
+import '../../dpad/dpad_extras.dart';
+import '../../dpad/dpad_navigator.dart';
 import '../../widgets/common.dart';
 import '../../widgets/section_chrome.dart';
-import '../../data/anime_sources.dart' show AnimeTarget;
-import '../../data/tmdb.dart' show Media, episodeLabel;
-import '../player_page.dart' show PlayerPage, PlayerEpisode, MiniPlayer;
+import '../../data/anime/anime_sources.dart' show AnimeTarget;
+import '../../data/catalog/tmdb.dart' show Media, episodeLabel;
+import '../player/player_page.dart' show PlayerPage, PlayerEpisode, MiniPlayer;
 
 import 'party_live_player.dart';
 import 'party_music_room.dart';
@@ -1359,8 +1361,11 @@ class _Chat extends StatelessWidget {
             final m = line.message!;
             final prev = idx > 0 ? lines[idx - 1].message : null;
             final first = prev == null || prev.user != m.user || m.created.difference(prev.created) > const Duration(minutes: 5);
-            // right-click or long-press: copy, or report someone else's message
-            return GestureDetector(
+            // right-click or long-press: copy, or report someone else's message. With a D-pad a
+            // message is a stop and OK opens the same menu.
+            return DpadMenuStop(
+             onMenu: (at) => _messageMenu(context, m, at),
+             child: GestureDetector(
               onSecondaryTapDown: (d) => _messageMenu(context, m, d.globalPosition),
               onLongPressStart: (d) => _messageMenu(context, m, d.globalPosition),
               child: Padding(
@@ -1399,6 +1404,7 @@ class _Chat extends StatelessWidget {
                   ],
                 ),
               ),
+             ),
             );
           },
         ),
@@ -1550,20 +1556,21 @@ class _WatchTile extends StatelessWidget {
 /// A key's name for people: "`", "V", "Caps Lock", "Mouse 4"…
 String keyName(LogicalKeyboardKey k) => k.keyLabel.trim().isNotEmpty ? k.keyLabel : (k.debugName ?? 'Key');
 
-/// Waits for the next key press and returns it (Esc cancels).
+/// Waits for the next key press and returns it (Esc cancels; so do a remote's Back and a
+/// controller's B, which could never be the key you hold: they leave the page).
 Future<LogicalKeyboardKey?> _askKey(BuildContext context) => showDialog<LogicalKeyboardKey>(
   context: context,
-  builder: (ctx) => Focus(
-    autofocus: true,
-    onKeyEvent: (_, e) {
-      if (e is KeyDownEvent) Navigator.pop(ctx, e.logicalKey == LogicalKeyboardKey.escape ? null : e.logicalKey);
-      return KeyEventResult.handled;
-    },
-    child: AlertDialog(
-      backgroundColor: VyseColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('Press a key', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-      content: const Text('The key you hold to talk. Esc cancels.', style: TextStyle(color: VyseColors.textDim)),
+  builder: (ctx) => AlertDialog(
+    backgroundColor: VyseColors.surface,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    title: const Text('Press a key', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+    content: Focus(
+      autofocus: true,
+      onKeyEvent: (_, e) {
+        if (e is KeyDownEvent) Navigator.pop(ctx, e.logicalKey.isBackKey ? null : e.logicalKey);
+        return KeyEventResult.handled;
+      },
+      child: const Text('The key you hold to talk. Esc cancels.', style: TextStyle(color: VyseColors.textDim)),
     ),
   ),
 );

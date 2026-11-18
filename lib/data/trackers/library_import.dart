@@ -3,10 +3,10 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../anilist.dart' show AniList;
+import '../anime/anilist.dart' show AniList;
 import '../app_settings.dart';
-import '../tmdb.dart';
-import '../watch_progress.dart';
+import '../catalog/tmdb.dart';
+import '../playback/watch_progress.dart';
 import 'anilist_tracker.dart';
 import 'media_ref.dart';
 import 'remote_library.dart';

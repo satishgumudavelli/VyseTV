@@ -4,11 +4,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 
-import '../account.dart';
-import '../addons.dart';
+import '../account/account.dart';
+import '../sources/addons.dart';
 import '../app_settings.dart';
-import '../film_sources/source_settings.dart';
-import '../tmdb.dart' show Media;
+import '../sources/film_sources/source_settings.dart';
+import '../catalog/tmdb.dart' show Media;
 import 'rooms.dart';
 
 Map<String, dynamic> _mediaJson(Media m) => {

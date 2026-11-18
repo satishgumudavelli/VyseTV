@@ -30,10 +30,10 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<!-- Plezy's player: the Flutter view is cleared to transparent so mpv's video
+	<!-- The player: the Flutter view is cleared to transparent so mpv's video
 	     layer behind it shows. With Impeller (the macOS default since Flutter 3.47)
 	     that put noise-filled glyphs and whole glyph-atlas textures on screen, so
-	     Plezy ships macOS on Skia with the UI thread unmerged. Same here. -->
+	     Upstream ships macOS on Skia with the UI thread unmerged. Same here. -->
 	<key>FLTEnableMergedPlatformUIThread</key>
 	<false/>
 	<key>FLTEnableImpeller</key>

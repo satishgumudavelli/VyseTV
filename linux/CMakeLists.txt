@@ -51,7 +51,7 @@ set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
 # System-level dependencies.
-# Plezy's player: simdutf validates the UTF-8 mpv hands over (a bad byte would
+# The player: simdutf validates the UTF-8 mpv hands over (a bad byte would
 # crash Flutter's message codec).
 include(FetchContent)
 FetchContent_Declare(

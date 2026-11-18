@@ -145,7 +145,7 @@ class DisplayModeManager {
   // conflicting same-kind preparation consumes their persisted disposition.
   static bool RecoverIfNeeded();
   static bool RecoverIfNeeded(DisplayRecoveryBackend& backend);
-#if defined(PLEZY_DISPLAY_MODE_MANAGER_TESTING)
+#if defined(VYSE_DISPLAY_MODE_MANAGER_TESTING)
   // Exercise persisted lifecycle exits and per-operation live ownership without
   // touching a real display or registry.
   static bool CompleteRecoveryOperationForTesting(DisplayRecoveryBackend& backend, bool mode);

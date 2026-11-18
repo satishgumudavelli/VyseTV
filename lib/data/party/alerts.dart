@@ -9,7 +9,7 @@ import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../account.dart';
+import '../account/account.dart';
 import '../app_settings.dart';
 import 'dms.dart';
 import 'rooms.dart';
