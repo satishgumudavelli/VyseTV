@@ -1,0 +1,20 @@
+android/app/src/main/kotlin/com/vyse/player/mpv/MpvPlayerCore.kt
+  s_141489c594600d::t_c60ee66befe3d9 454-457,2096-2097,2882-2886
+  s_141489c594600d::t_ad0f0c600f635a 2887-2889
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "845aed0023f0adbd6e6690d2221761e8827c386b",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
