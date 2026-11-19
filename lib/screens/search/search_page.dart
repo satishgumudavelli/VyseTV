@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/layout.dart';
 import '../../core/nav.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../dpad/dpad_root.dart' show backBindings;
 import '../../dpad/dpad_traversal.dart';
 import '../../dpad/input_mode_tracker.dart';
@@ -243,8 +244,11 @@ class _LinkCard extends StatelessWidget {
 class _Glow extends StatelessWidget {
   const _Glow();
 
+  // (not on the weakest TV boxes: see PageGlow)
   @override
-  Widget build(BuildContext context) => IgnorePointer(
+  Widget build(BuildContext context) => Lean.weak
+      ? const SizedBox.shrink()
+      : IgnorePointer(
         child: Container(
           width: 900,
           height: 520,

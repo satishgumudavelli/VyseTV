@@ -6,6 +6,7 @@ import '../core/accent.dart';
 import '../core/format.dart';
 import '../core/layout.dart';
 import '../core/theme.dart';
+import '../core/lean.dart';
 import '../data/music/music_player.dart';
 import '../models/music/music_track.dart';
 import '../screens/music/music_detail_pages.dart';
@@ -59,13 +60,13 @@ class _EqualizerState extends State<Equalizer> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    if (widget.active) _c.repeat();
+    if (widget.active) Lean.loop(_c); // (lean: three still bars say the same)
   }
 
   @override
   void didUpdateWidget(Equalizer old) {
     super.didUpdateWidget(old);
-    if (widget.active && !_c.isAnimating) _c.repeat();
+    if (widget.active && !_c.isAnimating) Lean.loop(_c);
     if (!widget.active) _c.stop();
   }
 

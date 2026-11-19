@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../app_settings.dart';
 import 'film_sources.dart';
 
@@ -31,7 +33,11 @@ void setFilmSourceOn(FilmSource s, bool on) {
 }
 
 /// The sources a play asks, in your order, without the ones you turned off.
-List<FilmSource> activeFilmSources() => [for (final s in orderedFilmSources()) if (filmSourceOn(s)) s];
+List<FilmSource> activeFilmSources() => debugFilmSources ?? [for (final s in orderedFilmSources()) if (filmSourceOn(s)) s];
+
+/// Tests: made-up sources in place of yours (no site is asked).
+@visibleForTesting
+List<FilmSource>? debugFilmSources;
 
 /// A party host's list, in their order. Ones this version doesn't have are left out.
 List<FilmSource> filmSourcesFrom(List<String> ids) {

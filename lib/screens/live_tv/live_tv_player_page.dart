@@ -7,7 +7,9 @@ import 'package:window_manager/window_manager.dart';
 import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/playback/audio_focus.dart';
+import '../../data/playback/player_engine.dart';
 import '../../data/live_tv/live_tv.dart';
+import '../../data/live_tv/live_favorites.dart';
 import '../../data/party/party_live.dart';
 import '../../data/party/rooms.dart';
 import '../../data/party/watch_party.dart';
@@ -51,7 +53,9 @@ class LiveTvPlayerPage extends StatefulWidget {
 }
 
 class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
-  late final _player = Player();
+  // On an Android TV: Media3 unless Settings says mpv (PlayerEngine). A channel it can't play
+  // is handed to mpv by its plugin.
+  late final _player = Player(useExoPlayer: PlayerEngine.forFullScreen);
   final _subs = <StreamSubscription<Object?>>[];
   final _position = ValueNotifier(Duration.zero);
   final _duration = ValueNotifier(Duration.zero);
@@ -122,6 +126,7 @@ class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
       }))
       ..add(_player.streams.duration.listen((d) => _duration.value = d))
       ..add(_player.streams.error.listen((e) => setState(() => _error = e.message)));
+    LiveFavorites.load();
     // After the first frame: claiming focus updates the shell's mini player.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _open();
@@ -188,7 +193,9 @@ class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
       _epg = _item.epg?.call();
     });
     try {
-      await _player.open(Media(_item.url));
+      // (Media3 introduces itself to the provider the way mpv does, so a line that plays on one
+      // plays on the other)
+      await _player.open(Media(_item.url, headers: _player.playerType == 'exoplayer' ? const {'User-Agent': 'libmpv'} : null));
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
@@ -348,7 +355,7 @@ class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
                         GlassIconButton(icon: Icons.arrow_back_rounded, label: 'Back (Esc)', size: 40, onTap: _back),
                         const SizedBox(width: 14),
                         if (_item.logo != null && _item.logo!.isNotEmpty) ...[
-                          SizedBox(width: 44, height: 32, child: NetImage(url: _item.logo, fit: BoxFit.contain, fallback: Icons.live_tv_rounded)),
+                          SizedBox(width: 44, height: 32, child: NetImage(url: _item.logo, fit: BoxFit.contain, fallback: Icons.live_tv_rounded, decodeWidth: NetImage.decodeWidthFor(context, 44))),
                           const SizedBox(width: 12),
                         ],
                         Expanded(
@@ -361,6 +368,23 @@ class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
                           ]),
                         ),
                         if (_item.live) const _LiveBadge(),
+                        // Its star, for a channel from a portal, a playlist or the Favorites list.
+                        // (Only a portal's had one, and only in the portal's own list.)
+                        if (_item.favoriteKey case final key?) ...[
+                          const SizedBox(width: 10),
+                          ValueListenableBuilder<Set<String>>(
+                            valueListenable: LiveFavorites.ids,
+                            builder: (context, ids, _) {
+                              final on = ids.contains(key);
+                              return GlassIconButton(
+                                icon: on ? Icons.star_rounded : Icons.star_border_rounded,
+                                label: on ? 'Remove from favorites' : 'Add to favorites',
+                                size: 40,
+                                onTap: () => LiveFavorites.toggleChannel(FavoriteChannel(key: key, title: _item.title, url: _item.url, logo: _item.logo, from: _item.subtitle)),
+                              );
+                            },
+                          ),
+                        ],
                         if (_item.live && Rooms.mine.value != null && WatchParty.canControl) ...[
                           const SizedBox(width: 10),
                           _sharing
@@ -520,7 +544,7 @@ class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
                   color: current ? VyseColors.accent.withValues(alpha: .16) : Colors.white.withValues(alpha: hovered ? .07 : 0),
                 ),
                 child: Row(children: [
-                  SizedBox(width: 40, height: 28, child: NetImage(url: it.logo, fit: BoxFit.contain, fallback: Icons.live_tv_rounded)),
+                  SizedBox(width: 40, height: 28, child: NetImage(url: it.logo, fit: BoxFit.contain, fallback: Icons.live_tv_rounded, decodeWidth: NetImage.decodeWidthFor(context, 40))),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(it.title,

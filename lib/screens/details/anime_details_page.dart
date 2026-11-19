@@ -315,11 +315,17 @@ class _AnimeBackdrop extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        FutureBuilder<AnimeExtras>(
+        // The even dim over the picture is painted with it (its colour filter), not as one more
+        // see-through layer over the whole screen: the same pixels, one layer less to blend.
+        // (ScrollVeil: lean, the same goes for the darkening as the page scrolls.)
+        ScrollVeil(
+          scroll: scroll,
+          base: .58,
+          builder: (context, dim) => FutureBuilder<AnimeExtras>(
           future: extras,
           builder: (context, x) {
             final url = x.data?.fanart ?? (x.connectionState == ConnectionState.done ? anime.banner ?? anime.cover : null);
-            if (url == null) return ColoredBox(color: (animeColor(anime) ?? bg).withValues(alpha: .25));
+            if (url == null) return ColoredBox(color: Color.alphaBlend(dim, Color.alphaBlend((animeColor(anime) ?? bg).withValues(alpha: .25), bg)));
             return TweenAnimationBuilder<double>(
               key: ValueKey(url),
               tween: Tween(begin: 1.06, end: 1.0),
@@ -333,32 +339,19 @@ class _AnimeBackdrop extends StatelessWidget {
                 memCacheWidth: screenDecodeWidth(context),
                 filterQuality: FilterQuality.low,
                 fadeInDuration: const Duration(milliseconds: 500),
+                color: dim,
+                colorBlendMode: BlendMode.srcOver,
                 placeholder: (_, _) => const ColoredBox(color: bg),
                 errorWidget: (_, _, _) => const ColoredBox(color: bg),
               ),
             );
           },
         ),
-        ColoredBox(color: bg.withValues(alpha: .58)),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [bg.withValues(alpha: .75), bg.withValues(alpha: .2), bg.withValues(alpha: 0)],
-              stops: const [0, .45, .8],
-            ),
-          ),
         ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [bg, bg.withValues(alpha: .6), bg.withValues(alpha: 0)],
-              stops: const [0, .3, .65],
-            ),
-          ),
-        ),
-        IgnorePointer(
+        const Scrim.left(alphas: [.75, .2, 0], stops: [0, .45, .8]),
+        const Scrim.bottom(alphas: [1, .6, 0], stops: [0, .3, .65]),
+        if (!Lean.on)
+          IgnorePointer(
           child: ListenableBuilder(
             listenable: scroll,
             builder: (context, _) {

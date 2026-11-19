@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../media_servers/media_servers.dart';
 import '../../widgets/common.dart';
 import 'server_widgets.dart';
@@ -724,7 +725,7 @@ class _Waiting extends StatefulWidget {
 }
 
 class _WaitingState extends State<_Waiting> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+  late final _c = Lean.loop(AnimationController(vsync: this, duration: const Duration(milliseconds: 1200)));
 
   @override
   void dispose() {

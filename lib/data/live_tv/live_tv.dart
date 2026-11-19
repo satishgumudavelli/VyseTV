@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import '../../models/iptv/iptv_models.dart';
 import '../../models/iptv/m3u_models.dart';
 import '../../services/iptv/iptv_controller.dart';
+import 'live_favorites.dart';
+import 'portal_names.dart';
 
 IptvController get iptv => IptvController.instance;
 
@@ -27,6 +29,7 @@ class LiveItem {
     this.logo,
     this.live = true,
     this.epg,
+    this.favoriteKey,
   });
 
   final String title;
@@ -34,16 +37,21 @@ class LiveItem {
   final String? subtitle;
   final String? logo;
 
+  /// What makes it a favorite ([LiveFavorites]), for what can be one: a live channel, from a
+  /// portal or from a playlist. The player shows its star for these.
+  final String? favoriteKey;
+
   /// Live streams get a LIVE badge and EPG; VOD gets a seek bar.
   final bool live;
   final Future<List<EpgEntry>> Function()? epg;
 
   factory LiveItem.hit(ChannelHit h, {String? channelName}) => LiveItem(
         title: channelName ?? h.stream.name,
-        subtitle: [h.portal.name, if (channelName != null) h.stream.name].join('  ·  '),
+        subtitle: [portalLabel(h.portal), if (channelName != null) h.stream.name].join('  ·  '),
         logo: h.stream.icon,
         url: h.streamUrl,
         epg: () => iptv.epgForHit(h),
+        favoriteKey: LiveFavorites.keyOf(h.portal, h.stream),
       );
 
   factory LiveItem.m3u(M3uChannel c, {String? playlist}) => LiveItem(
@@ -51,15 +59,20 @@ class LiveItem {
         subtitle: [?playlist, if (c.group.isNotEmpty) c.group].join('  ·  '),
         logo: c.logo,
         url: c.url,
+        favoriteKey: LiveFavorites.keyOfM3u(c.url),
       );
+
+  /// A favorite, from Live TV > Favorites: played by its saved address.
+  factory LiveItem.favorite(FavoriteChannel c) => LiveItem(title: c.title, subtitle: c.from, logo: c.logo, url: c.url, favoriteKey: c.key);
 
   factory LiveItem.stream(VerifiedPortal p, IptvStream s, IptvSection section) => LiveItem(
         title: s.name,
-        subtitle: p.name,
+        subtitle: portalLabel(p),
         logo: s.icon,
         url: xtreamUrl(p, s, section),
         live: section == IptvSection.live,
         epg: section == IptvSection.live ? () => iptv.epgFor(s) : null,
+        favoriteKey: section == IptvSection.live ? LiveFavorites.keyOf(p, s) : null,
       );
 
   factory LiveItem.episode(VerifiedPortal p, IptvStream series, IptvEpisode e) => LiveItem(

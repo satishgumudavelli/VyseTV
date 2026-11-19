@@ -13,6 +13,7 @@ import '../../core/format.dart';
 import '../../core/layout.dart';
 import '../../core/nav.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/anime/anilist.dart';
 import '../../data/playback/watch_progress.dart';
 import '../../data/app_settings.dart';
@@ -22,7 +23,7 @@ import '../../dpad/dpad_traversal.dart';
 import '../../dpad/focus_chrome.dart' show FocusRingTarget;
 import '../../widgets/common.dart';
 import 'episode_explorer.dart';
-import '../../widgets/hero_carousel.dart' show screenDecodeWidth;
+import '../../widgets/hero_carousel.dart' show backdropSize, screenDecodeWidth;
 import '../../widgets/media_rows.dart';
 import '../../widgets/page_scrollbar.dart';
 import '../../data/trackers/tracker_hub.dart';
@@ -328,12 +329,18 @@ class _Backdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const bg = VyseColors.bg;
-    final url = media.backdrop(Layout.isPhone(context) ? 'w780' : 'original');
+    final url = media.backdrop(Layout.isPhone(context) ? 'w780' : backdropSize);
     return Stack(
       fit: StackFit.expand,
       children: [
+        // The even dim over the picture is painted with it (its colour filter), not as one more
+        // see-through layer over the whole screen: the same pixels, one layer less to blend.
+        // (ScrollVeil: lean, the same goes for the darkening as the page scrolls.)
         if (url != null)
-          TweenAnimationBuilder<double>(
+          ScrollVeil(
+            scroll: scroll,
+            base: .58,
+            builder: (context, dim) => TweenAnimationBuilder<double>(
             tween: Tween(begin: 1.06, end: 1.0),
             duration: const Duration(milliseconds: 1600),
             curve: Curves.easeOutCubic,
@@ -345,35 +352,24 @@ class _Backdrop extends StatelessWidget {
               memCacheWidth: screenDecodeWidth(context),
               filterQuality: FilterQuality.low,
               fadeInDuration: const Duration(milliseconds: 500),
+              color: dim,
+              colorBlendMode: BlendMode.srcOver,
               // The home hero already cached the w1280 copy: show it while the big one loads.
               placeholder: (_, _) => media.backdrop() == null
                   ? const ColoredBox(color: bg)
-                  : Image(image: CachedNetworkImageProvider(media.backdrop()!), fit: BoxFit.cover),
+                  : Image(image: CachedNetworkImageProvider(media.backdrop()!), fit: BoxFit.cover, color: dim, colorBlendMode: BlendMode.srcOver),
               errorWidget: (_, _, _) => const ColoredBox(color: bg),
             ),
           ),
-        // Even dim, then a heavier left side behind the text and a melt into the page at the bottom.
-        ColoredBox(color: bg.withValues(alpha: .58)),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [bg.withValues(alpha: .75), bg.withValues(alpha: .2), bg.withValues(alpha: 0)],
-              stops: const [0, .45, .8],
-            ),
           ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [bg, bg.withValues(alpha: .6), bg.withValues(alpha: 0)],
-              stops: const [0, .3, .65],
-            ),
-          ),
-        ),
-        // Darken further as the page scrolls so rows stay legible.
-        IgnorePointer(
+        // Over the dimmed picture: a heavier left side behind the text and a melt into the page at
+        // the bottom, each laid only as far as it reaches (Scrim).
+        const Scrim.left(alphas: [.75, .2, 0], stops: [0, .45, .8]),
+        const Scrim.bottom(alphas: [1, .6, 0], stops: [0, .3, .65]),
+        // Darken further as the page scrolls so rows stay legible. (Lean: the picture's own
+        // veil deepens instead, see ScrollVeil.)
+        if (!Lean.on)
+          IgnorePointer(
           child: ListenableBuilder(
             listenable: scroll,
             builder: (context, _) {

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/audiobooks/audiobook_player.dart';
 import '../../widgets/audiobook_widgets.dart';
 import '../../dpad/dpad_picture.dart';
@@ -165,10 +166,14 @@ class _AudiobookPlayerPageState extends State<AudiobookPlayerPage> {
               return Stack(children: [
                 Positioned.fill(
                   child: Stack(fit: StackFit.expand, children: [
-                    ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
-                      child: Transform.scale(scale: 1.3, child: Opacity(opacity: .5, child: NetImage(url: b.coverImage))),
-                    ),
+                    // Lean (a TV): the cover as a wash of its colours in one draw, not blurred live (ArtWash)
+                    if (Lean.on)
+                      ArtWash(url: b.coverImage, sigma: 70, filter: ArtWash.veil(VyseColors.bg.withValues(alpha: .5)))
+                    else
+                      ImageFiltered(
+                        imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
+                        child: Transform.scale(scale: 1.3, child: Opacity(opacity: .5, child: NetImage(url: b.coverImage))),
+                      ),
                     const DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(

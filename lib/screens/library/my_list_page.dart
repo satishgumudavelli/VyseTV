@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../core/layout.dart';
 import '../../core/nav.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/app_settings.dart';
 import '../../data/catalog/tmdb.dart';
 import '../../data/playback/watch_progress.dart';
@@ -359,7 +360,15 @@ class _Header extends StatelessWidget {
       if (backdrop != null)
         Positioned.fill(
           child: RepaintBoundary(
-            child: ShaderMask(
+            // Lean (a TV): the same wash without the three off-screen buffers. Over a page of
+            // one colour, a picture faded and masked away is that picture under veils of the
+            // page's colour, and those are plain draws (ArtWash, Scrim).
+            child: Lean.on
+                ? Stack(fit: StackFit.expand, children: [
+                    ArtWash(url: backdrop, sigma: 36, filter: ArtWash.veil(VyseColors.bg.withValues(alpha: .55))),
+                    const Scrim.bottom(alphas: [1, 0], stops: [0, .85]),
+                  ])
+                : ShaderMask(
               shaderCallback: (r) => const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,

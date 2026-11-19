@@ -31,6 +31,7 @@ import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'core/layout.dart';
+import 'core/lean.dart';
 import 'core/nav.dart' show rootNavigatorKey;
 import 'core/logs/perf.dart';
 import 'core/theme.dart';
@@ -46,7 +47,7 @@ import 'services/iptv/iptv_settings.dart';
 void _hideSystemBars() => SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  VyseBinding.ensureInitialized(); // (Flutter's own, with reduce-motion in the app's hands: core/lean.dart)
   // Android TV and Google TV: known before anything is drawn, so the app opens in D-pad mode
   // there, with the ring on its first control
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -76,6 +77,8 @@ Future<void> main() async {
   }
   await IptvSettings.initialize();
   await AppSettings.initialize();
+  // On a TV the interface is drawn the lean way (fewer frames, less paint), unless Settings says not
+  Lean.decide();
   await Torrents.initialize(); // iPhone and iPad: is the engine in this build (instant elsewhere)
   unawaited(Downloads.instance.initialize()); // the saved list; nothing starts by itself
   Addons.start();

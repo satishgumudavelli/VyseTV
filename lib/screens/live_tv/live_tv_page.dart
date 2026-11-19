@@ -7,6 +7,8 @@ import '../../core/nav.dart';
 import '../../core/theme.dart';
 import '../../data/live_tv/channel_catalog.dart';
 import '../../data/live_tv/live_tv.dart';
+import '../../data/live_tv/live_favorites.dart';
+import '../../data/live_tv/portal_names.dart';
 import '../../models/iptv/iptv_models.dart';
 import '../../models/iptv/m3u_models.dart';
 import '../../services/iptv/hardcoded_channels.dart';
@@ -18,6 +20,7 @@ import '../../widgets/media_rows.dart';
 import '../../widgets/page_scrollbar.dart';
 import '../../widgets/section_chrome.dart';
 import 'live_tv_pages.dart';
+import 'live_tv_player_page.dart' show openLivePlayer;
 import 'matches_view.dart';
 import 'portal_browser_page.dart';
 
@@ -30,9 +33,11 @@ class LiveTvPage extends StatefulWidget {
 }
 
 class _LiveTvPageState extends State<LiveTvPage> {
-  static int _lastTab = 3;
+  // The tab you were on, for this run of the app. Before you have picked one: Favorites if you
+  // have any (the quick way back to the channels you starred), else Matches.
+  static int? _lastTab;
   final _scroll = ScrollController();
-  int _tab = _lastTab;
+  int _tab = _lastTab ?? (LiveFavorites.saved.value.isNotEmpty ? 4 : 3);
   final _search = TextEditingController();
 
   @override
@@ -40,6 +45,10 @@ class _LiveTvPageState extends State<LiveTvPage> {
     super.initState();
     ensureIptvStarted();
     _search.addListener(() => setState(() {}));
+    PortalNames.load();
+    LiveFavorites.load().then((_) {
+      if (mounted && _lastTab == null && _tab != 4 && LiveFavorites.saved.value.isNotEmpty) setState(() => _tab = 4);
+    });
   }
 
   @override
@@ -68,7 +77,7 @@ class _LiveTvPageState extends State<LiveTvPage> {
         PageScrollbar(
           controller: _scroll,
           child: ListenableBuilder(
-            listenable: iptv,
+            listenable: Listenable.merge([iptv, LiveFavorites.saved, PortalNames.changes]),
             builder: (context, _) => CustomScrollView(controller: _scroll, slivers: [
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(inset, top, right, 18),
@@ -84,6 +93,12 @@ class _LiveTvPageState extends State<LiveTvPage> {
                     offset: 8,
                     // the page's tabs: one row to a D-pad, entered on the tab that is showing
                     child: DpadRail(child: Wrap(spacing: 8, runSpacing: 8, children: [
+                      FilterChipPill(
+                        label: 'Favorites${LiveFavorites.saved.value.isEmpty ? '' : ' · ${LiveFavorites.saved.value.length}'}',
+                        icon: Icons.star_rounded,
+                        selected: _tab == 4,
+                        tab: true, onTap: () => _pick(4),
+                      ),
                       FilterChipPill(label: 'Matches', icon: Icons.sports_soccer_rounded, selected: _tab == 3, tab: true, onTap: () => _pick(3)),
                       FilterChipPill(label: 'Channels', icon: Icons.live_tv_rounded, selected: _tab == 0, tab: true, onTap: () => _pick(0)),
                       FilterChipPill(
@@ -108,6 +123,7 @@ class _LiveTvPageState extends State<LiveTvPage> {
                   sliver: SliverToBoxAdapter(child: StatusLine(text: iptv.error!, busy: false)),
                 ),
               ...switch (_tab) {
+                4 => _favorites(context, inset, right),
                 3 => [const SliverToBoxAdapter(child: MatchesView())],
                 1 => _portals(context, inset, right),
                 2 => _playlists(context, inset, right),
@@ -119,6 +135,35 @@ class _LiveTvPageState extends State<LiveTvPage> {
         ),
       ]),
     );
+  }
+
+  // ───────── Favorites ─────────
+
+  /// Every channel you starred, from any portal or playlist, in one list. OK plays one, and
+  /// Up and Down in the player then go through the rest of them.
+  List<Widget> _favorites(BuildContext context, double inset, double right) {
+    final list = LiveFavorites.saved.value;
+    if (list.isEmpty) {
+      return [
+        const SliverToBoxAdapter(
+          child: EmptyState(
+            icon: Icons.star_border_rounded,
+            title: 'No favorites yet',
+            body: 'Star a channel while it plays, or in a portal\'s list. Every channel you star is kept here.',
+          ),
+        ),
+      ];
+    }
+    final items = [for (final c in list) LiveItem.favorite(c)];
+    return [
+      SliverPadding(
+        padding: EdgeInsets.fromLTRB(inset, 0, right, 0),
+        sliver: SliverList.builder(
+          itemCount: list.length,
+          itemBuilder: (context, i) => _FavoriteRow(channel: list[i], onTap: () => openLivePlayer(context, items, i)),
+        ),
+      ),
+    ];
   }
 
   // ───────── Channels ─────────
@@ -427,13 +472,24 @@ class _PortalCard extends StatelessWidget {
   const _PortalCard({required this.portal});
   final VerifiedPortal portal;
 
+  Future<void> _rename(BuildContext context) async {
+    final v = await showFieldsDialog(
+      context,
+      title: 'Rename portal',
+      message: 'A name of your own for this portal, on this device. Leave it empty to go back to its own.',
+      confirm: 'Save',
+      fields: [('Name', portalLabel(portal), multiline: false, obscure: false)],
+    );
+    if (v != null) PortalNames.set(portal.key, v[0]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final fav = iptv.isFavoritePortal(portal.key);
     final edit = iptv.editMode;
     final selected = iptv.selected.contains(portal.key);
     return InfoTile(
-      title: portal.name.isEmpty ? portal.portal.url : portal.name,
+      title: portalLabel(portal),
       selected: selected,
       lines: [
         portal.portal.url,
@@ -451,6 +507,13 @@ class _PortalCard extends StatelessWidget {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // a name of your own for it (its own is often just the account's user name)
+                IconButton(
+                  tooltip: 'Rename',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _rename(context),
+                  icon: const Icon(Icons.edit_outlined, size: 18, color: VyseColors.textFaint),
+                ),
                 // the login in one line, to paste into another app or send to someone
                 IconButton(
                   tooltip: 'Copy login (url:username:password)',
@@ -477,6 +540,52 @@ class _PortalCard extends StatelessWidget {
             ),
     );
   }
+}
+
+/// One favorite channel: OK plays it, and its star (Right, then OK) takes it off the list.
+class _FavoriteRow extends StatelessWidget {
+  const _FavoriteRow({required this.channel, required this.onTap});
+  final FavoriteChannel channel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Pressable(
+      onTap: onTap,
+      builder: (context, hovered, _) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.white.withValues(alpha: hovered ? .06 : 0)),
+        child: Row(children: [
+          Container(
+            width: 56,
+            height: 38,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(color: VyseColors.surfaceHi, borderRadius: BorderRadius.circular(7)),
+            child: NetImage(url: channel.logo, fit: BoxFit.contain, fallback: Icons.live_tv_rounded, decodeWidth: NetImage.decodeWidthFor(context, 48)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(channel.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+              if (channel.from != null && channel.from!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(channel.from!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: VyseColors.textDim)),
+              ],
+            ]),
+          ),
+          IconButton(
+            tooltip: 'Remove from favorites',
+            onPressed: () => LiveFavorites.toggleChannel(channel),
+            icon: const Icon(Icons.star_rounded, color: VyseColors.star),
+          ),
+          Icon(Icons.play_circle_outline_rounded, color: hovered ? VyseColors.accent : VyseColors.textFaint),
+          const SizedBox(width: 8),
+        ]),
+      ),
+    ),
+  );
 }
 
 class _PlaylistCard extends StatelessWidget {

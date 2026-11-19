@@ -220,6 +220,53 @@ abstract final class Bed {
   /// seek or a pause, with no video there to watch.
   static final videoCalls = <String>[];
 
+  /// The same for the Media3 engine, which has a channel of its own: what an Android TV's
+  /// player asks of it ("open {…}", "setSubtitleStyle {…}").
+  static final exoCalls = <String>[];
+
+  /// What the Media3 plugin answers when the app asks it something, by the call's name
+  /// ('getStats': what it says of the video). Anything not listed gets "done, nothing to say".
+  static final exoAnswers = <String, Object?>{};
+
+  /// The same for the device channel ('getPlaybackCapabilities': what the TV can do with HDR).
+  static final deviceAnswers = <String, Object?>{};
+
+  /// What the Media3 plugin tells the app by itself, as it arrives from Android: an event
+  /// ('backend-switched', once it has handed the video to mpv, with what for).
+  static Future<void> exoEvent(WidgetTester t, String name, [Map<String, Object?>? data]) async {
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      'vyse/exo_player/events',
+      const StandardMethodCodec().encodeSuccessEnvelope(<String, Object?>{'type': 'event', 'name': name, 'data': ?data}),
+      (_) {},
+    );
+    await t.pump();
+  }
+
+  /// The same for mpv's own channel (a phone's or a desktop's player): an event as mpv sends it
+  /// ('file-loaded', once the file is open).
+  static Future<void> videoEvent(WidgetTester t, String name, [Map<String, Object?>? data]) async {
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      'vyse/mpv_player/events',
+      const StandardMethodCodec().encodeSuccessEnvelope(<String, Object?>{'type': 'event', 'name': name, 'data': ?data}),
+      (_) {},
+    );
+    await t.pump();
+  }
+
+  /// A property the plugin reports ('duration', in seconds: the video has been opened), under
+  /// the number the player asked to hear of it by (so: after the player is open, and with
+  /// [exoCalls] not cleared since).
+  static Future<void> exoProperty(WidgetTester t, String name, Object? value) async {
+    final asked = exoCalls.lastWhere((c) => c.startsWith('observeProperty ') && c.contains('name: $name,'));
+    final id = int.parse(RegExp(r'id: (\d+)').firstMatch(asked)![1]!);
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      'vyse/exo_player/events',
+      const StandardMethodCodec().encodeSuccessEnvelope(<Object?>[id, value]),
+      (_) {},
+    );
+    await t.pump();
+  }
+
   /// The same for the two audio engines (music, and audiobooks on the second): each call starts
   /// with its channel's last part ("mpv_audio_player_2 stop").
   static final audioCalls = <String>[];
@@ -249,12 +296,21 @@ abstract final class Bed {
       // The stand-in for the video: mpv's native side is not here, so its channel says "yes,
       // started" and then takes every command without doing anything. The player page builds
       // and behaves as it does while a title is still loading.
-      if (channel.startsWith('vyse/mpv') && message != null) {
+      if ((channel.startsWith('vyse/mpv') || channel.startsWith('vyse/exo_player')) && message != null) {
         try {
           final call = methods.decodeMethodCall(message);
           if (channel == 'vyse/mpv_player') videoCalls.add('${call.method} ${call.arguments ?? ''}'.trim());
+          // (the Media3 engine's own channel: an Android TV's player, unless Settings says mpv)
+          if (channel == 'vyse/exo_player') exoCalls.add('${call.method} ${call.arguments ?? ''}'.trim());
           if (channel.startsWith('vyse/mpv_audio_player')) audioCalls.add('${channel.substring('vyse/'.length)} ${call.method} ${call.arguments ?? ''}'.trim());
           if (call.method == 'initialize') return Future.value(methods.encodeSuccessEnvelope(true));
+          if (channel == 'vyse/exo_player' && exoAnswers.containsKey(call.method)) return Future.value(methods.encodeSuccessEnvelope(exoAnswers[call.method]));
+        } catch (_) {}
+      }
+      if (channel == 'vyse/device' && message != null && deviceAnswers.isNotEmpty) {
+        try {
+          final call = methods.decodeMethodCall(message);
+          if (deviceAnswers.containsKey(call.method)) return Future.value(methods.encodeSuccessEnvelope(deviceAnswers[call.method]));
         } catch (_) {}
       }
       return Future.value(methods.encodeSuccessEnvelope(null));

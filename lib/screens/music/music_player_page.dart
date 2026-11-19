@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/music/music_player.dart';
 import '../../data/party/rooms.dart';
 import '../../data/party/watch_party.dart';
@@ -246,10 +247,14 @@ class _Backdrop extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedSwitcher(
         duration: const Duration(milliseconds: 800),
         child: Stack(key: ValueKey(url), fit: StackFit.expand, children: [
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
-            child: Transform.scale(scale: 1.3, child: Opacity(opacity: .55, child: NetImage(url: url))),
-          ),
+          // Lean (a TV): the cover as a wash of its colours in one draw, not blurred live (ArtWash)
+          if (Lean.on)
+            ArtWash(url: url, sigma: 70, filter: ArtWash.veil(VyseColors.bg.withValues(alpha: .45)))
+          else
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
+              child: Transform.scale(scale: 1.3, child: Opacity(opacity: .55, child: NetImage(url: url))),
+            ),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -552,9 +557,8 @@ class _LyricsViewState extends State<_LyricsView> {
               ..clear()
               ..addAll(List.generate(_lines.length, (_) => GlobalKey()));
           }
-          return ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (r) => const LinearGradient(
+          return EdgeFade(
+            shader: (r) => const LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],

@@ -424,7 +424,7 @@ class _BrowserLivePlayerState extends State<BrowserLivePlayer> {
             SizedBox(
               width: 44,
               height: 32,
-              child: NetImage(url: item.logo, fit: BoxFit.contain, fallback: Icons.live_tv_rounded),
+              child: NetImage(url: item.logo, fit: BoxFit.contain, fallback: Icons.live_tv_rounded, decodeWidth: NetImage.decodeWidthFor(context, 44)),
             ),
             const SizedBox(width: 12),
           ],

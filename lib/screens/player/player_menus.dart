@@ -5,15 +5,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/anime/anime_sources.dart' show animeServers;
 import '../../data/app_settings.dart';
 import '../../data/subtitles/subtitle_style.dart';
 import '../../data/subtitles/subtitles.dart' as sub;
 import '../../dpad/dpad_traversal.dart';
+import '../../dpad/dpad_reveal.dart';
 import '../../dpad/input_mode_tracker.dart';
-import '../../core/platform/device_performance.dart';
 import '../../core/platform/platform_detector.dart' show PlatformDetector;
 import '../../widgets/common.dart';
+import 'tv_menus.dart';
 
 /// The player's settings panel: a pane of frosted glass above the dock, over the video, with its
 /// tabs and what's in them. It's plain Flutter, with no player in it.
@@ -36,7 +38,11 @@ enum MenuTab {
   audio('Audio'),
   subtitles('Subtitles'),
   speed('Speed'),
-  more('More');
+  more('More'),
+
+  /// Stream info and the report card (player_info.dart). On a TV a screen of its own, like the
+  /// others; in the card it has no tab: More opens it, and More stays lit while it shows.
+  info('Stream info');
 
   const MenuTab(this.label);
   final String label;
@@ -45,14 +51,11 @@ enum MenuTab {
 /// A phone on its side, or a short window: every pixel of height counts.
 bool shortMenus(BuildContext context) => MediaQuery.sizeOf(context).height < 520;
 
-/// On a TV the menus are a side panel: the full height of the screen's right edge, over the
-/// picture, with a list of the menus first and each one's choices in the same panel (a remote
-/// went up to a row of tabs, along it and back down; a tester asked for it to be easier). The
+/// On a TV a menu is the whole screen, over the picture: see tv_menus.dart. Each has a button
+/// of its own on the controls (Subtitles, Audio, Sources; Settings holds quality, speed and the
+/// rest side by side), so there are no tabs to go along and no list of menus to go through. The
 /// desktop and phone apps keep the card above the dock.
-bool get sideMenus => PlatformDetector.isTV();
-
-/// How wide the side panel is in a window [width] wide.
-double sideMenuWidth(double width) => math.min(460, math.max(360, width * .41));
+bool get tvMenus => PlatformDetector.isTV();
 
 /// Rows sit closer on a phone, or in a small window.
 bool tightMenus(BuildContext context) {
@@ -65,7 +68,10 @@ bool tightMenus(BuildContext context) {
 /// Where the panel goes in a box of a given size.
 @immutable
 class PanelFit {
-  const PanelFit({required this.right, required this.bottom, required this.maxBody, required this.narrow, this.left, this.width});
+  const PanelFit({required this.right, required this.bottom, required this.maxBody, required this.narrow, this.left, this.width, this.tv = false});
+
+  /// A TV's menu: the whole screen, in columns ([tvMenus]).
+  final bool tv;
   final double? left;
   final double right;
   final double? width;
@@ -121,11 +127,8 @@ class PlayerPanel extends StatefulWidget {
     required this.top,
     required this.dockH,
     required this.body,
-    this.list = false,
-    this.onList,
+    this.bodyOf,
     this.value,
-    this.heading,
-    this.subheading,
   });
   final bool open;
   final MenuTab tab;
@@ -135,20 +138,13 @@ class PlayerPanel extends StatefulWidget {
   final double dockH;
   final Widget Function(PanelFit fit) body;
 
-  // ── on a TV only ([sideMenus]) ──
+  // ── on a TV only ([tvMenus]) ──
 
-  /// Whether the side panel shows its list of menus rather than [tab]'s choices.
-  final bool list;
+  /// Any menu's contents, not only [tab]'s: Settings shows three of them side by side.
+  final Widget Function(MenuTab tab, PanelFit fit)? bodyOf;
 
-  /// From the list into a menu (false), or back to the list (true).
-  final ValueChanged<bool>? onList;
-
-  /// What each menu has in use, for the list ("English", "2160p").
+  /// What each menu has in use, beside its name ("English", "2160p").
   final String Function(MenuTab tab)? value;
-
-  /// What is playing, over the list.
-  final String? heading;
-  final String? subheading;
 
   @override
   State<PlayerPanel> createState() => _PlayerPanelState();
@@ -167,16 +163,21 @@ class _PlayerPanelState extends State<PlayerPanel> with SingleTickerProviderStat
   void didUpdateWidget(PlayerPanel old) {
     super.didUpdateWidget(old);
     if (old.open != widget.open) widget.open ? _t.forward() : _t.reverse();
-    // On a TV, from the list into a menu or back: once the new one is built, focus goes to where
-    // it starts (the choice in use; back in the list, the menu just left).
-    if (sideMenus && widget.open && old.open && (old.list != widget.list || old.tab != widget.tab)) _focusStartSoon();
+    // On a TV, another menu while one is open: once it is built, focus goes to where it starts
+    // (the choice in use). In the card the same for Stream info, which More's row opens in place
+    // of More itself and whose first row goes back: the row that was pressed is gone either way.
+    // Back in More the ring goes to More's tab, where it is when More is opened (the list being
+    // left is still sliding out, and its first row must not be taken for the menu's start).
+    if (widget.open && old.open && old.tab != widget.tab && (tvMenus || widget.tab == MenuTab.info || old.tab == MenuTab.info)) {
+      _focusStartSoon(onTab: !tvMenus && old.tab == MenuTab.info);
+    }
   }
 
-  void _focusStartSoon() {
+  void _focusStartSoon({bool onTab = false}) {
     final scope = FocusScope.of(context, createDependency: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || InputModeTracker.currentMode != InputMode.keyboard) return;
-      final start = Dpad.firstStop(scope);
+      final start = Dpad.firstStop(scope, where: onTab ? (n) => DpadReveal.startsPageElse[n] ?? false : null);
       if (start != null) Dpad.giveFocus(start);
     });
   }
@@ -189,7 +190,7 @@ class _PlayerPanelState extends State<PlayerPanel> with SingleTickerProviderStat
   }
 
   @override
-  Widget build(BuildContext context) => sideMenus ? _side() : LayoutBuilder(
+  Widget build(BuildContext context) => tvMenus ? _tv() : LayoutBuilder(
     builder: (context, box) {
       final fit = PanelFit.of(box.biggest, side: widget.side, top: widget.top, dockH: widget.dockH, safe: MediaQuery.paddingOf(context));
       final tight = tightMenus(context);
@@ -204,10 +205,13 @@ class _PlayerPanelState extends State<PlayerPanel> with SingleTickerProviderStat
                 Padding(
                   padding: EdgeInsets.fromLTRB(short ? 8 : 10, short ? 8 : 10, short ? 8 : 10, short ? 0 : 2),
                   child: MenuSegments<MenuTab>(
-                    value: widget.tab,
+                    value: widget.tab == MenuTab.info ? MenuTab.more : widget.tab,
                     height: short ? 34 : (tight ? 36 : 40),
                     fontSize: tight ? 12 : 13,
-                    options: [for (final t in MenuTab.values) (t, t.label)],
+                    options: [
+                      for (final t in MenuTab.values)
+                        if (t != MenuTab.info) (t, t.label),
+                    ],
                     onChanged: widget.onTab,
                     start: true,
                   ),
@@ -285,233 +289,47 @@ class _PlayerPanelState extends State<PlayerPanel> with SingleTickerProviderStat
     },
   );
 
-  // ── On a TV: the side panel ──
-
-  static IconData _icon(MenuTab t) => switch (t) {
-    MenuTab.sources => Icons.stream_rounded,
-    MenuTab.quality => Icons.high_quality_rounded,
-    MenuTab.audio => Icons.graphic_eq_rounded,
-    MenuTab.subtitles => Icons.closed_caption_rounded,
-    MenuTab.speed => Icons.speed_rounded,
-    MenuTab.more => Icons.tune_rounded,
-  };
+  // ── On a TV: the whole screen ──
 
   String _valueOf(MenuTab t) => widget.value?.call(t).trim() ?? '';
 
-  Widget _side() => AnimatedBuilder(
+  /// The menus Settings shows side by side.
+  static const _settings = [MenuTab.quality, MenuTab.speed, MenuTab.more];
+
+  Widget _pane(MenuTab t, PanelFit fit) => widget.bodyOf?.call(t, fit) ?? (t == widget.tab ? widget.body(fit) : const SizedBox.shrink());
+
+  Widget _tv() => AnimatedBuilder(
     animation: _v,
     builder: (context, _) {
       if (!widget.open && _t.isDismissed) return const SizedBox.shrink();
-      final v = _v.value.clamp(0.0, 1.0);
-      return LayoutBuilder(
-        builder: (context, box) {
-          final w = sideMenuWidth(box.maxWidth);
-          final edge = ((box.maxWidth - w) / box.maxWidth).clamp(.45, 1.0);
-          return Stack(
-            children: [
-              // The picture darkens a little towards the panel (painted over it: the video is
-              // never moved or shrunk for a menu).
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [const Color(0x00000000), const Color(0x00000000), Colors.black.withValues(alpha: .55 * v)],
-                        stops: [0, edge - .2, edge],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 0,
-                bottom: 0,
-                width: w,
-                right: -w * (1 - v),
-                child: IgnorePointer(
-                  ignoring: !widget.open,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {}, // keep taps inside the panel from closing it
-                    child: _sidePane(context),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+      const fit = PanelFit(right: 0, bottom: 0, maxBody: double.infinity, narrow: false, tv: true);
+      final tab = widget.tab;
+      final settings = _settings.contains(tab);
+      // (the same widgets from the first frame of the fade to the last: a row that was rebuilt
+      // as it finished would be a new row, and the ring on it would be gone)
+      return IgnorePointer(
+        ignoring: !widget.open,
+        child: Opacity(
+          // (a fade is an off-screen buffer the size of the screen while it lasts: a TV on the
+          // lighter interface gets the menu at once, see core/lean.dart)
+          opacity: Lean.on ? 1 : _v.value.clamp(0.0, 1.0),
+          // (the shade is painted over the picture, which is never moved or shrunk for a menu)
+          child: TvMenuScreen(
+            child: MediaQuery(
+              // a size up from the card: read from the sofa
+              data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.1)),
+              child: settings
+                  ? TvMenuFrame(
+                      title: 'Settings',
+                      // (it opens with the ring in the menu that was asked for)
+                      child: TvRails([for (final t in _settings) TvMenuScope(start: t == tab, child: _pane(t, fit))]),
+                    )
+                  : TvMenuFrame(title: tab.label, detail: _valueOf(tab), child: TvMenuScope(child: _pane(tab, fit))),
+            ),
+          ),
+        ),
       );
     },
-  );
-
-  Widget _sidePane(BuildContext context) {
-    final list = widget.list;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [const Color(0xFF1B1D2A).withValues(alpha: .97), const Color(0xFF0B0C13).withValues(alpha: .98)],
-        ),
-        border: Border(left: BorderSide(color: Colors.white.withValues(alpha: .10))),
-        boxShadow: const [BoxShadow(color: Color(0x80000000), blurRadius: 40, offset: Offset(-10, 0))],
-      ),
-      child: MediaQuery(
-        // a size up from the card: read from the sofa
-        data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.12)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 26, 28, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(padding: const EdgeInsets.only(left: 10), child: list ? _sideHeading() : _sideMenuHeading()),
-              const SizedBox(height: 14),
-              Expanded(
-                child: _SideSwitch(
-                  key: ValueKey(list ? 'list' : widget.tab.name),
-                  back: list,
-                  child: list
-                      ? _sideList()
-                      : LayoutBuilder(
-                          builder: (context, box) => Align(
-                            alignment: Alignment.topCenter,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(maxHeight: box.maxHeight),
-                              child: widget.body(PanelFit(right: 0, bottom: 0, maxBody: box.maxHeight, narrow: true)),
-                            ),
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Padding(padding: const EdgeInsets.only(left: 12), child: _SideHints(list: list)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _sideHeading() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      const Text('NOW PLAYING', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.3, color: MenuInk.faint)),
-      const SizedBox(height: 6),
-      Text(
-        widget.heading ?? '',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 21, height: 1.15, fontWeight: FontWeight.w800, letterSpacing: -.4, color: MenuInk.title),
-      ),
-      if (widget.subheading != null && widget.subheading!.isNotEmpty) ...[
-        const SizedBox(height: 3),
-        Text(widget.subheading!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: MenuInk.dim)),
-      ],
-    ],
-  );
-
-  Widget _sideMenuHeading() {
-    final now = _valueOf(widget.tab);
-    return Row(
-      children: [
-        const Icon(Icons.chevron_left_rounded, size: 26, color: MenuInk.dim),
-        const SizedBox(width: 2),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(widget.tab.label, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -.4, color: MenuInk.title)),
-              if (now.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(now, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: MenuInk.dim)),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// The menus, one line each, with what each has in use; OK shows its choices.
-  Widget _sideList() => ListView(
-    padding: EdgeInsets.zero,
-    children: [
-      for (final t in MenuTab.values)
-        MenuRow(
-          title: t.label,
-          // (More holds several things: they go under its name, where there is room for them)
-          detail: t == MenuTab.more ? (_valueOf(t).isEmpty ? 'Zoom, lighting, upscaling, sleep timer' : _valueOf(t)) : null,
-          value: t == MenuTab.more || _valueOf(t).isEmpty ? null : _valueOf(t),
-          chevron: true,
-          leading: _SideGlyph(_icon(t)),
-          // back in the list, the ring is on the menu just left
-          start: t == widget.tab,
-          onTap: () {
-            widget.onTab(t);
-            widget.onList?.call(false);
-          },
-        ),
-    ],
-  );
-}
-
-/// The side panel's list or menu, sliding in as it arrives (from the right going into a menu,
-/// from the left coming back to the list). A weak box gets it at once.
-class _SideSwitch extends StatelessWidget {
-  const _SideSwitch({super.key, required this.back, required this.child});
-  final bool back;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-    tween: Tween(begin: 0, end: 1),
-    duration: DevicePerformance.reducedDuration(const Duration(milliseconds: 240)),
-    curve: MenuInk.ease,
-    child: child,
-    // (the same widgets all the way, so nothing under them is rebuilt as it finishes: the row
-    // with focus would be replaced, and focus with it)
-    builder: (context, t, child) => Opacity(
-      opacity: t,
-      child: Transform.translate(offset: Offset(24 * (1 - t) * (back ? -1 : 1), 0), child: child),
-    ),
-  );
-}
-
-class _SideGlyph extends StatelessWidget {
-  const _SideGlyph(this.icon);
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 34,
-    height: 34,
-    decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: const Color(0x12FFFFFF)),
-    child: Icon(icon, size: 19, color: MenuInk.body),
-  );
-}
-
-/// What the remote's keys do here, at the foot of the side panel.
-class _SideHints extends StatelessWidget {
-  const _SideHints({required this.list});
-  final bool list;
-
-  Widget _key(String k) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-    decoration: BoxDecoration(borderRadius: BorderRadius.circular(5), border: Border.all(color: const Color(0x40FFFFFF))),
-    child: Text(k, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: .6, color: MenuInk.dim)),
-  );
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      _key('OK'),
-      const Text('  Choose', style: TextStyle(fontSize: 11.5, color: MenuInk.faint)),
-      const SizedBox(width: 18),
-      _key('BACK'),
-      Text(list ? '  Close' : '  Back', style: const TextStyle(fontSize: 11.5, color: MenuInk.faint)),
-    ],
   );
 }
 
@@ -588,9 +406,8 @@ class MenuScroll extends StatelessWidget {
   final EdgeInsets padding;
 
   @override
-  Widget build(BuildContext context) => ShaderMask(
-    blendMode: BlendMode.dstIn,
-    shaderCallback: (r) => LinearGradient(
+  Widget build(BuildContext context) => EdgeFade(
+    shader: (r) => LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
@@ -682,6 +499,13 @@ class MenuSegments<T> extends StatelessWidget {
   }
 }
 
+/// On a TV, once what [state] just changed is on screen: the ring goes one column to the right,
+/// as the Right key would take it (OK on a language goes on into its subtitles).
+void stepRightSoon(State state) => WidgetsBinding.instance.addPostFrameCallback((_) {
+  if (!state.mounted || InputModeTracker.currentMode != InputMode.keyboard) return;
+  FocusManager.instance.primaryFocus?.focusInDirection(TraversalDirection.right);
+});
+
 class MenuCaption extends StatelessWidget {
   const MenuCaption(this.text, {super.key});
   final String text;
@@ -728,8 +552,16 @@ class MenuRow extends StatelessWidget {
     this.onTap,
     this.titleLines = 1,
     this.start,
+    this.entry = false,
+    this.trailing,
   });
   final String title;
+
+  /// In a column of a TV menu: where a D-pad lands coming into the column from beside it.
+  final bool entry;
+
+  /// Something small at the row's end, before its tick: a count.
+  final Widget? trailing;
   final String? detail;
   final List<Widget> tags;
   final bool selected;
@@ -753,7 +585,9 @@ class MenuRow extends StatelessWidget {
     final base = DefaultTextStyle.of(context).style;
     return Pressable(
       onTap: onTap,
-      autofocus: start ?? selected,
+      // (a TV's screen of several menus starts in one of them: TvMenuScope.start)
+      autofocus: (start ?? selected) && (TvMenuScope.maybeOf(context)?.start ?? true),
+      railEntry: entry,
       builder: (context, hovered, pressed) => AnimatedScale(
         scale: pressed ? .985 : 1,
         duration: const Duration(milliseconds: 120),
@@ -842,6 +676,7 @@ class MenuRow extends StatelessWidget {
                   ),
                 ),
               ],
+              if (trailing != null) ...[const SizedBox(width: 10), trailing!],
               if (selected || chevron)
                 SizedBox(
                   width: 32,
@@ -871,7 +706,7 @@ class LiveBars extends StatefulWidget {
 }
 
 class _LiveBarsState extends State<LiveBars> with SingleTickerProviderStateMixin {
-  late final _t = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
+  late final _t = Lean.loop(AnimationController(vsync: this, duration: const Duration(milliseconds: 1800)));
 
   @override
   void dispose() {
@@ -981,7 +816,9 @@ class SourcesPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var i = 0;
-    return MenuScroll(
+    final tv = TvMenuScope.isIn(context);
+    return _column(
+      tv: tv,
       children: [
         if (now != null) Rise(index: i++, child: now!),
         for (final s in sources)
@@ -990,7 +827,7 @@ class SourcesPane extends StatelessWidget {
             child: MenuRow(
               title: s.name,
               detail: switch (s.state) {
-                SourceState.dead => 'Not working for this one · tap to retry',
+                SourceState.dead => 'Not working for this one · retry',
                 SourceState.loading => 'Checking…',
                 SourceState.ready => s.note,
               },
@@ -1014,6 +851,10 @@ class SourcesPane extends StatelessWidget {
       ],
     );
   }
+
+  /// One column on a TV; the card's list everywhere else.
+  static Widget _column({required bool tv, required List<Widget> children}) =>
+      tv ? TvRail(title: 'Servers', width: 470, children: children) : MenuScroll(children: children);
 }
 
 class _Dot extends StatelessWidget {
@@ -1079,6 +920,7 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
 
   @override
   Widget build(BuildContext context) {
+    if (TvMenuScope.isIn(context)) return _tvRails();
     final open = widget.sources.where((s) => s.id == _open).firstOrNull;
     return MenuSlide(index: open == null ? 0 : 1, child: open == null ? _sources() : _links(open));
   }
@@ -1086,6 +928,45 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
   void _openSource(MenuFilmSource s) {
     setState(() => _open = s.id);
     if (s.state == null || s.state == SourceState.dead) s.onOpen?.call();
+    // (on a TV its links are the column beside it: OK on a source goes on into them)
+    if (TvMenuScope.isIn(context)) stepRightSoon(this);
+  }
+
+  /// On a TV: the sources in one column and, beside it, the links of the one opened (the one
+  /// playing, until another is opened). Nothing is looked up until its source is opened.
+  Widget _tvRails() {
+    final sources = widget.sources;
+    final playing = sources.where((s) => s.links.any((l) => l.current)).firstOrNull;
+    final open = sources.where((s) => s.id == _open).firstOrNull ?? playing;
+    return TvRails([
+      TvRail(
+        title: widget.hostOrder ? "In the host's order" : 'In your order',
+        width: 330,
+        children: [
+          for (var n = 0; n < sources.length; n++)
+            // the menu opens on the source that is playing (its link does nothing when pressed, so
+            // the ring does not stop on it); with nothing playing, on the first source
+            _source(n + 1, sources[n], start: playing == null ? n == 0 : identical(sources[n], playing), entry: open == null ? n == 0 : identical(sources[n], open)),
+          TvNote(widget.hostOrder ? 'The host’s Settings → Sources sets this list' : 'Change the order in Settings → Sources'),
+        ],
+      ),
+      if (open != null)
+        TvRail(title: open.name, width: 420, count: open.links.isEmpty ? null : open.links.length, children: _tvLinks(open)),
+    ]);
+  }
+
+  List<Widget> _tvLinks(MenuFilmSource s) {
+    if (s.state == SourceState.loading && s.links.isEmpty) return [TvNote('Looking for links on ${s.name}…', busy: true)];
+    if (s.state == SourceState.dead) {
+      return [
+        TvNote('${s.name} has nothing for this one'),
+        if (s.onOpen != null) _Onward(title: 'Look again', detail: 'Asks ${s.name} once more', onTap: s.onOpen!),
+      ];
+    }
+    if (s.links.isEmpty) return [TvNote(s.note)];
+    // (coming in from the sources: the first link there is something to do with)
+    final into = s.links.where((l) => !l.current && l.state != SourceState.loading).firstOrNull;
+    return [for (final l in s.links) _link(l, entry: identical(l, into))];
   }
 
   Widget _sources() {
@@ -1105,7 +986,7 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
     );
   }
 
-  Widget _source(int rank, MenuFilmSource s) {
+  Widget _source(int rank, MenuFilmSource s, {bool? start, bool entry = false}) {
     final now = s.links.where((l) => l.current).firstOrNull;
     final trying = s.links.where((l) => l.state == SourceState.loading).firstOrNull;
     final looking = s.state == SourceState.loading || trying != null;
@@ -1120,7 +1001,7 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
         : trying != null
         ? 'Trying ${trying.name}…'
         : dead
-        ? 'Nothing for this one · tap to look again'
+        ? 'Nothing for this one · look again'
         : s.state == null || (s.servers && failed == 0)
         ? s.note
         : [
@@ -1133,6 +1014,8 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
       detail: detail,
       value: now?.quality,
       selected: now != null,
+      start: start,
+      entry: entry,
       quiet: dead,
       chevron: true,
       leading: SizedBox(
@@ -1214,7 +1097,7 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
     );
   }
 
-  Widget _link(MenuLink l) {
+  Widget _link(MenuLink l, {bool entry = false}) {
     final dead = !l.current && l.state == SourceState.dead;
     final trying = l.state == SourceState.loading;
     return MenuRow(
@@ -1224,7 +1107,7 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
           : trying
           ? 'Checking it plays…'
           : dead
-          ? 'Didn’t play · tap to try again'
+          ? 'Didn’t play · try again'
           : null,
       value: l.quality ?? (l.format == 'HLS' ? 'Auto' : null),
       tags: [
@@ -1232,6 +1115,7 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
         if (l.format != null) MenuTag(l.format!),
       ],
       selected: l.current,
+      entry: entry,
       live: true,
       quiet: dead,
       leading: trying
@@ -1294,6 +1178,18 @@ class QualityPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var i = 0;
+    // On a TV it is one of Settings' columns: narrow, so a quality's size goes under its name.
+    if (TvMenuScope.isIn(context)) {
+      return TvRail(
+        title: 'Quality',
+        width: 240,
+        children: [
+          if (only != null) MenuRow(title: only!.label, detail: only!.detail, selected: true, entry: true, onTap: () {}),
+          if (auto != null) MenuRow(title: auto!.label, detail: auto!.detail, selected: auto!.selected, entry: auto!.selected, onTap: auto!.onTap),
+          for (final q in items) MenuRow(title: q.label, detail: q.detail, selected: q.selected, entry: q.selected, onTap: q.onTap),
+        ],
+      );
+    }
     return MenuScroll(
       children: [
         if (only != null) Rise(index: i++, child: MenuRow(title: only!.label, detail: only!.detail, selected: true, onTap: () {})),
@@ -1343,6 +1239,29 @@ class AudioPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var i = 0;
+    // On a TV: what there is to hear in one column, how it sounds in the one beside it.
+    if (TvMenuScope.isIn(context)) {
+      return TvRails([
+        TvRail(
+          title: 'Tracks',
+          width: 400,
+          count: tracks.length > 1 ? tracks.length : null,
+          children: [
+            if (tracks.isEmpty) const TvNote('Loading…', busy: true),
+            for (final t in tracks) MenuRow(title: t.title, detail: t.detail, selected: t.current, entry: t.current, live: true, onTap: t.onTap),
+            if (links.isNotEmpty) ...[
+              MenuCaption(linksCaption),
+              for (final t in links) MenuRow(title: t.title, detail: t.detail, chevron: true, onTap: t.onTap),
+            ],
+            if (elsewhere.isNotEmpty) ...[
+              const MenuCaption('ON ANOTHER SERVER'),
+              for (final t in elsewhere) MenuRow(title: t.title, detail: t.detail, chevron: true, onTap: t.onTap),
+            ],
+          ],
+        ),
+        if (sound.isNotEmpty) TvRail(title: 'Sound', width: 430, children: sound),
+      ]);
+    }
     return MenuScroll(
       children: [
         if (tracks.isEmpty) Rise(index: i++, child: const MenuRow(title: 'Loading…')),
@@ -1391,6 +1310,17 @@ class SpeedPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final tight = tightMenus(context);
     final shown = value == value.roundToDouble() ? value.toStringAsFixed(0) : '$value';
+    // On a TV it is one of Settings' columns: every speed a row, slowest first.
+    if (TvMenuScope.isIn(context)) {
+      final all = [...speeds, ...more]..sort((a, b) => a.$1.compareTo(b.$1));
+      return TvRail(
+        title: 'Speed',
+        width: 190,
+        children: [
+          for (final (speed, label) in all) MenuRow(title: label, selected: speed == value, entry: speed == value, onTap: () => onChanged(speed)),
+        ],
+      );
+    }
     return MenuScroll(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
       children: [
@@ -1470,9 +1400,11 @@ class SubtitlesPane extends StatefulWidget {
 class _SubtitlesPaneState extends State<SubtitlesPane> {
   bool _style = false;
   String? _open; // the language being browsed
+  bool _onOff = false; // a TV: the ring is on Off, so no language's subtitles show beside it
 
   @override
   Widget build(BuildContext context) {
+    if (widget.fit.tv) return _tvRails();
     final list = MenuSlide(index: _open == null ? 0 : 1, child: _open == null ? _languages() : _files(_open!));
     if (!widget.fit.narrow) {
       return SizedBox(
@@ -1578,10 +1510,122 @@ class _SubtitlesPaneState extends State<SubtitlesPane> {
   static bool _extra(sub.SubtitleTrack t) =>
       RegExp(r'making[ ._-]?of|behind[ ._-]?the[ ._-]?scenes|featurette|trailer|teaser|bonus|extras|the[ ._-]?asylums?[ ._-]', caseSensitive: false).hasMatch(t.release);
 
-  Widget _files(String lang) {
-    // ones likely to be off (camera copies, extras) go last; the rest keep their order
+  /// A language's subtitles: ones likely to be off (camera copies, extras) go last; the rest
+  /// keep their order.
+  List<sub.SubtitleTrack> _ordered(String lang) {
     final all = _groups[lang] ?? const <sub.SubtitleTrack>[];
-    final list = [...all.where((t) => !_cam(t) && !_extra(t)), ...all.where((t) => _cam(t) && !_extra(t)), ...all.where(_extra)];
+    return [...all.where((t) => !_cam(t) && !_extra(t)), ...all.where((t) => _cam(t) && !_extra(t)), ...all.where(_extra)];
+  }
+
+  Widget _fileRow(sub.SubtitleTrack t, List<sub.SubtitleTrack> list, {bool entry = false}) => MenuRow(
+    title: _name(t, list),
+    titleLines: 2,
+    selected: t.id == widget.active?.id,
+    entry: entry,
+    tags: [
+      // inside the video, or a file in the torrent
+      if (t.provider == 'Built in') const MenuTag('Built in', strong: true),
+      // anime: which of our servers it came from (they're all in the menu at once)
+      if (animeServers.any((s) => s.name == t.provider)) MenuTag('From ${t.provider}'),
+      if (t.translated) const MenuTag('Auto-translated'),
+      if (t.hearingImpaired) const MenuTag('SDH'),
+      if (_extra(t)) const MenuTag('Maybe not this film') else if (_cam(t)) const MenuTag('Cam copy timing'),
+      MenuTag(t.format.toUpperCase()),
+    ],
+    onTap: () => widget.onTrack(t),
+  );
+
+  // ── On a TV: three columns ──
+
+  /// Tells when the ring comes onto [child], or onto something inside it.
+  static Widget _onRing(VoidCallback arrived, Widget child) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onFocusChange: (has) {
+      if (has) arrived();
+    },
+    child: child,
+  );
+
+  void _browse(String? lang) {
+    final off = lang == null;
+    if (_onOff == off && (off || _open == lang)) return;
+    setState(() {
+      _onOff = off;
+      if (!off) _open = lang;
+    });
+  }
+
+  /// Languages; the subtitles of the language the ring is on (the one in use, when the menu
+  /// opens); and how subtitles look. Moving down the languages shows each one's subtitles
+  /// beside it at once, and OK or Right goes into them.
+  Widget _tvRails() {
+    final groups = _groups;
+    final real = groups.entries.where((e) => e.value.any((t) => !t.translated)).toList();
+    final made = groups.entries.where((e) => e.value.every((t) => t.translated)).toList();
+    final active = widget.active;
+    final using = active != null && groups.containsKey(active.language) ? active.language : null;
+    final open = _onOff ? null : (_open != null && groups.containsKey(_open) ? _open : using);
+    final files = open == null ? const <sub.SubtitleTrack>[] : _ordered(open);
+    final first = files.any((t) => t.id == active?.id) ? null : files.firstOrNull;
+
+    Widget language(String lang, List<sub.SubtitleTrack> list) {
+      final count = list.where((t) => !t.translated).length;
+      return _onRing(
+        () => _browse(lang),
+        MenuRow(
+          title: lang,
+          detail: count == 0 ? 'Translated on demand' : null,
+          selected: using == lang,
+          start: false, // (the menu opens on the subtitle in use, in the next column)
+          entry: open == lang,
+          trailing: count == 0 ? null : TvCount(count, lit: using == lang),
+          onTap: () {
+            _browse(lang);
+            stepRightSoon(this);
+          },
+        ),
+      );
+    }
+
+    return TvRails([
+      TvRail(
+        title: 'Languages',
+        width: 200,
+        children: [
+          _onRing(
+            () => _browse(null),
+            MenuRow(title: 'Off', selected: active == null, entry: open == null, onTap: () => widget.onTrack(null)),
+          ),
+          if (widget.loading) const TvNote('Looking…', busy: true),
+          for (final e in real) language(e.key, e.value),
+          if (made.isNotEmpty) ...[
+            const MenuCaption('AUTO-TRANSLATED'),
+            for (final e in made) language(e.key, e.value),
+          ],
+        ],
+      ),
+      TvRail(
+        title: open ?? 'Subtitles',
+        width: 330,
+        count: files.isEmpty ? null : files.length,
+        children: [
+          if (open != null)
+            for (final t in files) _fileRow(t, files, entry: t.id == active?.id || identical(t, first))
+          else if (widget.loading && groups.isEmpty)
+            const TvNote('Looking for subtitles…', busy: true)
+          else if (groups.isEmpty)
+            const TvNote('No subtitles found for this one')
+          else
+            TvNote(active == null ? 'Subtitles are off. Pick a language to see what it has.' : 'Off turns subtitles off.'),
+        ],
+      ),
+      _SubtitleStyle(art: widget.art, tv: true, offset: widget.offset, onSync: widget.onSync),
+    ]);
+  }
+
+  Widget _files(String lang) {
+    final list = _ordered(lang);
     return MenuScroll(
       children: [
         Pressable(
@@ -1601,27 +1645,7 @@ class _SubtitlesPaneState extends State<SubtitlesPane> {
             ),
           ),
         ),
-        for (var i = 0; i < list.length; i++)
-          Rise(
-            index: i,
-            child: MenuRow(
-              title: _name(list[i], list),
-              titleLines: 2,
-              selected: list[i].id == widget.active?.id,
-              tags: [
-                // inside the video, or a file in the torrent
-                if (list[i].provider == 'Built in') const MenuTag('Built in', strong: true),
-                // anime: which of our servers it came from (they're all in the menu at once)
-                if (animeServers.any((s) => s.name == list[i].provider)) MenuTag('From ${list[i].provider}'),
-                if (list[i].translated) const MenuTag('Auto-translated'),
-                if (list[i].hearingImpaired) const MenuTag('SDH'),
-                if (_extra(list[i])) const MenuTag('Maybe not this film')
-                else if (_cam(list[i])) const MenuTag('Cam copy timing'),
-                MenuTag(list[i].format.toUpperCase()),
-              ],
-              onTap: () => widget.onTrack(list[i]),
-            ),
-          ),
+        for (var i = 0; i < list.length; i++) Rise(index: i, child: _fileRow(list[i], list)),
       ],
     );
   }
@@ -1639,8 +1663,14 @@ class _SubtitlesPaneState extends State<SubtitlesPane> {
 /// The player used to offer S / M / L / XL and three colours of its own, which fought with a
 /// size or colour picked in Settings.
 class _SubtitleStyle extends StatelessWidget {
-  const _SubtitleStyle({this.art});
+  const _SubtitleStyle({this.art, this.tv = false, this.offset = 0, this.onSync});
   final String? art;
+
+  /// A TV's Style column: no preview (the subtitles themselves show through the menu, and
+  /// change as the settings do), and Sync first.
+  final bool tv;
+  final double offset;
+  final VoidCallback? onSync;
 
   static const _label = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: MenuInk.dim);
 
@@ -1668,9 +1698,7 @@ class _SubtitleStyle extends StatelessWidget {
       final lift = AppSettings.subtitleLift.value;
       // a box strength from the old Soft preset (40) lights the nearest of today's steps
       final box = captionBoxLevels.reduce((a, b) => (a - back).abs() <= (b - back).abs() ? a : b);
-      return MenuScroll(
-        children: [
-          Padding(
+      final preview = Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
@@ -1709,7 +1737,8 @@ class _SubtitleStyle extends StatelessWidget {
                 ),
               ),
             ),
-          ),
+          );
+      final controls = <Widget>[
           MenuStepper(
             title: 'Text size',
             label: '${size}px',
@@ -1768,8 +1797,23 @@ class _SubtitleStyle extends StatelessWidget {
             onPlus: () => lift < 45 ? AppSettings.subtitleLift.set(lift + 1) : null,
             onReset: () => AppSettings.subtitleLift.set(AppSettings.subtitleLift.fallback),
           ),
-        ],
-      );
+      ];
+      if (tv) {
+        return TvRail(
+          title: 'Style',
+          width: 300,
+          children: [
+            if (onSync != null)
+              _Onward(
+                title: 'Sync subtitles',
+                detail: offset == 0 ? 'Line them up with the dialogue' : 'Offset ${offset > 0 ? '+' : ''}${offset}s',
+                onTap: onSync!,
+              ),
+            ...controls,
+          ],
+        );
+      }
+      return MenuScroll(children: [preview, ...controls]);
     },
   );
 }
@@ -1811,15 +1855,15 @@ class MorePane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var i = 0;
-    return MenuScroll(
-      children: [
-        for (final (caption, rows) in sections)
-          if (rows.isNotEmpty) ...[
-            MenuCaption(caption),
-            for (final r in rows) Rise(index: i++, child: r),
-          ],
-      ],
-    );
+    final children = [
+      for (final (caption, rows) in sections)
+        if (rows.isNotEmpty) ...[
+          MenuCaption(caption),
+          for (final r in rows) Rise(index: i++, child: r),
+        ],
+    ];
+    // (on a TV it is the last of Settings' columns)
+    return TvMenuScope.isIn(context) ? TvRail(title: 'More', width: 400, children: children) : MenuScroll(children: children);
   }
 }
 

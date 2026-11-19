@@ -373,7 +373,10 @@ void main() {
     );
     RenderFocusChrome chrome(WidgetTester t) => t.renderObject<RenderFocusChrome>(find.byType(FocusChrome));
 
-    testWidgets('one that cannot take focus itself draws no ring when something inside it has focus', (t) async {
+    // One ring, on the control that has focus. A card used to keep its own ring (and its growth)
+    // while focus was on a button inside it, and the two rings did not line up: "the misborder
+    // alignments" of the sixth round from testers' TVs (docs/dpad/PLAN.md note 91).
+    testWidgets('one with focus on something inside it draws no ring of its own; the ring is on what has focus', (t) async {
       final inner = FocusNode();
       addTearDown(inner.dispose);
       Widget page({required bool can}) => _host(
@@ -384,19 +387,26 @@ void main() {
         ),
       );
       RenderFocusChrome outer(WidgetTester t) => t.renderObject<RenderFocusChrome>(find.byType(FocusChrome).first);
+      RenderFocusChrome within(WidgetTester t) => t.renderObject<RenderFocusChrome>(find.byType(FocusChrome).last);
       await t.pumpWidget(page(can: true));
       await _dpadMode(t);
       inner.requestFocus();
       await t.pumpAndSettle();
-      expect(outer(t).shown, 1, reason: 'a control keeps its ring while one of its own buttons has focus (a row and its delete button)');
+      expect(within(t).shown, 1);
+      expect(outer(t).shown, 0, reason: 'a card and its star: the ring is on the star, never on both');
+      // focus on the control itself: its own ring, and none left on what is inside it
+      Focus.of(t.element(find.byType(FocusableWrapper).last)).requestFocus();
+      await t.pumpAndSettle();
+      expect(inner.hasFocus, isFalse);
+      expect(outer(t).shown, 1);
+      expect(within(t).shown, 0);
       // the same wrapper, now only a frame round what is inside it (a player that fills the window)
+      inner.requestFocus();
       await t.pumpWidget(page(can: false));
       await t.pumpAndSettle();
       expect(inner.hasPrimaryFocus, isTrue);
       expect(outer(t).shown, 0, reason: 'no ring round something that is not a control');
-      await t.pumpWidget(page(can: true));
-      await t.pumpAndSettle();
-      expect(outer(t).shown, 1);
+      expect(within(t).shown, 1);
     });
 
     testWidgets('shows its ring only in D-pad mode, and never moves or resizes', (t) async {

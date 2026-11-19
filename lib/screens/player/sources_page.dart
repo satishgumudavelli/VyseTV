@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/sources/addons.dart';
 import '../../data/sources/debrid/debrid.dart' show Debrid;
 import '../../data/anime/anilist.dart';
@@ -452,7 +453,10 @@ class _SourcesPageState extends State<SourcesPage> {
           bottom: 0,
           right: 0,
           width: size.width * .66,
-          child: ShaderMask(
+          // (lean: the same picture without the off-screen buffers, _LeanArt)
+          child: Lean.on
+              ? (widget.overlay ? const SizedBox.shrink() : _LeanArt(url: info.art))
+              : ShaderMask(
             shaderCallback: (r) => const LinearGradient(colors: [Color(0x00FFFFFF), Color(0x99FFFFFF), Color(0xFFFFFFFF)], stops: [0, .35, .7]).createShader(r),
             blendMode: BlendMode.dstIn,
             child: ShaderMask(
@@ -729,7 +733,12 @@ class _Backdrop extends StatelessWidget {
       : Stack(
           children: [
             Positioned.fill(
-              child: ClipRect(
+              // Lean (a TV): dimmed only. The video is on a surface of its own behind the
+              // interface, where a blur can't reach it, so this one blurred nothing and still
+              // cost an off-screen copy of the screen for every frame.
+              child: Lean.on
+                  ? const ColoredBox(color: Color(0xB807080F))
+                  : ClipRect(
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                   child: const ColoredBox(color: Color(0xB807080F)),
@@ -739,6 +748,41 @@ class _Backdrop extends StatelessWidget {
             Positioned.fill(child: child),
           ],
         );
+}
+
+/// The art as the two masks and the fade leave it, without them (lean, core/lean.dart): at half
+/// strength, melting into the page on the left and at the bottom. Over a page of one colour, a
+/// picture faded and masked away is that picture under veils of the page's colour, and those
+/// are plain draws where each mask is an off-screen copy of two thirds of the screen.
+class _LeanArt extends StatelessWidget {
+  const _LeanArt({required this.url});
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    const bg = VyseColors.bg;
+    final u = url;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (u == null)
+          ColoredBox(color: Color.lerp(bg, VyseColors.surface, .5)!)
+        else
+          CachedNetworkImage(
+            imageUrl: u,
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            fadeInDuration: const Duration(milliseconds: 400),
+            color: bg.withValues(alpha: .5),
+            colorBlendMode: BlendMode.srcOver,
+            placeholder: (_, _) => const ColoredBox(color: bg),
+            errorWidget: (_, _, _) => const ColoredBox(color: bg),
+          ),
+        const Scrim.left(alphas: [1, .4, 0], stops: [0, .35, .7]),
+        const Scrim.bottom(alphas: [1, 0], stops: [0, .45]),
+      ],
+    );
+  }
 }
 
 class _Art extends StatelessWidget {
@@ -1147,7 +1191,7 @@ class AddonLogo extends StatelessWidget {
     );
     return Tooltip(
       message: addon.name,
-      waitDuration: const Duration(milliseconds: 400),
+      waitDuration: tooltipWait(const Duration(milliseconds: 400)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size * .24),
         child: SizedBox.square(
@@ -1214,7 +1258,7 @@ class _BadgeView extends StatelessWidget {
     if (b.image == null) return tag;
     return Tooltip(
       message: _plain(b.name),
-      waitDuration: const Duration(milliseconds: 500),
+      waitDuration: tooltipWait(const Duration(milliseconds: 500)),
       child: CachedNetworkImage(
         imageUrl: b.image!,
         height: height,
@@ -1313,7 +1357,7 @@ class _Skeleton extends StatefulWidget {
 }
 
 class _SkeletonState extends State<_Skeleton> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat(reverse: true);
+  late final _c = Lean.loop(AnimationController(vsync: this, duration: const Duration(milliseconds: 1000)), reverse: true);
 
   @override
   void dispose() {

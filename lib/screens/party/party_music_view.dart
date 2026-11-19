@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/party/watch_party.dart' show PartySong;
 import '../../dpad/dpad_seek.dart';
 import '../../widgets/common.dart';
@@ -571,14 +572,14 @@ class _CoverState extends State<_Cover> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    if (widget.playing) _breath.repeat(reverse: true);
+    if (widget.playing) Lean.loop(_breath, reverse: true);
   }
 
   @override
   void didUpdateWidget(_Cover old) {
     super.didUpdateWidget(old);
     if (old.playing == widget.playing) return;
-    widget.playing ? _breath.repeat(reverse: true) : _breath.stop();
+    widget.playing ? Lean.loop(_breath, reverse: true) : _breath.stop();
   }
 
   @override
@@ -1097,9 +1098,8 @@ class _LyricsState extends State<_Lyrics> {
   @override
   Widget build(BuildContext context) {
     final base = DefaultTextStyle.of(context).style;
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (r) => const LinearGradient(
+    return EdgeFade(
+      shader: (r) => const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],

@@ -8,6 +8,9 @@ import '../../data/playback/intro_db.dart' show SegmentKind;
 import '../../data/account/account.dart';
 import '../../core/platform/platform_detector.dart' show PlatformDetector;
 import '../../data/phone_edit/phone_session.dart';
+import '../../data/playback/playback_report.dart';
+import '../../data/playback/player_engine.dart';
+import '../player/player_info.dart' show showReportCard;
 import '../../data/party/party.dart';
 import '../../data/party/friends.dart';
 import '../party/friends_view.dart';
@@ -22,6 +25,7 @@ import '../../core/accent.dart';
 import '../../core/layout.dart';
 import '../../core/nav_sections.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/app_settings.dart';
 import '../../data/updates/updater.dart';
 import '../../widgets/dialogs/update_dialog.dart';
@@ -137,7 +141,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(inset, top, right, 0),
                   sliver: SliverToBoxAdapter(
-                    child: Center(
+                    // One layer for the page: it is a single scrolled child (not a list, whose
+                    // rows each get a layer), so without this every frame of a scroll drew the
+                    // header and all the tabs' names again.
+                    child: RepaintBoundary(
+                      child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 1100),
                         child: Column(
@@ -193,6 +201,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                           ],
                         ),
+                      ),
                       ),
                     ),
                   ),
@@ -1081,8 +1090,24 @@ class _AppearanceTab extends StatelessWidget {
           ),
         ),
       ),
+      if (PlatformDetector.isTV()) const _Section(title: 'Interface', children: [_LeanRow()]),
       const _Navigation(),
     ],
+  );
+}
+
+/// Settings → Appearance, on a TV: the lean way of drawing (core/lean.dart), on or off.
+class _LeanRow extends StatelessWidget {
+  const _LeanRow();
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: Lean.changes,
+    builder: (context, on, _) => _Row(
+      title: 'Lighter interface',
+      subtitle: 'Fewer animations and effects, so VyseTV stays quick on this TV. Switch it off for the full look if your TV keeps up',
+      trailing: _Switch(value: on, onChanged: Lean.choose),
+    ),
   );
 }
 
@@ -1314,6 +1339,8 @@ class _PlaybackTab extends StatelessWidget {
       _Section(
         title: 'Player',
         children: [
+          if (PlayerEngine.offered) const _EngineRow(),
+          if (PlatformDetector.isTV()) const _LastPlaybackRow(),
           _Row(
             title: 'Streaming mode',
             subtitle: "On: videos play right away from VyseTV's servers. Off: pick a source from your addons first",
@@ -1346,6 +1373,59 @@ class _PlaybackTab extends StatelessWidget {
       ),
       const _AutoplayOrder(),
     ],
+  );
+}
+
+/// Settings → Playback → Player engine (Android TV): Media3 or mpv, from the next video on.
+class _EngineRow extends StatelessWidget {
+  const _EngineRow();
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: PlayerEngine.changes,
+    builder: (context, _) => _Row(
+      title: 'Player engine',
+      subtitle: PlayerEngine.isMedia3
+          ? "Media3 is Android's own player. A video it can't play switches to mpv by itself. "
+                'Upscaling, ambient lighting, the 5.1 limit and some subtitle styling need mpv. Applies from the next video'
+          : 'mpv has upscaling, ambient lighting, the 5.1 limit and every subtitle style. Applies from the next video',
+      below: _Choice<String>(
+        value: PlayerEngine.current,
+        options: const [PlayerEngine.media3, PlayerEngine.mpv],
+        label: (v) => v == PlayerEngine.media3 ? 'Media3' : 'mpv',
+        onChanged: PlayerEngine.choose,
+      ),
+    ),
+  );
+}
+
+/// Settings → Playback → Last playback (on a TV): the report card of the last video opened,
+/// kept after the player has closed, so one that never started can still be photographed and
+/// reported (the player's own Stream info shows the same while it is open).
+class _LastPlaybackRow extends StatefulWidget {
+  const _LastPlaybackRow();
+
+  @override
+  State<_LastPlaybackRow> createState() => _LastPlaybackRowState();
+}
+
+class _LastPlaybackRowState extends State<_LastPlaybackRow> {
+  @override
+  void initState() {
+    super.initState();
+    PlaybackReport.load();
+  }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: PlaybackReport.last,
+    builder: (context, report, _) => _Row(
+      title: 'Last playback',
+      subtitle: report == null
+          ? 'Nothing played yet. After a video that will not play, its report card is here to photograph'
+          : '${report.summary}. Its report card says what the TV and the player did, to photograph when you report a problem',
+      trailing: report == null ? null : _SmallButton(label: 'Report card', icon: Icons.fact_check_outlined, onTap: () => showReportCard(context, report)),
+    ),
   );
 }
 
@@ -1631,7 +1711,12 @@ class _SubtitlesTab extends StatelessWidget {
   const _SubtitlesTab();
 
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: PlayerEngine.changes, builder: (context, _) => _body(context, PlayerEngine.isMedia3));
+
+  /// [m3]: Media3 is the engine, so the parts of the look only mpv draws
+  /// (SubtitleStyle.media3Skips) are left out. They are back when the engine is mpv.
+  Widget _body(BuildContext context, bool m3) => Column(
     children: [
       _Section(
         title: 'Language',
@@ -1666,14 +1751,17 @@ class _SubtitlesTab extends StatelessWidget {
       ),
       _Section(
         title: 'Caption style',
-        subtitle: "Drawn by the player's subtitle engine (libass), so the preview is close but not exact.",
+        subtitle: m3
+            ? 'Drawn by the player, so the preview is close but not exact.'
+            : "Drawn by the player's subtitle engine (libass), so the preview is close but not exact.",
         children: [
           const Padding(padding: EdgeInsets.only(top: 18, bottom: 4), child: _SubtitlePreview()),
-          _Row(
-            title: 'Font',
-            subtitle: 'Go Noto covers every language. Other fonts fall back to it for letters they lack.',
-            trailing: const _FontButton(),
-          ),
+          if (!m3)
+            _Row(
+              title: 'Font',
+              subtitle: 'Go Noto covers every language. Other fonts fall back to it for letters they lack.',
+              trailing: const _FontButton(),
+            ),
           _Row(title: 'Bold', trailing: _Toggle(AppSettings.subtitleBold)),
           _Row(title: 'Italic', trailing: _Toggle(AppSettings.subtitleItalic)),
           ValueListenableBuilder(
@@ -1698,10 +1786,11 @@ class _SubtitlesTab extends StatelessWidget {
             ),
           ),
           _Row(title: 'Text colour', trailing: _Swatches(setting: AppSettings.subtitleColor, colors: _captionColors)),
-          _Row(
-            title: 'Letter spacing',
-            trailing: _Stepper(setting: AppSettings.subtitleSpacing, min: -20, max: 50, step: 5, label: (v) => v == 0 ? 'Normal' : _tenths(v)),
-          ),
+          if (!m3)
+            _Row(
+              title: 'Letter spacing',
+              trailing: _Stepper(setting: AppSettings.subtitleSpacing, min: -20, max: 50, step: 5, label: (v) => v == 0 ? 'Normal' : _tenths(v)),
+            ),
         ],
       ),
       _Section(
@@ -1709,7 +1798,7 @@ class _SubtitlesTab extends StatelessWidget {
         children: [
           _Row(
             title: 'Box',
-            subtitle: 'A box behind the text. With no box, the outline and shadow below are used.',
+            subtitle: m3 ? 'A box behind the text. With no box, the outline below is used.' : 'A box behind the text. With no box, the outline and shadow below are used.',
             below: _Segmented<int>(setting: AppSettings.subtitleBackground, options: captionBoxLevels, label: (v) => v == 0 ? 'None' : '$v%'),
           ),
           _Row(title: 'Box colour', trailing: _Swatches(setting: AppSettings.subtitleBackColor, colors: captionBoxColors)),
@@ -1718,31 +1807,34 @@ class _SubtitlesTab extends StatelessWidget {
       ValueListenableBuilder(
         valueListenable: AppSettings.subtitleBackground,
         builder: (context, back, _) => _Section(
-          title: 'Outline & shadow',
-          subtitle: back > 0 ? 'Turn the background box off to use these.' : null,
+          title: m3 ? 'Outline' : 'Outline & shadow',
+          subtitle: back > 0 ? (m3 ? 'Turn the background box off to use it.' : 'Turn the background box off to use these.') : null,
           children: [
             _Row(
               title: 'Outline',
-              trailing: _Stepper(setting: AppSettings.subtitleOutline, min: 0, max: 80, step: 5, label: (v) => v == 0 ? 'None' : _tenths(v)),
+              subtitle: m3 ? 'On or off: Media3 draws it at one thickness' : null,
+              trailing: _Stepper(setting: AppSettings.subtitleOutline, min: 0, max: 80, step: 5, label: (v) => v == 0 ? 'None' : (m3 ? 'On' : _tenths(v))),
             ),
             _Row(title: 'Outline colour', trailing: _Swatches(setting: AppSettings.subtitleOutlineColor, colors: captionOutlineColors)),
-            _Row(
-              title: 'Shadow',
-              trailing: _Stepper(setting: AppSettings.subtitleShadow, min: 0, max: 60, step: 5, label: (v) => v == 0 ? 'None' : _tenths(v)),
-            ),
-            _Row(
-              title: 'Shadow strength',
-              below: _Segmented<int>(
-                setting: AppSettings.subtitleShadowColor,
-                options: const [0x60000000, 0xA0000000, 0xFF000000],
-                label: (v) => switch (v) { 0x60000000 => 'Soft', 0xA0000000 => 'Medium', _ => 'Strong' },
+            if (!m3) ...[
+              _Row(
+                title: 'Shadow',
+                trailing: _Stepper(setting: AppSettings.subtitleShadow, min: 0, max: 60, step: 5, label: (v) => v == 0 ? 'None' : _tenths(v)),
               ),
-            ),
-            _Row(
-              title: 'Soft edges',
-              subtitle: 'Blurs the outline a little',
-              trailing: _Stepper(setting: AppSettings.subtitleBlur, min: 0, max: 30, step: 5, label: (v) => v == 0 ? 'Off' : _tenths(v)),
-            ),
+              _Row(
+                title: 'Shadow strength',
+                below: _Segmented<int>(
+                  setting: AppSettings.subtitleShadowColor,
+                  options: const [0x60000000, 0xA0000000, 0xFF000000],
+                  label: (v) => switch (v) { 0x60000000 => 'Soft', 0xA0000000 => 'Medium', _ => 'Strong' },
+                ),
+              ),
+              _Row(
+                title: 'Soft edges',
+                subtitle: 'Blurs the outline a little',
+                trailing: _Stepper(setting: AppSettings.subtitleBlur, min: 0, max: 30, step: 5, label: (v) => v == 0 ? 'Off' : _tenths(v)),
+              ),
+            ],
           ],
         ),
       ),
@@ -1765,7 +1857,8 @@ class _SubtitlesTab extends StatelessWidget {
           ),
         ],
       ),
-      ValueListenableBuilder(
+      // (Media3 leaves styled subtitles as their makers styled them: nothing to choose)
+      if (!m3) ValueListenableBuilder(
         valueListenable: AppSettings.subtitleAss,
         builder: (context, mode, _) => _Section(
           title: 'Styled subtitles',
@@ -1870,24 +1963,26 @@ class _SubtitlePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge(SubtitleStyle.settings),
+    listenable: Listenable.merge([...SubtitleStyle.settings, PlayerEngine.changes]),
     builder: (context, _) {
       const h = 190.0;
+      // (Media3 draws its own font, one outline thickness, no shadow or blur: SubtitleStyle.media3Skips)
+      final m3 = PlayerEngine.isMedia3;
       final size = AppSettings.subtitleSize.value * .8;
       final back = AppSettings.subtitleBackground.value;
       final box = back > 0;
       final top = AppSettings.subtitleTop.value;
       final edge = 14 + AppSettings.subtitleLift.value / 100 * h;
-      final outline = box ? 0.0 : AppSettings.subtitleOutline.value / 10 * 1.2;
-      final shadow = box ? 0.0 : AppSettings.subtitleShadow.value / 10 * 1.2;
-      final blur = AppSettings.subtitleBlur.value / 10 * 1.5;
+      final outline = box ? 0.0 : (m3 ? (AppSettings.subtitleOutline.value > 0 ? 1.6 : 0.0) : AppSettings.subtitleOutline.value / 10 * 1.2);
+      final shadow = box || m3 ? 0.0 : AppSettings.subtitleShadow.value / 10 * 1.2;
+      final blur = m3 ? 0.0 : AppSettings.subtitleBlur.value / 10 * 1.5;
       final base = TextStyle(
-        fontFamily: SubtitleStyle.choiceFor(AppSettings.subtitleFont.value).preview,
+        fontFamily: m3 ? null : SubtitleStyle.choiceFor(AppSettings.subtitleFont.value).preview,
         fontSize: size,
         height: 1.25,
         fontWeight: AppSettings.subtitleBold.value ? FontWeight.w700 : FontWeight.w400,
         fontStyle: AppSettings.subtitleItalic.value ? FontStyle.italic : FontStyle.normal,
-        letterSpacing: AppSettings.subtitleSpacing.value / 10 * 1.2,
+        letterSpacing: m3 ? 0 : AppSettings.subtitleSpacing.value / 10 * 1.2,
       );
       const sample = 'This is how subtitles will look';
       Widget text = Stack(

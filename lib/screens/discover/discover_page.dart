@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../core/layout.dart';
 import '../../core/nav.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/catalog/discover.dart';
 import '../../data/catalog/tmdb.dart';
 import '../../widgets/common.dart';
@@ -227,8 +228,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
 class _Haze extends StatelessWidget {
   const _Haze();
 
+  // (not on the weakest TV boxes: see PageGlow)
   @override
-  Widget build(BuildContext context) => IgnorePointer(
+  Widget build(BuildContext context) => Lean.weak
+      ? const SizedBox.shrink()
+      : IgnorePointer(
         child: Container(
           width: 640,
           height: 640,

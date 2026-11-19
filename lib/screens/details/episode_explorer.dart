@@ -180,8 +180,8 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
               width: 180,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 460),
-                child: ShaderMask(
-                  shaderCallback: (r) => const LinearGradient(
+                child: EdgeFade(
+                  shader: (r) => const LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [Colors.white, Colors.white, Colors.transparent],

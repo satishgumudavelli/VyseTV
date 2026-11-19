@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../data/live_tv/match_finder.dart';
 import '../../data/live_tv/sports_schedule.dart';
 import '../../widgets/media_rows.dart';
+import '../../widgets/section_chrome.dart' show NetImage;
 
 const _tileBg = Color(0xFF0D0F18);
 
@@ -41,6 +42,7 @@ class TeamBadge extends StatelessWidget {
             : CachedNetworkImage(
                 imageUrl: url!,
                 fit: BoxFit.contain,
+                memCacheWidth: NetImage.decodeWidthFor(context, size),
                 fadeInDuration: const Duration(milliseconds: 250),
                 errorWidget: (_, _, _) => Icon(Icons.shield_outlined, size: size * .7, color: VyseColors.textFaint),
               ),

@@ -13,7 +13,9 @@ import '../../core/nav.dart';
 import '../../core/theme.dart';
 import '../../data/live_tv/live_favorites.dart';
 import '../../data/live_tv/live_guide.dart';
+import '../../data/live_tv/iptv_playback.dart';
 import '../../data/live_tv/live_tv.dart';
+import '../../data/live_tv/portal_names.dart';
 import '../../models/iptv/iptv_models.dart';
 import '../../services/iptv/iptv_controller.dart';
 import '../../dpad/dpad_root.dart' show backBindings;
@@ -23,6 +25,7 @@ import 'live_tv_widgets.dart';
 import '../../widgets/page_scrollbar.dart';
 import '../../widgets/section_chrome.dart';
 import 'live_tv_pages.dart' show SeriesPage;
+import 'iptv_video.dart';
 import 'live_tv_player_page.dart';
 import 'portal_browser_player.dart';
 import '../../core/platform/platform_detector.dart' show PlatformDetector;
@@ -300,6 +303,11 @@ class _PortalBrowserPageState extends State<PortalBrowserPage> {
       setState(() => _watching = list[i]);
       return;
     }
+    if (_section == IptvSection.vod) {
+      // a film: in the film player, which has the audio and subtitle menus (IptvPlayback)
+      openIptvVideo(context, IptvPlayback.film(iptvFilm(_portal, list[i]), portal: portalLabel(_portal)));
+      return;
+    }
     openLivePlayer(context, [for (final x in list) LiveItem.stream(_portal, x, _section)], i);
   }
 
@@ -361,7 +369,7 @@ class _PortalBrowserPageState extends State<PortalBrowserPage> {
     return '${fmtThousands(n)} ${n == 1 ? one : _noun}';
   }
 
-  String get _title => _portal.name.isEmpty ? 'Portal' : _portal.name;
+  String get _title => PortalNames.of(_portal.key) ?? (_portal.name.isEmpty ? 'Portal' : _portal.name);
 
   String _meta(bool ready) => [
         if (_portal.expiry.isNotEmpty) 'Expires ${_portal.expiry}',
@@ -426,6 +434,13 @@ class _PortalBrowserPageState extends State<PortalBrowserPage> {
     }
     _counts = counts;
     _favCount = fav;
+    // (ones starred before Live TV had a Favorites list get what that list needs, now their
+    // portal's channels are here)
+    // (After this frame: this runs in a build, and the list has listeners of its own.)
+    if (_live && fav > 0) {
+      final portal = _portal, streams = _data.browserAllStreams;
+      WidgetsBinding.instance.addPostFrameCallback((_) => LiveFavorites.adopt(portal, streams, (s) => xtreamUrl(portal, s, IptvSection.live)));
+    }
     _catNames = {for (final c in _data.categories) c.id: c.name};
   }
 
@@ -896,7 +911,7 @@ class _PortalBrowserPageState extends State<PortalBrowserPage> {
             alive: _alive.results[s.streamId],
             touch: touch,
             onTap: () => _tapStream(list, i, embedded: embedded),
-            onFavorite: () => LiveFavorites.toggle(_portal, s),
+            onFavorite: () => LiveFavorites.toggle(_portal, s, url: xtreamUrl(_portal, s, IptvSection.live)),
             onInfo: embedded ? null : () => _showInfo(list, i),
           );
         },
@@ -1829,7 +1844,7 @@ class _ChannelDetailsState extends State<_ChannelDetails> {
             builder: (context, _, _) => _StarButton(
               on: LiveFavorites.has(widget.portal, s),
               touch: widget.touch,
-              onTap: () => LiveFavorites.toggle(widget.portal, s),
+              onTap: () => LiveFavorites.toggle(widget.portal, s, url: xtreamUrl(widget.portal, s, IptvSection.live)),
             ),
           ),
         ]),

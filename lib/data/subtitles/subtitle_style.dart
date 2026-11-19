@@ -239,5 +239,38 @@ abstract final class SubtitleStyle {
         await player.setProperty(k, v);
       } catch (_) {}
     }
+    // Media3 draws plain subtitles itself and takes its style in one call, once a video is
+    // open. (The properties above are kept by its plugin for the mpv it falls back to.) What
+    // it has no word for is left out of Settings while it is the engine: see [media3Skips].
+    if (player.playerType == 'exoplayer') {
+      try {
+        await player.setSubtitleStyle(
+          fontSize: AppSettings.subtitleSize.value * 1.3 * 720 / 1080,
+          textColor: _rgb(AppSettings.subtitleColor.value),
+          borderSize: box ? 0 : AppSettings.subtitleOutline.value / 10,
+          borderColor: _rgb(AppSettings.subtitleOutlineColor.value),
+          bgColor: _rgb(AppSettings.subtitleBackColor.value),
+          bgOpacity: back,
+          subtitlePosition: basePosition.round(),
+          bold: AppSettings.subtitleBold.value,
+          italic: AppSettings.subtitleItalic.value,
+          anchorToScreen: !AppSettings.subtitleOnPicture.value,
+        );
+      } catch (_) {}
+    }
   }
+
+  static String _rgb(int argb) => '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+
+  /// The parts of the subtitle look Media3 can't draw (it has one outline, no shadow, its own
+  /// font, and leaves styled subtitles as their author made them). Settings, the phone page and
+  /// the preview leave these out while Media3 is the engine.
+  static final Set<Setting<Object?>> media3Skips = {
+    AppSettings.subtitleFont,
+    AppSettings.subtitleSpacing,
+    AppSettings.subtitleShadow,
+    AppSettings.subtitleShadowColor,
+    AppSettings.subtitleBlur,
+    AppSettings.subtitleAss,
+  };
 }

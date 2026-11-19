@@ -8,6 +8,7 @@ import '../../core/format.dart';
 import '../../core/layout.dart';
 import '../../core/nav.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/catalog/tmdb.dart';
 import '../../dpad/dpad_root.dart' show backBindings;
 import '../../widgets/common.dart';
@@ -159,7 +160,10 @@ class _Backdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     const bg = VyseColors.bg;
     return Stack(fit: StackFit.expand, children: [
-      AnimatedSwitcher(
+      ScrollVeil(
+        scroll: scroll,
+        base: .7,
+        builder: (context, dim) => AnimatedSwitcher(
         duration: const Duration(milliseconds: 900),
         child: media?.backdrop() == null
             ? const SizedBox.expand(key: ValueKey('none'))
@@ -169,28 +173,18 @@ class _Backdrop extends StatelessWidget {
                 fit: BoxFit.cover,
                 alignment: const Alignment(.4, -.3),
                 fadeInDuration: const Duration(milliseconds: 600),
+                // the even dim, painted with the picture rather than as a layer over the screen
+                // (and lean, the darkening as the page scrolls too: ScrollVeil)
+                color: dim,
+                colorBlendMode: BlendMode.srcOver,
               ),
       ),
-      ColoredBox(color: bg.withValues(alpha: .7)),
-      DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [bg.withValues(alpha: .8), bg.withValues(alpha: .25), bg.withValues(alpha: 0)],
-            stops: const [0, .5, .85],
-          ),
-        ),
       ),
-      DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: [bg, bg.withValues(alpha: .6), bg.withValues(alpha: 0)],
-            stops: const [0, .35, .7],
-          ),
-        ),
-      ),
-      IgnorePointer(
+      // (each laid only as far as it reaches: Scrim)
+      const Scrim.left(alphas: [.8, .25, 0], stops: [0, .5, .85]),
+      const Scrim.bottom(alphas: [1, .6, 0], stops: [0, .35, .7]),
+      if (!Lean.on)
+        IgnorePointer(
         child: ListenableBuilder(
           listenable: scroll,
           builder: (context, _) {

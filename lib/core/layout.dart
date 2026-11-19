@@ -31,6 +31,13 @@ enum FormFactor { phone, tablet, desktop }
 /// remote sets the volume, and a player there plays at full volume.
 bool get playersHaveVolume => !PlatformDetector.isTV();
 
+/// Whether a player can be shrunk to a small window that stays over the app while you do
+/// something else (its arrow-down button, or M). Not on a TV: nothing floats over a TV's pages.
+/// There is no pointer to move the window or put it away with, and the video is on a surface
+/// of its own behind the interface, of which a small window shows a corner, not the picture
+/// made smaller (testers saw a black square with the bottom of the film cut off).
+bool get playersCanMinimize => !PlatformDetector.isTV();
+
 /// Pages that need the whole phone screen (chats, rooms) raise this while open; the phone's
 /// bottom tab bar stays hidden while it's above zero.
 final hideBottomBar = ValueNotifier<int>(0);

@@ -11,6 +11,7 @@ import '../../core/layout.dart';
 import '../../core/nav.dart';
 import '../../core/nav_sections.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/account/account.dart';
 import '../../data/app_settings.dart';
 import '../../data/sources/debrid/debrid.dart' show Debrid;
@@ -641,7 +642,9 @@ class _AmbientGlow extends StatelessWidget {
             final t = AppSettings.theme;
             return AnimatedSwitcher(
               duration: const Duration(milliseconds: 500),
-              child: !t.glow
+              // (not on the weakest TV boxes, core/lean.dart: it is the whole screen blended
+              // through a round gradient for every frame of every page)
+              child: !t.glow || Lean.weak
                   ? const SizedBox.expand()
                   : DecoratedBox(
                       key: ValueKey(t.id),

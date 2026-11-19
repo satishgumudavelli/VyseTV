@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../data/live_tv/iptv_playback.dart';
 import '../../data/live_tv/live_tv.dart';
+import '../../data/live_tv/portal_names.dart';
 import '../../data/live_tv/match_finder.dart';
 import '../../data/live_tv/sports_schedule.dart';
 import '../../models/iptv/iptv_models.dart';
@@ -15,6 +17,7 @@ import 'live_tv_widgets.dart';
 import '../../widgets/page_scrollbar.dart';
 import '../../widgets/section_chrome.dart';
 import 'match_widgets.dart';
+import 'iptv_video.dart';
 import 'live_tv_player_page.dart';
 
 /// Shared scaffold: glow, header, a toolbar row, then the page's slivers.
@@ -312,14 +315,16 @@ class _HitRow extends StatelessWidget {
               height: 38,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(color: VyseColors.surfaceHi, borderRadius: BorderRadius.circular(7)),
-              child: NetImage(url: hit.stream.icon, fit: BoxFit.contain, fallback: Icons.live_tv_rounded),
+              // (decoded as small as it is shown: a channel's page lists a logo for every source
+              // found, and a provider's logo can be thousands of pixels wide)
+              child: NetImage(url: hit.stream.icon, fit: BoxFit.contain, fallback: Icons.live_tv_rounded, decodeWidth: NetImage.decodeWidthFor(context, 48)),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(hit.stream.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text(hit.portal.name.isEmpty ? hit.portal.portal.url : hit.portal.name,
+                Text(portalLabel(hit.portal),
                     maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: VyseColors.textDim)),
                 if (guide != null) ...[
                   const SizedBox(height: 3),
@@ -376,7 +381,18 @@ class _SeriesPageState extends State<SeriesPage> {
           final seasons = {for (final e in all) e.season}.toList()..sort();
           final season = _season ?? seasons.firstOrNull;
           final eps = all.where((e) => e.season == season).toList();
-          final items = [for (final e in eps) LiveItem.episode(widget.portal, widget.series, e)];
+          // An episode opens in the film player (audio and subtitle menus, the episode list,
+          // Next), which is handed every episode of the series, not just this season's.
+          void play(IptvEpisode e) => openIptvVideo(
+            context,
+            IptvPlayback.series(
+              show: widget.series.name,
+              all: [for (final x in all) iptvEpisode(widget.portal, widget.series, x)],
+              start: iptvEpisode(widget.portal, widget.series, e),
+              portal: portalLabel(widget.portal),
+              poster: widget.series.icon,
+            ),
+          );
           return _LivePage(
             scroll: _scroll,
             title: widget.series.name,
@@ -407,7 +423,7 @@ class _SeriesPageState extends State<SeriesPage> {
                   padding: EdgeInsets.fromLTRB(Layout.inset(context), 0, pageRight(context), 0),
                   sliver: SliverList.builder(
                     itemCount: eps.length,
-                    itemBuilder: (context, i) => _EpisodeRow(episode: eps[i], fallbackImage: widget.series.icon, onTap: () => openLivePlayer(context, items, i)),
+                    itemBuilder: (context, i) => _EpisodeRow(episode: eps[i], fallbackImage: widget.series.icon, onTap: () => play(eps[i])),
                   ),
                 ),
             ],
@@ -441,7 +457,7 @@ class _EpisodeRow extends StatelessWidget {
                   width: 112,
                   height: 64,
                   child: Stack(fit: StackFit.expand, children: [
-                    NetImage(url: episode.image.isNotEmpty ? episode.image : fallbackImage, fallback: Icons.movie_outlined),
+                    NetImage(url: episode.image.isNotEmpty ? episode.image : fallbackImage, fallback: Icons.movie_outlined, decodeWidth: NetImage.decodeWidthFor(context, 112)),
                     if (hovered) const ColoredBox(color: Color(0x66000000), child: Icon(Icons.play_arrow_rounded, size: 30)),
                   ]),
                 ),
@@ -510,12 +526,15 @@ class _M3uPlaylistPageState extends State<M3uPlaylistPage> {
         if (groups.isNotEmpty)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 14),
+              // The row starts at the page's edge and is cut there. It used to run the width of
+              // the window with room left before the first chip, so chips scrolled on under the
+              // side rail and their names showed between its icons.
+              padding: EdgeInsets.only(left: Layout.inset(context), bottom: 14),
               child: SizedBox(
                 height: 34,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.only(left: Layout.inset(context), right: pageRight(context)),
+                  padding: EdgeInsets.only(right: pageRight(context)),
                   itemCount: groups.length + 1,
                   separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (_, i) => i == 0

@@ -201,6 +201,31 @@ class _FocusableWrapperState extends State<FocusableWrapper> with SingleTickerPr
   FocusNode get _focusNode => _focusNodeBinding.node;
   bool _isFocused = false;
 
+  // VyseTV: the focus look is for the control focus is on, not for one that focus is somewhere
+  // inside. A card with buttons of its own (a portal and its star, a row and its Play) kept its
+  // ring and its growth while one of its buttons had focus: two rings, and the button's drawn
+  // where the card's growth had not moved it (testers: "misborder alignments"). [_isFocused]
+  // still says focus is here or inside, for everything else.
+  bool _primary = false;
+  FocusNode? _watched;
+
+  void _watchNode() {
+    final node = _focusNode;
+    if (identical(node, _watched)) return;
+    _watched?.removeListener(_onNode);
+    _watched = node..addListener(_onNode);
+    _primary = node.hasPrimaryFocus;
+  }
+
+  void _onNode() {
+    final primary = _focusNode.hasPrimaryFocus;
+    if (primary == _primary || !mounted) return;
+    // (built again: the first time it shows, the look's animation is made here and the
+    // chrome has to be handed it)
+    setState(() => _primary = primary);
+    _syncChrome();
+  }
+
   // Created lazily on first focus/keyboard-mode build: touch scrolling builds
   // hundreds of these wrappers and must not pay for a Ticker per card.
   AnimationController? _animationController;
@@ -252,12 +277,14 @@ class _FocusableWrapperState extends State<FocusableWrapper> with SingleTickerPr
     DpadReveal.startsPage[_focusNode] = widget.autofocus;
     DpadReveal.startsPageElse[_focusNode] = widget.autofocusFallback;
     DpadReveal.entersRail[_focusNode] = widget.railEntry;
+    _watchNode();
   }
 
   AnimationController _ensureAnimationController() {
     final existing = _animationController;
     if (existing != null) return existing;
-    final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 150));
+    // (kept at its length where animations are cut short, core/lean.dart: the ring is what the eye follows)
+    final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 150), animationBehavior: AnimationBehavior.preserve);
     controller.addStatusListener(_onChromeStatus);
     _animationController = controller;
     return controller;
@@ -302,13 +329,14 @@ class _FocusableWrapperState extends State<FocusableWrapper> with SingleTickerPr
     _selectLongPress.dispose();
     _removeGlow();
     _animationController?.dispose();
+    _watched?.removeListener(_onNode);
     _focusNodeBinding.dispose();
     super.dispose();
   }
 
   // VyseTV: a wrapper that cannot take focus itself is not a control (a player's tile once the
   // player fills the window): focus on something inside it draws nothing round it.
-  bool get _showFocus => _isFocused && _keyboardMode && widget.canRequestFocus;
+  bool get _showFocus => _primary && _keyboardMode && widget.canRequestFocus;
 
   /// VyseTV: runs the look in or out to match [_showFocus], and the glow with it.
   void _syncChrome() {

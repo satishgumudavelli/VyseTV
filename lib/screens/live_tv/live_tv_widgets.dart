@@ -70,7 +70,12 @@ class ChannelTile extends StatelessWidget {
         onTap: onTap,
         builder: (hovered) => Stack(fit: StackFit.expand, children: [
           if (channel.backdropUrl != null) ...[
-            NetImage(url: channel.backdropUrl, fallback: Icons.live_tv_rounded),
+            // (every picture here is decoded as wide as it is shown, not as large as its file:
+            // channel art and logos come in any size, some in the thousands of pixels, and a page
+            // of those is more memory than a TV box has)
+            LayoutBuilder(
+              builder: (context, c) => NetImage(url: channel.backdropUrl, fallback: Icons.live_tv_rounded, decodeWidth: NetImage.decodeWidthFor(context, c.maxWidth)),
+            ),
             IgnorePointer(
               child: AnimatedContainer(duration: const Duration(milliseconds: 180), color: Colors.black.withValues(alpha: hovered ? 0 : .08)),
             ),
@@ -83,7 +88,7 @@ class ChannelTile extends StatelessWidget {
                   duration: const Duration(milliseconds: 200),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 110, maxHeight: 40),
-                    child: CachedNetworkImage(imageUrl: channel.iconUrl!, fit: BoxFit.contain, alignment: Alignment.bottomLeft),
+                    child: CachedNetworkImage(imageUrl: channel.iconUrl!, fit: BoxFit.contain, alignment: Alignment.bottomLeft, memCacheWidth: NetImage.decodeWidthFor(context, 110)),
                   ),
                 ),
               ),
@@ -100,11 +105,14 @@ class ChannelTile extends StatelessWidget {
                       scale: hovered ? 1.06 : 1,
                       duration: const Duration(milliseconds: 260),
                       curve: Curves.easeOutCubic,
-                      child: CachedNetworkImage(
-                        imageUrl: channel.iconUrl!,
-                        fit: BoxFit.contain,
-                        fadeInDuration: const Duration(milliseconds: 250),
-                        errorWidget: (_, _, _) => _name(),
+                      child: LayoutBuilder(
+                        builder: (context, c) => CachedNetworkImage(
+                          imageUrl: channel.iconUrl!,
+                          fit: BoxFit.contain,
+                          memCacheWidth: NetImage.decodeWidthFor(context, c.maxWidth),
+                          fadeInDuration: const Duration(milliseconds: 250),
+                          errorWidget: (_, _, _) => _name(),
+                        ),
                       ),
                     ),
             ),
@@ -135,7 +143,11 @@ class StreamCard extends StatelessWidget {
         onTap: onTap,
         builder: (hovered) => Stack(fit: StackFit.expand, children: [
           if (_hasImage)
-            NetImage(url: image, fallback: Icons.movie_outlined)
+            // decoded as wide as the card: a portal's posters can be thousands of pixels tall,
+            // and a grid of them decoded whole filled slowly and pushed each other out of memory
+            LayoutBuilder(
+              builder: (context, c) => NetImage(url: image, fallback: Icons.movie_outlined, decodeWidth: NetImage.decodeWidthFor(context, c.maxWidth)),
+            )
           else
             Container(
               color: VyseColors.surfaceHi,
@@ -167,11 +179,14 @@ class StreamCard extends StatelessWidget {
                     scale: hovered ? 1.06 : 1,
                     duration: const Duration(milliseconds: 260),
                     curve: Curves.easeOutCubic,
-                    child: CachedNetworkImage(
-                      imageUrl: image!,
-                      fit: BoxFit.contain,
-                      fadeInDuration: const Duration(milliseconds: 250),
-                      errorWidget: (_, _, _) => _initials(),
+                    child: LayoutBuilder(
+                      builder: (context, c) => CachedNetworkImage(
+                        imageUrl: image!,
+                        fit: BoxFit.contain,
+                        memCacheWidth: NetImage.decodeWidthFor(context, c.maxWidth),
+                        fadeInDuration: const Duration(milliseconds: 250),
+                        errorWidget: (_, _, _) => _initials(),
+                      ),
                     ),
                   )
                 : _initials(),

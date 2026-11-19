@@ -8,9 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vyse_tv/data/anime/anilist.dart';
 import 'package:vyse_tv/data/app_settings.dart';
 import 'package:vyse_tv/data/playback/watch_progress.dart';
-import 'package:vyse_tv/mpv/vyse_video.dart' show VyseVideo;
-import 'package:vyse_tv/screens/player/player_chrome.dart' show PlayerDock;
-import 'package:vyse_tv/screens/player/player_menus.dart';
 import 'package:vyse_tv/screens/player/player_page.dart';
 import 'package:vyse_tv/dpad/focus_chrome.dart';
 import 'package:vyse_tv/core/platform/platform_detector.dart';
@@ -262,8 +259,7 @@ void main() {
     await t.sendKeyEvent(LogicalKeyboardKey.keyS);
     await Bed.settle(t, rounds: 3);
     expect(find.text('Anime4K · high quality'), findsNothing, reason: 'not named as in use anywhere');
-    await t.tap(find.text('More').last);
-    await Bed.settle(t, rounds: 3);
+    // (S is Settings on a TV: quality, speed and More side by side, with upscaling under More)
     expect(find.text('UPSCALING'), findsOneWidget);
     expect(find.text('NVIDIA Image Scaling'), findsOneWidget);
     for (final gone in const ['ArtCNN', 'ArtCNN · high quality', 'Anime4K', 'Anime4K · high quality']) {
@@ -276,6 +272,8 @@ void main() {
     expect([for (final c in Bed.videoCalls) if (c.contains('ArtCNN') || c.contains('Anime4K')) c], isEmpty);
     // NVIDIA's can be picked (handed to mpv once it says the picture is not HDR, which the
     // bed's stand-in never does)
+    await t.ensureVisible(find.text('NVIDIA Image Scaling'));
+    await Bed.settle(t, rounds: 1);
     await t.tap(find.text('NVIDIA Image Scaling'));
     await Bed.settle(t, rounds: 2);
     expect(AppSettings.upscaler.value, 'nvscaler');
@@ -400,88 +398,7 @@ void main() {
     expect(t.binding.transientCallbackCount, 0, reason: 'and then the screen is still');
   }, variant: tv);
 
-  // After the fourth round, the user: "Have you remade the player menu's to be for android tv?
-  // like all of them as side panels or something so its easier to use and navigate" (pictures
-  // first, then "Yes, build it"). On a TV the menu was the desktop's card: a row of tabs to go
-  // up to, along and back down from.
-  testWidgets('on a TV the player’s menu is a side panel: a list of the menus, OK opens one, Back steps back, then closes', (t) async {
-    await Bed.openPlayer(t);
-    FocusNode tool(String tip) => Bed.nodeOf(t, find.byWidgetPredicate((w) => w is Pressable && w.tooltip == tip));
-    bool dockUp() => !t.widget<ExcludeFocus>(find.ancestor(of: find.byType(PlayerDock), matching: find.byType(ExcludeFocus)).first).excluding;
-    PlayerPanel panel() => t.widget<PlayerPanel>(find.byType(PlayerPanel));
-    bool inPanel() => FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<PlayerPanel>() != null;
-    String focusedRow() {
-      final row = FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<MenuRow>();
-      return row?.title ?? 'not a row';
-    }
-
-    // the controls, then along the dock to Settings
-    await Bed.down(t);
-    final settings = tool('Settings (S)');
-    for (var i = 0; i < 14 && !settings.hasPrimaryFocus; i++) {
-      await Bed.right(t);
-    }
-    expect(settings.hasPrimaryFocus, isTrue);
-    await Bed.ok(t);
-    expect(panel().open, isTrue);
-    expect(panel().list, isTrue, reason: 'Settings opens the list of menus');
-    // the full height of the screen's right edge; the picture is not moved
-    final box = t.getRect(find.text('NOW PLAYING')).left;
-    expect(box, greaterThan(960 * .5), reason: 'on the right');
-    final pane = t.getRect(find.ancestor(of: find.text('NOW PLAYING'), matching: find.byType(DecoratedBox)).last);
-    expect(pane.right, 960);
-    expect(pane.top, 0);
-    expect(pane.bottom, 540);
-    expect(t.getRect(find.byType(VyseVideo)), const Rect.fromLTWH(0, 0, 960, 540), reason: 'the video keeps the whole screen');
-    expect(dockUp(), isFalse, reason: 'the dock steps aside while the panel is open');
-    for (final m in MenuTab.values) {
-      expect(find.widgetWithText(MenuRow, m.label), findsOneWidget, reason: '${m.label} is in the list');
-    }
-    expect(inPanel(), isTrue);
-    expect(focusedRow(), 'Sources', reason: 'the list opens on the menu last used');
-    await Bed.picture(t, 'tv4/side_panel_1_list');
-
-    // Down to Subtitles; OK shows its choices in the same panel, on the one in use
-    for (var i = 0; i < 6 && focusedRow() != 'Subtitles'; i++) {
-      await Bed.down(t);
-    }
-    expect(focusedRow(), 'Subtitles');
-    await Bed.ok(t);
-    expect(panel().list, isFalse);
-    expect(panel().tab, MenuTab.subtitles);
-    expect(find.text('Sync subtitles'), findsOneWidget);
-    expect(inPanel(), isTrue);
-    expect(focusedRow(), 'Off', reason: 'on the choice in use (no subtitles yet)');
-    expect(Bed.focusInView(), isTrue);
-    await Bed.picture(t, 'tv4/side_panel_2_subtitles');
-
-    // Back: to the list, on Subtitles; Back again: closed, and the ring is back on Settings
-    await Bed.back(t);
-    expect(panel().open, isTrue);
-    expect(panel().list, isTrue);
-    expect(focusedRow(), 'Subtitles', reason: 'back in the list on the menu just left');
-    await Bed.back(t);
-    expect(panel().open, isFalse);
-    expect(settings.hasPrimaryFocus, isTrue, reason: 'focus goes back to the button that opened it');
-    expect(dockUp(), isTrue);
-
-    // a tool opens its own menu at once
-    final subtitles = tool('Subtitles (C)');
-    for (var i = 0; i < 10 && !subtitles.hasPrimaryFocus; i++) {
-      await Bed.left(t);
-    }
-    expect(subtitles.hasPrimaryFocus, isTrue);
-    await Bed.ok(t);
-    expect(panel().open, isTrue);
-    expect(panel().list, isFalse);
-    expect(panel().tab, MenuTab.subtitles);
-    expect(focusedRow(), 'Off');
-    // and from there Back is the list, then closed
-    await Bed.back(t);
-    expect(panel().list, isTrue);
-    await Bed.back(t);
-    expect(panel().open, isFalse);
-    expect(subtitles.hasPrimaryFocus, isTrue);
-    await Bed.closePlayer(t);
-  }, variant: tv);
+  // (After the fourth round the player's menus became a side panel on a TV, with a list of the
+  // menus to go through first. On 2026-11-19 the user asked for full-screen menus like NuvioTV's
+  // instead: the panel and its test are gone, and t4_journeys_tv8_test.dart has the new ones.)
 }

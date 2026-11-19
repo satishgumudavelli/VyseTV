@@ -226,6 +226,45 @@ object DoviBridge {
 
   fun getConversionMode(context: Context): DvConversionMode = getConversionDecision(context).mode
 
+  /**
+   * VyseTV: what this device can do with HDR and Dolby Vision, for the app's report card
+   * (Settings and the player's Stream info): its name, what its display says it takes, the
+   * Dolby Vision decoders it has with the profiles each declares, whether the profile 7
+   * conversion is there to use, and what the automatic choice for profile 7 comes to and why.
+   * Read from the system, with no player open.
+   */
+  fun capabilities(context: Context): Map<String, Any?> {
+    val decision = getConversionDecision(context)
+    val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) getCurrentDisplay(context) else null
+    val hdrTypes = display?.let { runCatching { getDisplayHdrTypes(it) }.getOrNull() } ?: IntArray(0)
+    val model = Build.MODEL.orEmpty().trim()
+    val maker = Build.MANUFACTURER.orEmpty().trim()
+    return mapOf(
+      "device" to if (maker.isEmpty() || model.startsWith(maker, ignoreCase = true)) model else "$maker $model",
+      "android" to Build.VERSION.RELEASE,
+      "sdk" to Build.VERSION.SDK_INT,
+      "displayHdr" to hdrTypes.toList().mapNotNull { type ->
+        when (type) {
+          Display.HdrCapabilities.HDR_TYPE_DOLBY_VISION -> "Dolby Vision"
+          Display.HdrCapabilities.HDR_TYPE_HDR10 -> "HDR10"
+          Display.HdrCapabilities.HDR_TYPE_HDR10_PLUS -> "HDR10+"
+          Display.HdrCapabilities.HDR_TYPE_HLG -> "HLG"
+          else -> null
+        }
+      },
+      "dvDecoders" to dolbyVisionDecoders.map { decoder ->
+        val profiles = decoder.profileLevels.map { describeDvProfile(it.profile).substringBefore('/') }.distinct()
+        if (profiles.isEmpty()) decoder.name else "${decoder.name} (${profiles.joinToString(", ")})"
+      },
+      "dvProfile5" to canPlayDolbyVisionP5(),
+      "dvProfile7" to decision.advertisedP7,
+      "dvProfile8" to decision.advertisedP8,
+      "dvBridgeReady" to decision.bridgeReady,
+      "dvAutoMode" to decision.mode.name,
+      "dvAutoReason" to decision.reason
+    )
+  }
+
   /** Get the fallback mode when native DV7 decoding fails. */
   fun getDv7FallbackDecision(context: Context): Dv7FallbackDecision {
     val bridgeReady = isAvailable()

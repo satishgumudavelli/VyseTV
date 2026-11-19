@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/accent.dart';
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/music/music_library.dart';
 import '../../data/music/yt_music.dart';
 import '../../data/music/music_player.dart';
@@ -97,37 +98,38 @@ class MusicBackdrop extends StatelessWidget {
   final String? url;
   final ScrollController scroll;
 
-  static const _mute = ColorFilter.matrix([
+  static const _muteM = <double>[
     .62, .31, .07, 0, 0, //
     .16, .77, .07, 0, 0, //
     .16, .31, .53, 0, 0, //
     0, 0, 0, 1, 0,
-  ]);
+  ];
+  static const _mute = ColorFilter.matrix(_muteM);
 
   @override
   Widget build(BuildContext context) {
     const bg = VyseColors.bg;
     return IgnorePointer(
       child: Stack(fit: StackFit.expand, children: [
-        if (url != null && url!.isNotEmpty)
-          ClipRect(
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50, tileMode: TileMode.clamp),
-              child: ColorFiltered(colorFilter: _mute, child: Transform.scale(scale: 1.2, child: NetImage(url: url))),
+        // Lean (a TV): the artwork as a wash of its colours, muted and dimmed in the same draw.
+        // A live blur is an off-screen copy of the screen blurred again for every frame (ArtWash).
+        if (Lean.on)
+          ScrollVeil(scroll: scroll, base: .7, builder: (context, dim) => ArtWash(url: url, sigma: 50, filter: ArtWash.matrixThenVeil(_muteM, dim)))
+        else ...[
+          if (url != null && url!.isNotEmpty)
+            ClipRect(
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50, tileMode: TileMode.clamp),
+                child: ColorFiltered(colorFilter: _mute, child: Transform.scale(scale: 1.2, child: NetImage(url: url))),
+              ),
             ),
-          ),
-        ColoredBox(color: bg.withValues(alpha: .7)),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [bg, bg.withValues(alpha: .6), bg.withValues(alpha: 0)],
-              stops: const [0, .35, .7],
-            ),
-          ),
-        ),
-        ListenableBuilder(
+          ColoredBox(color: bg.withValues(alpha: .7)),
+        ],
+        // (laid only as far as it reaches: Scrim)
+        const Scrim.bottom(alphas: [1, .6, 0], stops: [0, .35, .7]),
+        // (lean: the wash's own veil deepens with the scroll instead, ScrollVeil)
+        if (!Lean.on)
+          ListenableBuilder(
           listenable: scroll,
           builder: (context, _) {
             final t = scroll.hasClients ? (scroll.offset / 500).clamp(0.0, 1.0) : 0.0;

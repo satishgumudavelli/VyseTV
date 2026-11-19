@@ -525,6 +525,106 @@ class PlayerDock extends StatelessWidget {
   }
 }
 
+/// A TV's controls: a row of round keys from the left, in the order they are reached for (the
+/// way NuvioTV lays its own out, which is what the user asked for). The key with the ring is a
+/// white disc. Play is where the ring starts. Each menu has a key of its own, and Settings
+/// holds quality, speed and the rest. No volume (the remote sets it) and no skip keys: Left and
+/// Right seek from the picture, or from the bar above the row.
+class TvDock extends StatelessWidget {
+  const TvDock({
+    super.key,
+    required this.paused,
+    required this.subtitlesOn,
+    required this.onPause,
+    required this.onSubtitles,
+    required this.onAudio,
+    required this.onSources,
+    required this.onSettings,
+    this.onInfo,
+    this.onEpisodes,
+    this.onNext,
+  });
+  final bool paused;
+  final bool subtitlesOn;
+  final VoidCallback onPause;
+  final VoidCallback onSubtitles;
+  final VoidCallback onAudio;
+  final VoidCallback onSources;
+  final VoidCallback onSettings;
+
+  /// Stream info and the report card: the last key, for when something won't play.
+  final VoidCallback? onInfo;
+  final VoidCallback? onEpisodes;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 60,
+    child: Row(
+      children: [
+        // (the names are the desktop's, keys and all: they are what a screen reader says)
+        _TvKey(icon: paused ? Icons.play_arrow_rounded : Icons.pause_rounded, tooltip: 'Play / pause (Space)', onTap: onPause, first: true),
+        if (onNext != null) _TvKey(icon: Icons.skip_next_rounded, tooltip: 'Next episode (N)', onTap: onNext!),
+        if (onEpisodes != null) _TvKey(icon: Icons.video_library_outlined, tooltip: 'Episodes (E)', onTap: onEpisodes!),
+        _TvKey(
+          icon: subtitlesOn ? Icons.closed_caption_rounded : Icons.closed_caption_off_outlined,
+          tooltip: 'Subtitles (C)',
+          on: subtitlesOn,
+          onTap: onSubtitles,
+        ),
+        _TvKey(icon: Icons.graphic_eq_rounded, tooltip: 'Audio', onTap: onAudio),
+        _TvKey(icon: Icons.stream_rounded, tooltip: 'Sources', onTap: onSources),
+        _TvKey(icon: Icons.tune_rounded, tooltip: 'Settings (S)', onTap: onSettings),
+        if (onInfo != null) _TvKey(icon: Icons.info_outline_rounded, tooltip: 'Stream info', onTap: onInfo!),
+      ],
+    ),
+  );
+}
+
+/// One of a TV's round control keys.
+class _TvKey extends StatelessWidget {
+  const _TvKey({required this.icon, required this.tooltip, required this.onTap, this.on = false, this.first = false});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool on; // in use: a small dot under it
+
+  /// Play: a size up, on a faint disc of its own, and where the ring starts.
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(right: 8),
+    child: Pressable(
+      tooltip: tooltip,
+      onTap: onTap,
+      autofocus: first,
+      // (on a TV "hovered" is the ring: nothing answers a pointer's hover there)
+      builder: (context, lit, pressed) => AnimatedScale(
+        scale: pressed ? .92 : 1,
+        duration: const Duration(milliseconds: 120),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          width: first ? 54 : 48,
+          height: first ? 54 : 48,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: lit ? Colors.white : Colors.white.withValues(alpha: first ? .16 : 0)),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, size: first ? 32 : 25, color: lit ? Colors.black : const Color(0xE6FFFFFF)),
+              if (on && !lit)
+                Positioned(
+                  bottom: 6,
+                  child: Container(width: 4, height: 4, decoration: const BoxDecoration(color: VyseColors.accent, shape: BoxShape.circle)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// A row of tools for phones, spread across the width.
 class PhoneTools extends StatelessWidget {
   const PhoneTools({
@@ -535,6 +635,10 @@ class PhoneTools extends StatelessWidget {
     required this.onSettings,
     this.onEpisodes,
     this.onNext,
+    this.shapeLabel,
+    this.onShape,
+    this.landscape = false,
+    this.onRotate,
   });
   final bool subtitlesOn;
   final VoidCallback onSubtitles;
@@ -542,6 +646,18 @@ class PhoneTools extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback? onEpisodes;
   final VoidCallback? onNext;
+
+  /// The picture's shape, when it isn't Fit ("Fill"): the button shows it's in use.
+  final String? shapeLabel;
+
+  /// Fit, Fill, Stretch and round again.
+  final VoidCallback? onShape;
+
+  /// Whether the screen is on its side now: the rotate button turns it the other way.
+  final bool landscape;
+
+  /// Turns the screen, whatever the phone's own rotation lock says.
+  final VoidCallback? onRotate;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -552,6 +668,9 @@ class PhoneTools extends StatelessWidget {
         _Tool(icon: Icons.tune_rounded, tooltip: 'Settings', onTap: onSettings),
         if (onEpisodes != null) _Tool(icon: Icons.video_library_outlined, tooltip: 'Episodes', onTap: onEpisodes!),
         if (onNext != null) _Tool(icon: Icons.skip_next_rounded, tooltip: 'Next episode', onTap: onNext!),
+        if (onShape != null) _Tool(icon: Icons.aspect_ratio_rounded, tooltip: 'Aspect ratio', on: shapeLabel != null, onTap: onShape!),
+        if (onRotate != null)
+          _Tool(icon: landscape ? Icons.stay_current_portrait_rounded : Icons.screen_rotation_rounded, tooltip: landscape ? 'Turn upright' : 'Turn sideways', onTap: onRotate!),
       ],
     ),
   );

@@ -28,6 +28,7 @@ import com.vyse.player.DeferredSurfaceTextureListener
 import com.vyse.player.ExternalPlayerChannel
 import com.vyse.player.FlutterRendererPolicy
 import com.vyse.player.TvDetection
+import com.vyse.player.exoplayer.DoviBridge
 import com.vyse.player.exoplayer.ExoPlayerPlugin
 import com.vyse.player.mpv.MpvAudioPlayerPlugin
 import com.vyse.player.mpv.MpvPlayerPlugin
@@ -270,6 +271,12 @@ class MainActivity : FlutterActivity() {
     // Upstream's device signals: lib/core/platform/device_performance.dart picks the lighter
     // visual tier from them on a weak box (no focus glow, instant focus animations, smaller caches)
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "vyse/device").setMethodCallHandler { call, result ->
+      // VyseTV: what this TV can do with HDR and Dolby Vision, for the report card
+      // (lib/data/playback/playback_report.dart)
+      if (call.method == "getPlaybackCapabilities") {
+        result.success(runCatching { DoviBridge.capabilities(this) }.getOrDefault(emptyMap<String, Any?>()))
+        return@setMethodCallHandler
+      }
       if (call.method != "getPerformanceSignals") {
         result.notImplemented()
         return@setMethodCallHandler

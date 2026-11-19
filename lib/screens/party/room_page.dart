@@ -465,7 +465,7 @@ class _RoomPageState extends State<RoomPage> {
             expanded: _full,
             onExpand: () => RoomPage.theater.value = !RoomPage.theater.value,
             anime: p.anime,
-            onMinimize: _minimize,
+            onMinimize: playersCanMinimize ? _minimize : null,
           );
         }
       }

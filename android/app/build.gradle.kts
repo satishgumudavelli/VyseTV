@@ -390,10 +390,13 @@ dependencies {
     implementation(mpvAarDependency)
     mpvAarNatives(mpvAarDependency)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
-    // Media3 ExoPlayer (upstream's opt-in fallback backend; the mpv core uses a few of its helpers)
+    // Media3 ExoPlayer: VyseTV's engine on Android TV unless Settings says mpv (upstream keeps it
+    // as its opt-in backend); the mpv core uses a few of its helpers
     implementation("androidx.media3:media3-decoder:$media3Version")
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
+    // VyseTV: some film sources are DASH (upstream's servers never are)
+    implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-datasource-cronet:$media3Version")

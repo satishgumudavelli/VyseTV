@@ -11,6 +11,10 @@
 //   (a poster does not fade in again, a hover animation carries on).
 // - Nothing here uses an opacity or blur layer: the glow fades by its own colour. The video is
 //   a hole through to a native surface, and such layers would paint over it.
+// - While a control has its focus look it paints on a layer of its own, so each frame of the
+//   ring coming and going records that one control again, not the page around it. (Without it
+//   every arrow press recorded the whole page some nine times over, twice: once for the control
+//   left and once for the one arrived at. A TV's processor has no time for that.)
 // - A control whose picture is only part of it (a cast card: the portrait, with the name and the
 //   role under it) marks that part with [FocusRingTarget], and the ring goes round the part.
 import 'package:flutter/material.dart';
@@ -99,9 +103,26 @@ class RenderFocusChrome extends RenderProxyBox {
   Animation<double>? _progress;
   set progress(Animation<double>? value) {
     if (identical(_progress, value)) return;
-    if (attached) _progress?.removeListener(markNeedsPaint);
+    if (attached) _progress?.removeListener(_ticked);
     _progress = value;
-    if (attached) value?.addListener(markNeedsPaint);
+    if (attached) value?.addListener(_ticked);
+    _ticked();
+  }
+
+  /// Whether this control paints on a layer of its own right now: while it has a focus look
+  /// (see the notes at the top). The page is recorded again once as that starts and once as it
+  /// ends, to take the control out of its own picture and to put it back.
+  bool _ownLayer = false;
+
+  @override
+  bool get isRepaintBoundary => _ownLayer;
+
+  void _ticked() {
+    final want = shown > 0;
+    if (want != _ownLayer) {
+      _ownLayer = want;
+      markNeedsCompositingBitsUpdate();
+    }
     markNeedsPaint();
   }
 
@@ -168,8 +189,55 @@ class RenderFocusChrome extends RenderProxyBox {
 
   final _leader = LayerHandle<LeaderLayer>();
 
+  // (not `layer`: on a layer of its own that one is the framework's)
+  final _grown = LayerHandle<TransformLayer>();
+
   /// How far the control is into its focus look right now (0 when it has none).
   double get shown => _progress?.value ?? 0;
+
+  /// How far past its box a focused control may draw: it grows, a ring with no room of its own
+  /// goes round it on the outside, and what it draws for itself under focus (a shadow, a lift)
+  /// spills too.
+  static const _spill = 40.0;
+
+  /// A layer says how far its picture reaches, and a renderer that redraws only what changed
+  /// goes by that: what a layer draws past its say can be left as it was, cut off at the box.
+  /// So while this is a layer of its own it says more than its box.
+  @override
+  Rect get paintBounds {
+    final box = super.paintBounds;
+    if (!_ownLayer) return box;
+    return box.inflate(_spill + (_scale - 1).abs() * box.longestSide / 2);
+  }
+
+  /// Whether the control is only text: nothing drawn round it, no padding of its own.
+  bool _onlyText() {
+    RenderObject? node = child;
+    for (var depth = 0; node != null && depth < 16; depth++) {
+      if (node is! RenderBox || !node.hasSize) return false;
+      if ((node.size.width - size.width).abs() > 1 || (node.size.height - size.height).abs() > 1) return false;
+      if (node is RenderParagraph) return true;
+      if (_shapeOf(node) != null) return false;
+      RenderObject? only;
+      var children = 0;
+      node.visitChildren((c) {
+        children++;
+        only = c;
+      });
+      if (children != 1) return false;
+      node = only;
+    }
+    return false;
+  }
+
+  /// How far inside the control's edges its ring sits: what the control asked for, or, for
+  /// one that is only text and asked for nothing, round the text on the outside
+  /// ([FocusTheme.textLinkInset]).
+  EdgeInsets get _room => _inset == EdgeInsets.zero && _onlyText() ? FocusTheme.textLinkInset : _inset;
+
+  /// Tests: where this control's ring goes.
+  @visibleForTesting
+  EdgeInsets get debugRoom => _room;
 
   @override
   bool get alwaysNeedsCompositing => _link != null;
@@ -177,18 +245,24 @@ class RenderFocusChrome extends RenderProxyBox {
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
-    _progress?.addListener(markNeedsPaint);
+    _progress?.addListener(_ticked);
+    final want = shown > 0;
+    if (want != _ownLayer) {
+      _ownLayer = want;
+      markNeedsCompositingBitsUpdate();
+    }
   }
 
   @override
   void detach() {
-    _progress?.removeListener(markNeedsPaint);
+    _progress?.removeListener(_ticked);
     super.detach();
   }
 
   @override
   void dispose() {
     _leader.layer = null;
+    _grown.layer = null;
     super.dispose();
   }
 
@@ -240,16 +314,17 @@ class RenderFocusChrome extends RenderProxyBox {
     // A control that grows or shrinks itself (a card lifting under the pointer, a button
     // giving under a press) takes its ring with it.
     final moved = own?.transform;
+    final room = own == null ? _room : _inset;
     shape
       ?..radius = radius
       ..transform = moved
-      ..inset = _inset;
-    var outline = radius.toRRect(_inset.deflateRect(bounds));
+      ..inset = room;
+    var outline = radius.toRRect(room.deflateRect(bounds));
     if (moved != null) {
       canvas.save();
       canvas.translate(bounds.left, bounds.top);
       canvas.transform(moved.storage);
-      outline = radius.toRRect(_inset.deflateRect(Offset.zero & bounds.size));
+      outline = radius.toRRect(room.deflateRect(Offset.zero & bounds.size));
     }
     if (_fill) {
       canvas.drawRRect(outline, Paint()..color = _color.withValues(alpha: _color.a * t));
@@ -265,7 +340,7 @@ class RenderFocusChrome extends RenderProxyBox {
     final link = _link;
     if (t == 0 && link == null) {
       // the usual case, and the only one a mouse or a finger ever meets
-      layer = null;
+      _grown.layer = null;
       _leader.layer = null;
       super.paint(context, offset);
       return;
@@ -291,7 +366,7 @@ class RenderFocusChrome extends RenderProxyBox {
 
     final s = 1 + (_scale - 1) * t;
     if (s == 1) {
-      layer = null;
+      _grown.layer = null;
       linked(context, offset);
       return;
     }
@@ -300,7 +375,7 @@ class RenderFocusChrome extends RenderProxyBox {
       ..setEntry(0, 0, s)
       ..setEntry(1, 1, s)
       ..setTranslationRaw((1 - s) * size.width / 2, (1 - s) * size.height / 2, 0);
-    layer = context.pushTransform(needsCompositing, offset, transform, linked, oldLayer: layer is TransformLayer ? layer as TransformLayer? : null);
+    _grown.layer = context.pushTransform(needsCompositing, offset, transform, linked, oldLayer: _grown.layer);
   }
 }
 

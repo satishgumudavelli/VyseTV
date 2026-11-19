@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
+import 'player_menus.dart' show tvMenus;
+import 'tv_menus.dart';
 
 class SyncCue {
   const SyncCue(this.start, this.end, this.text);
@@ -403,6 +405,20 @@ class _SubtitleSyncPanelState extends State<SubtitleSyncPanel> {
         for (var i = 0; i < cues.length; i++)
           if (q.isEmpty || cues[i].text.toLowerCase().contains(q)) i,
       ];
+      // On a TV it is the whole screen, like the player's menus (tv_menus.dart): the picture
+      // shows through the shade, and the tools stand at the left.
+      if (tvMenus) {
+        _rowExtent = 84;
+        return TvMenuScreen(
+          child: Padding(
+            padding: TvMenuFrame.edge + safe,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(width: 540, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _roomy(cues, shown))),
+            ),
+          ),
+        );
+      }
       return DecoratedBox(
         decoration: BoxDecoration(
           color: full ? const Color(0xF705070D) : null,

@@ -1341,6 +1341,20 @@ abstract class PlayerBase with PlayerStreamControllersMixin, VyseExtrasMixin imp
   @override
   Future<String> runtimePlayerType() async => playerType;
 
+  // VyseTV (see Player): the mpv backends, where mpv always plays and subtitle files go in
+  // through its own commands.
+  @override
+  bool get mpvCore => true;
+
+  @override
+  ({String kind, String reason})? get handOver => null;
+
+  @override
+  Map<String, Object?>? get handOverFacts => null;
+
+  @override
+  Future<bool> addSubtitleFile(String uri, {String? title, String? language}) async => false;
+
   @override
   Future<bool> requestAudioFocus() async {
     // Default returns true, overridden by Android

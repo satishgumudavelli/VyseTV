@@ -33,7 +33,10 @@ import '../../data/party/watch_party.dart';
 import '../../data/account/account.dart' show Account;
 import '../../data/sources/film_sources/film_sources.dart';
 import '../../data/sources/film_sources/source_settings.dart';
+import '../../data/live_tv/iptv_playback.dart' show IptvPlayback;
 import '../../data/playback/outside_play.dart';
+import '../../data/playback/playback_report.dart';
+import '../../data/playback/player_engine.dart';
 import '../../data/sources/sources.dart';
 import '../../data/playback/stream_proxy.dart';
 import '../../mpv/mpv.dart' as pz;
@@ -55,7 +58,9 @@ import '../../dpad/focusable_wrapper.dart';
 import '../../dpad/input_mode_tracker.dart';
 import 'player_chrome.dart';
 import 'player_episodes.dart';
+import 'player_info.dart';
 import 'player_menus.dart';
+import 'picture_shape.dart';
 import 'sources_page.dart';
 import '../../media_servers/media_servers.dart' show serverError;
 import 'subtitle_sync_panel.dart';
@@ -165,7 +170,8 @@ const _moreSpeeds = [.25, 1.75, 2.5, 3.0, 4.0, 8.0]; // the player goes 0.25x to
 
 String _speedLabel(double s) => s == 1 ? 'Normal' : '${s == s.roundToDouble() ? s.toInt() : s}×';
 
-/// Full-screen player. Fetches sources, plays via the mpv player (lib/mpv). Shows controls, subtitle sync, episodes.
+/// Full-screen player. Fetches sources, plays via the player in lib/mpv (mpv; on an Android TV,
+/// Media3 unless Settings says mpv: PlayerEngine). Shows controls, subtitle sync, episodes.
 /// controls and the settings panel. Esc leaves, S opens settings, C subtitles, F full screen.
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -332,7 +338,7 @@ class _PlayerHostState extends State<PlayerPage> {
     if (p.embedded) return _PlayerView(p, mini: p.mini, onMinimize: p.onMinimize, onRestore: p.onRestore, onClose: p.onClose);
     return ValueListenableBuilder<MiniSession?>(
       valueListenable: MiniPlayer.session,
-      builder: (context, mini, _) => _left || identical(mini, _session) ? const SizedBox.shrink() : _session.view(mini: false, onMinimize: _minimize),
+      builder: (context, mini, _) => _left || identical(mini, _session) ? const SizedBox.shrink() : _session.view(mini: false, onMinimize: playersCanMinimize ? _minimize : null),
     );
   }
 }
@@ -387,8 +393,15 @@ class _PlayerPageState extends State<_PlayerView> {
   EpisodeInfo? _nextInfo; // looked up when an episode starts
   bool _upNextDismissed = false;
 
-  // ── player: mpv (lib/mpv); the video is a native surface behind Flutter ──
-  late final _player = pz.Player();
+  // ── player (lib/mpv); the video is a native surface behind Flutter ──
+  // On an Android TV the engine is Media3 unless Settings says mpv (PlayerEngine). A watch
+  // party stays on mpv: its video sits in a tile, which only the mpv side can place.
+  late final _player = pz.Player(useExoPlayer: PlayerEngine.forFullScreen && !widget.party && !widget.embedded && !widget.mini);
+
+  /// This player is a Media3 one. Subtitles, seeking and the picture go through what both of its
+  /// cores understand (Media3, and the mpv it hands a video to when it can't play it), never
+  /// through mpv's own commands; and what only mpv can do stays out of the menus.
+  late final bool _media3 = _player.playerType == 'exoplayer';
   // One video widget for the page's whole life: picture-in-picture moves it rather than
   // building a new one, so the native surface never loses its place.
   final _videoKey = GlobalKey();
@@ -522,9 +535,6 @@ class _PlayerPageState extends State<_PlayerView> {
   bool _brightnessChanged = false;
   bool _dragBrightness = false;
   bool _panel = false;
-  // On a TV the menu is a side panel (sideMenus): its list of menus, or one menu's choices.
-  // The settings button opens the list, a tool its own menu; Back goes from a menu to the list.
-  bool _panelList = false;
   bool _sync = false; // subtitle sync panel
   double _subOffset = 0; // seconds added to subtitle times
   bool _fullscreen = false;
@@ -543,6 +553,19 @@ class _PlayerPageState extends State<_PlayerView> {
   late final _effects = pz.PictureEffects(_player);
   late final _display = pz.DisplayMatch(_player);
   int _zoom = 100; // %, this session only
+
+  // ── the picture's shape (picture_shape.dart) and, on a phone, which way the screen is turned ──
+
+  /// Fit, Fill and Stretch come from Settings (this screen's); a forced shape lasts until the
+  /// player closes.
+  PictureShape _shape = PictureShape.remembered(AppSettings.pictureShape.value);
+
+  /// What the engine was last given, so a size change or a new file writes only what changed.
+  final _shapeSent = <String, String>{};
+  Size? _shapeBox; // the picture's box when Stretch was last worked out
+
+  /// The phone was turned from the player: it is let go of when the player closes, or shrinks.
+  bool _turned = false;
   int? _sleepMinutes; // null: off; -1: at the end of this episode
   DateTime? _sleepAt;
   Timer? _sleepTimer;
@@ -567,6 +590,7 @@ class _PlayerPageState extends State<_PlayerView> {
   DateTime _partySteadyAt = DateTime.now(); // when playback last came back from buffering
   Timer? _stallTimer;
   Timer? _startTimer;
+  (StreamSource, int)? _watched; // what the start-up watch is on: the source and its load
   bool _stalled = false; // buffering for over a second: the room waits for us
   bool _autoPaused = false; // the host paused because someone is loading
   List<String> _waitingFor = const [];
@@ -602,6 +626,8 @@ class _PlayerPageState extends State<_PlayerView> {
       ..add(_player.streams.buffering.listen((v) {
         if (!mounted) return;
         setState(() => _buffering = v);
+        // the report card counts a stop to load again (a seek's own loading is not one)
+        if (v && _reportFrame && !_reopening && DateTime.now().difference(_seekAt) > const Duration(seconds: 3)) _editReport((r) => r.withRebuffer());
         if (!widget.party) return;
         _stallTimer?.cancel();
         if (v) {
@@ -635,18 +661,7 @@ class _PlayerPageState extends State<_PlayerView> {
       ..add(_player.streams.duration.listen((d) {
         if (!_reopening && d > Duration.zero) _duration.value = d + _offsetDur;
       }))
-      ..add(_player.videoSize.listen((s) {
-        if (mounted && (s.$1 != _videoW || s.$2 != _videoH)) {
-          final first = _videoW == 0 && s.$1 > 0;
-          setState(() {
-            _videoW = s.$1;
-            _videoH = s.$2;
-          });
-          // ambient lighting needs the picture's shape; refresh matching needs it decoding
-          if (s.$1 > 0) unawaited(_applyPicture());
-          if (first) unawaited(_maybeMatchDisplay());
-        }
-      }))
+      ..add(_player.videoSize.listen(_onVideoSize))
       ..add(_player.streams.completed.listen((done) {
         if (done && _sleepMinutes == -1) _sleepNow();
       }))
@@ -658,14 +673,27 @@ class _PlayerPageState extends State<_PlayerView> {
         _scanTimer = Timer(const Duration(milliseconds: 300), _scanEmbedded);
         // after every load (a reopen for a seek, a quality or server switch), make sure the
         // subtitle you picked is the one showing
-        if (_subPath != null || _embeddedSid != null) {
+        // (on Media3 always: it turns a file's default track on by itself, also with subtitles off)
+        if (_subPath != null || _embeddedSid != null || _media3) {
           _subCheckTimer?.cancel();
           _subCheckTimer = Timer(const Duration(milliseconds: 700), () => _checkSubs('tracks changed'));
         }
       }))
       ..add(_player.streams.track.listen((t) { if (mounted) setState(() => _audioNow = t.audio); }))
       ..add(_player.streams.log.listen(_mpvLog))
+      // (the report card: the first frame, and why it did not play)
+      ..add(_player.streams.playbackRestart.listen((_) => _reportFirstFrame()))
+      ..add(_player.streams.fileLoaded.listen((_) => unawaited(_applyShape(fresh: true))))
+      ..add(_player.streams.error.listen((e) => _editReport((r) => r.withFailure(e.message))))
       ;
+    if (_media3) {
+      _subs
+        // Media3 styles its subtitles once a video is open, and doesn't say when the picture's
+        // size changes: both are done as each video starts showing
+        ..add(_player.streams.fileLoaded.listen((_) => unawaited(_applySubtitleStyle())))
+        ..add(_player.streams.playbackRestart.listen((_) => unawaited(_readVideoSize())))
+        ..add(_player.streams.backendSwitched.listen((_) => _handedToMpv()));
+    }
     // Buffer about three minutes ahead. 4K runs ~16 Mbps (~360 MB for 3 min); mpv keeps the
     // cache on disk, so the byte limits don't sit in RAM.
     {
@@ -731,6 +759,8 @@ class _PlayerPageState extends State<_PlayerView> {
       });
     }
     if (old.mini != widget.mini) {
+      unawaited(_applyShape());
+      if (widget.mini) _letGoOfTurn(); // (the app around the small window goes back to how the phone is held)
       // Android would shrink the whole app around a player that's already a small window
       if (_pipOk) unawaited(pz.Pip.setAutoReady(_playing && !widget.mini, width: _videoW > 0 ? _videoW : 16, height: _videoH > 0 ? _videoH : 9));
       // back from the small window: the controls show, and the keys are the player's again
@@ -749,6 +779,9 @@ class _PlayerPageState extends State<_PlayerView> {
     _subCheckTimer?.cancel();
     _syncTimer?.cancel();
     SubLog.line('==== player closed');
+    _letGoOfTurn();
+    // (kept after the page has gone: Settings shows the last playback's report card)
+    if (_report.value case final r?) unawaited(PlaybackReport.keep(r.closed(_reportClock.elapsedMilliseconds)));
     for (final setting in _subtitleSettings) {
       setting.removeListener(_subtitleStyleChanged);
     }
@@ -773,6 +806,9 @@ class _PlayerPageState extends State<_PlayerView> {
     _hide?.cancel();
     _noteTimer?.cancel();
     _reopenTimer?.cancel();
+    // (for every player, not only one in a room: it was left running for 25 seconds after
+    // the page had gone)
+    _startTimer?.cancel();
     FocusManager.instance.removeListener(_onFocusChange);
     _picture.dispose();
     _tileNode.dispose();
@@ -795,7 +831,6 @@ class _PlayerPageState extends State<_PlayerView> {
       _partyTimer?.cancel();
       _partyDebounce?.cancel();
       _stallTimer?.cancel();
-      _startTimer?.cancel();
       // the host leaving pauses everyone where they are (unless the watch was just stopped)
       if (WatchParty.state.value != null) _partyReport(playing: false);
       if (_follower) WatchParty.wait(false); // nobody waits for a player that's closed
@@ -808,12 +843,76 @@ class _PlayerPageState extends State<_PlayerView> {
     super.dispose();
   }
 
+  void _onVideoSize((int, int) s) {
+    if (!mounted || (s.$1 == _videoW && s.$2 == _videoH)) return;
+    final first = _videoW == 0 && s.$1 > 0;
+    setState(() {
+      _videoW = s.$1;
+      _videoH = s.$2;
+    });
+    // ambient lighting needs the picture's shape; refresh matching needs it decoding
+    if (s.$1 > 0) unawaited(_applyPicture());
+    if (first) unawaited(_maybeMatchDisplay());
+  }
+
+  /// Media3: the picture's size, asked for once frames are showing.
+  Future<void> _readVideoSize() async {
+    try {
+      final w = double.tryParse(await _player.getProperty('dwidth') ?? '')?.round() ?? 0;
+      final h = double.tryParse(await _player.getProperty('dheight') ?? '')?.round() ?? 0;
+      if (w > 0 && h > 0) _onVideoSize((w, h));
+    } catch (_) {}
+  }
+
+  /// Media3 couldn't play this video and its plugin carried on with mpv, at the same spot. The
+  /// tracks come again under mpv's own numbers, so a subtitle from inside the file is found
+  /// again by what it is; and mpv seeks fMP4 streams by reopening them, as on the mpv engine.
+  void _handedToMpv() {
+    if (!mounted) return;
+    final why = _player.handOver;
+    SubLog.line('Media3 handed this video to mpv (${why?.kind ?? '?'}: ${why?.reason ?? ''})');
+    // The report card keeps what Media3 knew of the video and what it gave it up for; the next
+    // first frame is mpv's.
+    final facts = _player.handOverFacts ?? const <String, Object?>{};
+    _reportFrame = false;
+    _editReport(
+      (r) => r
+          .withMedia3((facts['stats'] as Map?)?.cast<String, Object?>() ?? const {})
+          .withHandOver(kind: why?.kind ?? 'error', reason: why?.reason ?? '', detail: facts['detail'] as String? ?? '', afterMs: facts['afterMs'] as int? ?? _reportClock.elapsedMilliseconds),
+    );
+    // (held a little longer than other notes: it is what a tester reads back to us)
+    _switch(PlayerEngine.handOverNote(why), () {}, hold: const Duration(seconds: 5));
+    // mpv starts on the file from nothing, so it gets the time any player gets to start one. The
+    // clock used to run on from when Media3 opened it; on a slow host that left mpv a few
+    // seconds, and the link was given up on while mpv was still opening it ("it says media3
+    // can't play this one - using mpv, and then it skips to another source").
+    final watched = _watched;
+    if (watched != null && (_startTimer?.isActive ?? false)) _watchStart(watched.$1, watched.$2);
+    final t = _activeSubTrack;
+    if (t != null && _isBuiltIn(t.url)) {
+      _embeddedSid = null;
+      _rePick = (t.lang, t.release);
+    }
+    final url = _playUrl;
+    if (_sources.isNotEmpty && _sources[_source].hls) {
+      StreamProxy.instance.fragmentedStart(url, 0).then((start) {
+        if (mounted && url == _playUrl && start != null) _fragmented = true;
+      }, onError: (Object _) {});
+    }
+  }
+
+  (String, String)? _rePick; // a built-in subtitle to find again after Media3 handed over to mpv
+
   int _loadId = 0;
   final _subCache = <String, String>{};
 
   // fMP4 servers can't be seeked by mpv; they reopen a playlist trimmed at the target instead,
   // and everything mpv reports is shifted by where that playlist starts.
   bool _fragmented = false;
+
+  /// Media3 seeks every kind of HLS stream itself, so nothing is trimmed or reopened for it
+  /// (until it hands a video to mpv: [_handedToMpv]).
+  bool get _nativeHlsSeek => _media3 && !_player.mpvCore;
   String? _timeline; // fMP4 played as a segment timeline (StreamProxy.timeline): seeks natively
   double _offset = 0;
   bool _reopening = false;
@@ -912,7 +1011,7 @@ class _PlayerPageState extends State<_PlayerView> {
       await _prepOpen();
       // the trimmed playlist begins at its segment's start; a short seek inside it lands exactly
       final into = Duration(milliseconds: ((secs - start) * 1000).round());
-      await _player.open(pz.Media(url, start: frag ? (into > const Duration(milliseconds: 200) ? into : null) : t), play: play);
+      await _open(pz.Media(url, start: frag ? (into > const Duration(milliseconds: 200) ? into : null) : t), play: play);
       if (tl != null) _watchTimeline(tl, seq);
     } catch (_) {
       if (mounted) setState(() => _veil = false);
@@ -949,6 +1048,7 @@ class _PlayerPageState extends State<_PlayerView> {
       SubLog.line('PREP open: sub-delay=${(_subOffset - _offset).toStringAsFixed(3)} file=${_subPath == null ? '-' : _subPath!.split(Platform.pathSeparator).last} built-in=${_embeddedSid ?? '-'}');
     }
     await mpv.setProperty('sub-delay', (_subOffset - _offset).toStringAsFixed(3));
+    if (_media3) return; // the file goes in with the video itself: see _open
     final path = _subPath;
     if (path == null) {
       await mpv.command(['change-list', 'sub-files', 'clr', '']);
@@ -960,6 +1060,33 @@ class _PlayerPageState extends State<_PlayerView> {
     if (lang != null) await mpv.setProperty('slang', lang);
     await mpv.setProperty('sid', _subPath != null ? 'auto' : (_embeddedSid ?? 'no'));
   }
+
+  /// Opens [m]. Media3 takes the subtitle file in use along with the video (mpv was told in
+  /// [_prepOpen]), and puts it on.
+  Future<void> _open(pz.Media m, {bool play = true}) async {
+    if (!_media3) return _player.open(m, play: play);
+    final path = _subPath;
+    await _player.open(m, play: play, externalSubtitles: path == null ? null : [_subFile(path)]);
+    // a file picked while this open was on its way reached the player before the video did,
+    // and went with the one before it: hand it over again
+    final now = _subPath;
+    if (now != null && now != path && mounted) {
+      await _player.addSubtitleFile(Uri.file(now).toString(), title: _activeSubTrack?.language, language: _activeSubTrack?.lang);
+    }
+  }
+
+  /// A subtitle file of ours, the way Media3 is handed one.
+  pz.SubtitleTrack _subFile(String path) => pz.SubtitleTrack.uri(
+    Uri.file(path).toString(),
+    title: _activeSubTrack?.language,
+    language: RegExp(r'\.([a-z]{2,3})\.\w+$').firstMatch(path)?[1],
+    isDefault: true,
+  );
+
+  /// A subtitle track inside the video file, as the list names it: `mpv-sid:3` (mpv's number
+  /// for it) or `exo-sid:3_0` (Media3's).
+  static bool _isBuiltIn(String url) => url.startsWith('mpv-sid:') || url.startsWith('exo-sid:');
+  String get _sidPrefix => _media3 ? 'exo-sid:' : 'mpv-sid:';
 
   Future<String> _writeSub(sub.SubtitleTrack track, String content) async {
     final dir = Directory('${Directory.systemTemp.path}${Platform.pathSeparator}vyse_subs');
@@ -981,11 +1108,11 @@ class _PlayerPageState extends State<_PlayerView> {
       // another file of the same episode: open it where we are
       _holdAt(at);
       await _prepOpen();
-      await _player.open(pz.Media(_playUrl, headers: src.headers, start: at), play: _playing);
+      await _open(pz.Media(_playUrl, headers: src.headers, start: at), play: _playing);
       return;
     }
     final url = _playUrl;
-    final frag = await StreamProxy.instance.fragmentedStart(url, 0).then((s) => s != null, onError: (Object _) => false);
+    final frag = !_nativeHlsSeek && await StreamProxy.instance.fragmentedStart(url, 0).then((s) => s != null, onError: (Object _) => false);
     final tl = frag ? await StreamProxy.instance.timeline(url).catchError((Object _) => null) : null;
     if (!mounted || url != _playUrl) return;
     _timeline = tl;
@@ -1130,11 +1257,16 @@ class _PlayerPageState extends State<_PlayerView> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _applyPicture() => _effects.apply(
-    upscaler: pz.Upscaler.chosen(AppSettings.upscaler.value),
-    ambient: AppSettings.ambientLight.value,
-    videoAspect: _videoW > 0 && _videoH > 0 ? _videoW / _videoH : null,
-  );
+  Future<void> _applyPicture() async {
+    if (_media3) return; // upscaling and ambient lighting are mpv shaders
+    await _effects.apply(
+      upscaler: pz.Upscaler.chosen(AppSettings.upscaler.value),
+      // (the glow fills black bars: with the picture cropped, stretched or forced to a shape
+      // there are none of the picture's own)
+      ambient: AppSettings.ambientLight.value && _shapeNow == PictureShape.fit,
+      videoAspect: _videoW > 0 && _videoH > 0 ? _videoW / _videoH : null,
+    );
+  }
 
   void _setZoom(int percent) {
     final z = percent.clamp(50, 200);
@@ -1144,7 +1276,72 @@ class _PlayerPageState extends State<_PlayerView> {
     if (!Platform.isIOS && !Platform.isMacOS) {
       _player.setProperty('video-zoom', (math.log(z / 100) / math.ln2).toStringAsFixed(4)).catchError((Object _) {});
     }
+    unawaited(_applyShape()); // (subtitles keep to the screen once the picture runs off it)
   }
+
+  /// The shape in use: Fit in a small window (picture-in-picture, the mini player), where a
+  /// cropped or stretched picture is no use.
+  PictureShape get _shapeNow => widget.mini || pz.Pip.active.value ? PictureShape.fit : _shape;
+
+  void _setShape(PictureShape s, {bool note = false}) {
+    if (s.kept) AppSettings.pictureShape.set(s.id);
+    if (note) {
+      _switch('Aspect ratio: ${s.label}', () => _shape = s);
+    } else {
+      setState(() => _shape = s);
+    }
+    unawaited(_applyShape());
+    unawaited(_applyPicture()); // ambient lighting goes with Fit only
+  }
+
+  /// Tells the engine the shape, as upstream's player does: Media3's picture frame first, then
+  /// mpv's properties (which Media3's plugin also takes the forced shape from, and keeps for the
+  /// mpv it may hand the video to). [fresh]: a new file is open, so everything is said again.
+  Future<void> _applyShape({bool fresh = false}) async {
+    if (fresh) _shapeSent.clear();
+    final s = _shapeNow;
+    final box = (_videoKey.currentContext?.findRenderObject() as RenderBox?)?.size;
+    _shapeBox = box;
+    final want = {
+      'fit': '${s.boxFit}',
+      'video-aspect-override': s.aspectOverride(box),
+      'panscan': s.panscan,
+      'sub-ass-force-margins': s.forceMargins(zoomPercent: _zoom) ? 'yes' : 'no',
+    };
+    for (final MapEntry(:key, :value) in want.entries) {
+      if (_shapeSent[key] == value) continue;
+      _shapeSent.remove(key); // (a write that fails is tried again next time)
+      try {
+        if (key == 'fit') {
+          await _player.setBoxFitMode(s.boxFit);
+        } else {
+          await _player.setProperty(key, value);
+        }
+        _shapeSent[key] = value;
+      } catch (_) {}
+    }
+  }
+
+  /// On a phone: the screen turns the other way and stays there while the player is open, even
+  /// with the phone's rotation lock on (people watch with it on, and wanted a button).
+  void _turn() {
+    final size = MediaQuery.sizeOf(context);
+    _turned = true;
+    unawaited(SystemChrome.setPreferredOrientations(
+      size.width > size.height ? const [DeviceOrientation.portraitUp] : const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
+    ));
+    _poke();
+  }
+
+  /// The phone follows its own rotation setting again.
+  void _letGoOfTurn() {
+    if (!_turned) return;
+    _turned = false;
+    unawaited(SystemChrome.setPreferredOrientations(const []));
+  }
+
+  /// A phone or a small tablet held in the hand, where the rotate button goes.
+  bool get _turnable => (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS) && !tvMenus;
 
   // ── sleep timer ──
 
@@ -1184,17 +1381,25 @@ class _PlayerPageState extends State<_PlayerView> {
     if (!AppSettings.matchRefreshRate.value || widget.party || widget.embedded || _displayTried) return;
     if (Platform.isWindows && !_fullscreen) return;
     _displayTried = true;
-    String? raw;
-    try {
-      raw = await _player.getProperty('container-fps');
-    } catch (_) {}
-    final fps = double.tryParse(raw ?? '') ?? 0;
-    if (!mounted || fps <= 0) return;
+    final id = _loadId;
+    var fps = 0.0;
+    // (Media3 works the rate out from the frames it has shown: ask again for a few seconds)
+    for (var tries = 0; tries < (_media3 ? 6 : 1) && fps <= 0; tries++) {
+      if (tries > 0) await Future<void>.delayed(const Duration(seconds: 1));
+      if (!mounted || id != _loadId) return;
+      String? raw;
+      try {
+        raw = await _player.getProperty('container-fps');
+      } catch (_) {}
+      fps = double.tryParse(raw ?? '') ?? 0;
+    }
+    if (!mounted || id != _loadId || fps <= 0) return;
     await _display.match(fps: fps, duration: _duration.value, width: _videoW, height: _videoH);
   }
 
   void _pipChanged() {
     if (mounted) setState(() {});
+    unawaited(_applyShape()); // (a small window shows the whole picture)
   }
 
   /// What picture-in-picture shows: the video alone (Android, iPhone, Mac), or on Windows and
@@ -1642,8 +1847,24 @@ class _PlayerPageState extends State<_PlayerView> {
       }
     }
 
-    final n = int.tryParse(await get('track-list/count')) ?? 0;
     final found = <sub.SubtitleTrack>[];
+    if (_media3) {
+      // Media3 (and the mpv it hands over to) lists its tracks itself, under its own ids
+      for (final t in _player.state.tracks.subtitle) {
+        if (t.isExternal || t.id == 'no' || t.id == 'auto') continue;
+        final codec = (t.codec ?? '').toLowerCase();
+        final lang = t.language ?? '';
+        found.add(sub.subtitleTrack(
+          'builtin-${t.id}',
+          'Built in',
+          lang.isEmpty ? 'und' : lang,
+          'exo-sid:${t.id}',
+          release: [if ((t.title ?? '').isNotEmpty) t.title!, if (t.isForced) 'Forced'].join(' · '),
+          format: codec.contains('ass') || codec.contains('ssa') ? 'ass' : 'srt',
+        ));
+      }
+    }
+    final n = _media3 ? 0 : int.tryParse(await get('track-list/count')) ?? 0;
     for (var i = 0; i < n; i++) {
       if (await get('track-list/$i/type') != 'sub' || await get('track-list/$i/external') == 'yes') continue;
       final codec = (await get('track-list/$i/codec')).toLowerCase();
@@ -1672,11 +1893,21 @@ class _PlayerPageState extends State<_PlayerView> {
       chapters.add(PlayerChapter(Duration(milliseconds: ((at + _offset) * 1000).round()), title.isEmpty ? 'Chapter ${i + 1}' : title));
     }
     if (!mounted || id != _loadId) return;
-    final files = _builtIn.where((t) => !t.url.startsWith('mpv-sid:'));
+    final files = _builtIn.where((t) => !_isBuiltIn(t.url));
     setState(() {
       _builtIn = [...found, ...files];
       _chapters = chapters;
     });
+    // after Media3 handed over to mpv: the track that was on, under its new id
+    final again = _rePick;
+    if (again != null && found.isNotEmpty) {
+      _rePick = null;
+      final t = found.where((b) => b.lang == again.$1 && b.release == again.$2).firstOrNull ?? found.where((b) => b.lang == again.$1).firstOrNull;
+      if (t != null) {
+        unawaited(_setSubtitleTrack(t));
+        return;
+      }
+    }
     _pickBuiltIn(id);
   }
 
@@ -1707,7 +1938,7 @@ class _PlayerPageState extends State<_PlayerView> {
       tracks.add(sub.subtitleTrack('torrent-$i', 'Built in', lang ?? 'und', f.url, release: name, format: ext == 'ssa' ? 'ass' : ext));
     }
     if (!mounted || id != _loadId) return;
-    setState(() => _builtIn = [..._builtIn.where((t) => t.url.startsWith('mpv-sid:')), ...tracks]);
+    setState(() => _builtIn = [..._builtIn.where((t) => _isBuiltIn(t.url)), ...tracks]);
     _pickBuiltIn(id);
   }
 
@@ -1718,15 +1949,20 @@ class _PlayerPageState extends State<_PlayerView> {
     if (r != null && !_subsChosen && !_follower && id == _loadId) {
       // the one you had was inside the video: it's back as soon as the file lists it
       final url = r['url'];
-      if (url is String && url.startsWith('mpv-sid:')) {
-        final t = _builtIn.where((b) => b.url == url).firstOrNull;
-        if (t != null) {
-          _restoreSub = null;
-          _subsChosen = true;
-          _setSubtitleTrack(t);
+      if (url is String && _isBuiltIn(url) && !url.startsWith(_sidPrefix)) {
+        // remembered under the other engine's number for it: Settings' default takes over
+        _restoreSub = null;
+      } else {
+        if (url is String && _isBuiltIn(url)) {
+          final t = _builtIn.where((b) => b.url == url).firstOrNull;
+          if (t != null) {
+            _restoreSub = null;
+            _subsChosen = true;
+            _setSubtitleTrack(t);
+          }
         }
+        return; // the one you had comes first; nothing is picked for you meanwhile
       }
-      return; // the one you had comes first; nothing is picked for you meanwhile
     }
     if (!AppSettings.autoSubtitles.value || _subsChosen || _follower || id != _loadId) return;
     if (_activeSubTrack?.provider == 'Built in') return;
@@ -2318,7 +2554,7 @@ class _PlayerPageState extends State<_PlayerView> {
       _restoreSub = null;
       return;
     }
-    if (url.startsWith('mpv-sid:')) return; // waits for the file's own tracks (_pickBuiltIn)
+    if (_isBuiltIn(url)) return; // waits for the file's own tracks (_pickBuiltIn)
     _restoreSub = null;
     final listed = _subtitleTracks.where((t) => t.url == url || (t.provider == r['provider'] && t.id == r['id'])).firstOrNull;
     final track = listed ??
@@ -2356,13 +2592,18 @@ class _PlayerPageState extends State<_PlayerView> {
         ? 'PICK off'
         : 'PICK ${track.language} · ${track.provider} · ${track.format}${track.translated ? ' · translated' : ''} · ${SubLog.clip(track.release, 50)} · ${SubLog.clip(track.url, 90)}');
     _embeddedSid = null;
-    if (track != null && track.url.startsWith('mpv-sid:')) {
-      // a track inside the video file: mpv already has it; the overlay draws it like any other
+    if (track != null && _isBuiltIn(track.url)) {
+      // a track inside the video file: the player already has it
       final sid = track.url.substring(8);
       _subPath = null;
       try {
-        await _player.command(['change-list', 'sub-files', 'clr', '']);
-        await _player.setProperty('sid', sid);
+        if (_media3) {
+          final t = _player.state.tracks.subtitle.where((x) => x.id == sid).firstOrNull;
+          if (t != null) await _player.selectSubtitleTrack(t);
+        } else {
+          await _player.command(['change-list', 'sub-files', 'clr', '']);
+          await _player.setProperty('sid', sid);
+        }
       } catch (e) {
         SubLog.line('  built-in #$sid FAILED: $e');
       }
@@ -2374,7 +2615,7 @@ class _PlayerPageState extends State<_PlayerView> {
     }
     if (track == null) {
       _subPath = null;
-      await _player.command(['change-list', 'sub-files', 'clr', '']);
+      if (!_media3) await _player.command(['change-list', 'sub-files', 'clr', '']);
       await _player.selectSubtitleTrack(pz.SubtitleTrack.off);
       if (mounted) setState(() { _activeSubTrack = null; _subtitle = 'Off'; _cues = const []; });
       _syncTimer?.cancel();
@@ -2398,11 +2639,18 @@ class _PlayerPageState extends State<_PlayerView> {
       if (cues.isEmpty) SubLog.line('  WARNING: no lines could be read from it');
       final path = await _writeSub(track, content);
       _subPath = path;
+      _subRetried = null;
       final mpv = _player;
-      await mpv.setProperty('sub-files', path);
-      await mpv.command(['sub-add', path, 'select', track.language, track.lang]);
-      SubLog.line('  handed to mpv: ${path.split(Platform.pathSeparator).last}');
-      await _dropOtherSubs(path);
+      if (_media3) {
+        // (a video not open yet takes the file with its open: see _open)
+        await mpv.addSubtitleFile(Uri.file(path).toString(), title: track.language, language: track.lang);
+        SubLog.line('  handed to Media3: ${path.split(Platform.pathSeparator).last}');
+      } else {
+        await mpv.setProperty('sub-files', path);
+        await mpv.command(['sub-add', path, 'select', track.language, track.lang]);
+        SubLog.line('  handed to mpv: ${path.split(Platform.pathSeparator).last}');
+        await _dropOtherSubs(path);
+      }
       if (mounted) setState(() { _activeSubTrack = track; _subtitle = track.language; _cues = cues; });
       _warnIfShort(cues);
       _partyReport();
@@ -2423,6 +2671,7 @@ class _PlayerPageState extends State<_PlayerView> {
   /// What mpv has for subtitles, written to the log; and if the file you picked isn't the one
   /// selected (a reload can leave another track on, or none), it's put back.
   Future<void> _checkSubs(String why, {bool retried = false}) async {
+    if (_media3) return _checkSubsMedia3(why);
     final mpv = _player;
     final path = _subPath;
     String norm(String x) => x.replaceAll('\\', '/').toLowerCase();
@@ -2469,6 +2718,52 @@ class _PlayerPageState extends State<_PlayerView> {
       } else if (!oursOn) {
         SubLog.line('  FIX: your subtitle file was loaded but not on, selecting #$ours');
         await mpv.setProperty('sid', ours);
+      }
+    } catch (e) {
+      SubLog.line('CHECK ($why) failed: $e');
+    }
+  }
+
+  String? _subRetried; // the subtitle file Media3 was handed a second time (never a third)
+
+  /// The same check on a Media3 player, through what it reports itself: the track that should
+  /// be on is on, and with subtitles off nothing is (Media3 turns a file's default track on by
+  /// itself).
+  Future<void> _checkSubsMedia3(String why) async {
+    try {
+      final tracks = _player.state.tracks.subtitle;
+      final on = _player.state.track.subtitle;
+      final onId = on == null || on.id == 'no' ? null : on.id;
+      SubLog.line('CHECK ($why, Media3${_player.mpvCore ? ' on mpv' : ''}): on=${onId ?? '-'} yours=${_embeddedSid ?? _subPath?.split(Platform.pathSeparator).last ?? '-'} '
+          '· ${tracks.isEmpty ? 'no subtitle tracks' : tracks.map((t) => '#${t.id}${t.isExternal ? ' file' : ''} ${t.language ?? ''}').join(' | ')}');
+      final sid = _embeddedSid;
+      if (sid != null) {
+        final t = tracks.where((x) => x.id == sid).firstOrNull;
+        if (t != null && onId != sid) await _player.selectSubtitleTrack(t);
+        return;
+      }
+      final path = _subPath;
+      if (path == null) {
+        if (onId != null && _activeSubTrack == null) await _player.selectSubtitleTrack(pz.SubtitleTrack.off);
+        return;
+      }
+      if (tracks.isEmpty && _player.state.tracks.audio.isEmpty) return; // nothing is loaded yet
+      final uri = Uri.file(path).toString();
+      final name = path.split(Platform.pathSeparator).last;
+      final ours = tracks.where((x) => x.isExternal && (x.uri == uri || (x.uri ?? '').endsWith(name))).firstOrNull;
+      if (ours != null) {
+        // (an earlier file can still be attached, and Media3 may have put that one on)
+        if (ours.id != onId) await _player.selectSubtitleTrack(ours);
+      } else if (why == 'after pick') {
+        // Media3 is preparing the video again with the file, and still lists the tracks from
+        // before: look once that has had time. (Handing it over again now, as this did, spent
+        // the one retry before there was anything to retry.)
+        _subCheckTimer?.cancel();
+        _subCheckTimer = Timer(const Duration(milliseconds: 2500), () => _checkSubs('look again'));
+      } else if (_subRetried != path) {
+        _subRetried = path;
+        SubLog.line('  FIX: your subtitle file was not loaded, handing it over again');
+        await _player.addSubtitleFile(Uri.file(path).toString(), title: _activeSubTrack?.language, language: _activeSubTrack?.lang);
       }
     } catch (e) {
       SubLog.line('CHECK ($why) failed: $e');
@@ -2526,7 +2821,7 @@ class _PlayerPageState extends State<_PlayerView> {
   /// Every few seconds while a subtitle file is on: the line mpv shows next to the line the file
   /// says should be up now, and how far off it is when they differ.
   Future<void> _syncProbe() async {
-    if (!mounted || _subPath == null || _cues.isEmpty || !_started || !_playing || _reopening) return;
+    if (_media3 || !mounted || _subPath == null || _cues.isEmpty || !_started || !_playing || _reopening) return;
     try {
       final tp = double.tryParse(await _player.getProperty('time-pos') ?? '');
       if (tp == null) return;
@@ -2564,7 +2859,9 @@ class _PlayerPageState extends State<_PlayerView> {
   /// after a while, carry on the search from there, one at a time, to the next that plays.
   void _watchStart(StreamSource src, int seq) {
     _startTimer?.cancel();
+    _watched = null;
     if (_userPicked) return;
+    _watched = (src, seq);
     _startTimer = Timer(const Duration(seconds: 25), () async {
       final session = _session, l = _playingLink, id = _loadId;
       // the best source was a dead link (a torrent is still finding peers, so it's left be)
@@ -2579,10 +2876,99 @@ class _PlayerPageState extends State<_PlayerView> {
     });
   }
 
+  // ── Stream info and the report card (player_info.dart, data/playback/playback_report.dart) ──
+
+  /// What is playing and how it went, for the Stream info menu; the newest is kept for Settings.
+  final _report = ValueNotifier<PlaybackReport?>(null);
+  final _reportClock = Stopwatch(); // since this video was opened
+  bool _reportFrame = false; // its first frame has shown
+
+  void _editReport(PlaybackReport Function(PlaybackReport r) change) {
+    final r = _report.value;
+    // (not once the page has gone: what was kept as it closed is the last word)
+    if (r == null || !mounted) return;
+    final next = change(r);
+    if (identical(next, r)) return;
+    _report.value = next;
+    unawaited(PlaybackReport.keep(next));
+  }
+
+  /// A new report, for [src] being opened now.
+  void _beginReport(StreamSource src) {
+    final l = _films ? _playingLink : null;
+    final addon = _pick?.stream.addon.name;
+    final ep = _ep;
+    _reportClock
+      ..reset()
+      ..start();
+    _reportFrame = false;
+    _report.value = PlaybackReport.begin(
+      title: ep == null ? widget.media.title : '${widget.media.title} · ${episodeLabel(ep.season, ep.number)}',
+      source: l?.source.name ?? addon ?? widget.server?.label ?? src.server,
+      link: _torrent != null
+          ? 'Torrent'
+          : (l != null ? [l.name, l.quality, ?l.format].where((x) => x.isNotEmpty).join(' · ') : [if (addon != null || widget.server != null) src.server, src.quality].where((x) => x.isNotEmpty).toSet().join(' · ')),
+      url: src.url,
+      // (a Media3 player that has handed one video to mpv plays the next ones on mpv too)
+      engine: !_media3 ? 'mpv' : (_player.mpvCore ? 'mpv-kept' : 'media3'),
+    );
+    unawaited(PlaybackReport.keep(_report.value!));
+    unawaited(PlaybackReport.device().then((caps) => _editReport((r) => r.withDevice(caps))));
+  }
+
+  void _reportFirstFrame() {
+    if (_reportFrame || _report.value == null) return; // (a seek shows a first frame too)
+    _reportFrame = true;
+    _editReport((r) => r.withFirstFrame(_reportClock.elapsedMilliseconds));
+    unawaited(_refreshReport());
+  }
+
+  /// mpv's own names for what the report shows, where the engine has no stats call (a desktop).
+  static const _reportProperties = [
+    'video-codec', 'video-params/w', 'video-params/h', 'video-params/gamma', 'video-bitrate', 'container-fps', 'hwdec-current',
+    'audio-codec-name', 'audio-params/samplerate', 'audio-params/hr-channels',
+    'current-tracks/audio/demux-channel-count', 'current-tracks/audio/demux-samplerate',
+  ];
+
+  /// Reads the player again for the report: the picture and the sound as the engine has them,
+  /// and the audio track and subtitle in use. Asked for when the first frame shows, and every
+  /// couple of seconds while Stream info is open.
+  Future<void> _refreshReport() async {
+    if (_report.value == null) return;
+    final media3 = _media3 && !_player.mpvCore;
+    Map<String, Object?> facts;
+    try {
+      facts = await _player.getStats();
+      if (!media3 && facts['video-params/w'] == null && _player.mpvCore && _player.playerType != 'exoplayer') {
+        facts = {
+          for (final name in _reportProperties) name: await _player.getProperty(name),
+          'dvSourceProfile': int.tryParse(await _player.getProperty('current-tracks/video/dolby-vision-profile') ?? ''),
+        };
+      }
+    } catch (_) {
+      facts = const {};
+    }
+    if (!mounted) return;
+    final audio = _audioNow;
+    final t = _activeSubTrack;
+    _editReport((r) {
+      r = media3 ? r.withMedia3(facts) : r.withMpv(facts);
+      if (audio != null) r = r.withAudio(language: _audioName(audio), codec: audio.codec, channels: audio.channels, sampleRate: audio.sampleRate);
+      return t == null
+          ? r.withSubtitle()
+          : r.withSubtitle(
+              name: t.release.isEmpty ? t.language : t.release,
+              language: t.language,
+              origin: t.provider == 'Built in' ? (_isBuiltIn(t.url) ? 'Inside the file' : 'A file in the torrent') : (t.translated ? '${t.provider}, translated' : t.provider),
+            );
+    });
+  }
+
   /// Everything plays through the local relay, which sends each host the headers it expects.
   Future<void> _playSource(StreamSource src, {Duration? at}) async {
     AudioFocus.claim(this, _player.pause);
     setState(() => _error = null);
+    _beginReport(src);
     final resume = at != null && at > const Duration(seconds: 5) ? at : null;
     if (resume != null) _holdAt(resume);
     _reopenTimer?.cancel();
@@ -2612,7 +2998,7 @@ class _PlayerPageState extends State<_PlayerView> {
       // a torrent can make the player wait on pieces still arriving: let it wait (2 min)
       // instead of giving up on the stream at 60 s
       await _player.setProperty('network-timeout', _torrent != null ? '120' : '60');
-      await _player.open(pz.Media(_playUrl, headers: src.headers, start: resume));
+      await _open(pz.Media(_playUrl, headers: src.headers, start: resume));
       return;
     }
     final proxy = StreamProxy.instance;
@@ -2630,14 +3016,14 @@ class _PlayerPageState extends State<_PlayerView> {
     });
     final url0 = pick == null ? src.url : variants[pick].url;
     _playUrl = url0;
-    final frag = await proxy.fragmentedStart(url0, 0).then((s) => s != null, onError: (Object _) => false);
+    final frag = !_nativeHlsSeek && await proxy.fragmentedStart(url0, 0).then((s) => s != null, onError: (Object _) => false);
     final tl = frag ? await proxy.timeline(url0).catchError((Object _) => null) : null;
     if (!mounted || _playUrl != url0 || seq != _openSeq) return;
     _timeline = tl;
     _fragmented = frag && tl == null;
     if (tl != null) {
       await _prepOpen();
-      await _player.open(pz.Media(tl, start: resume));
+      await _open(pz.Media(tl, start: resume));
       _watchTimeline(tl, seq);
     } else if (resume != null && frag) {
       // fMP4 can't start mid-way by seeking; open a playlist trimmed at that point
@@ -2649,36 +3035,38 @@ class _PlayerPageState extends State<_PlayerView> {
       _offset = start;
       await _prepOpen();
       try {
-        await _player.open(pz.Media(url, start: Duration(milliseconds: ((secs - start) * 1000).round())));
+        await _open(pz.Media(url, start: Duration(milliseconds: ((secs - start) * 1000).round())));
       } finally {
         _reopening = false;
       }
     } else {
       final url = await proxy.wrap(url0);
       await _prepOpen();
-      await _player.open(pz.Media(url, start: resume));
+      await _open(pz.Media(url, start: resume));
     }
   }
 
-  void _switch(String note, VoidCallback change) {
+  void _switch(String note, VoidCallback change, {Duration hold = const Duration(milliseconds: 2400)}) {
     setState(() {
       change();
       _note = note;
     });
     _noteTimer?.cancel();
-    _noteTimer = Timer(const Duration(milliseconds: 2400), () {
+    _noteTimer = Timer(hold, () {
       if (mounted) setState(() => _note = null);
     });
   }
 
   void _openPanel([_Tab? tab]) {
+    // On a TV each menu is a screen of its own, and Settings is three of them side by side
+    // (tv_menus.dart): asked for by itself, it opens on the first of the three.
+    if (tvMenus) tab ??= _Tab.quality;
     setState(() {
-      if (_panel && (tab == null || (tab == _tab && !(sideMenus && _panelList)))) {
+      if (_panel && (tab == null || tab == _tab)) {
         _panel = false;
       } else {
         _panel = true;
         if (tab != null) _tab = tab;
-        _panelList = tab == null;
       }
     });
     _poke();
@@ -2820,13 +3208,7 @@ class _PlayerPageState extends State<_PlayerView> {
     } else if (_sync) {
       setState(() => _sync = false);
     } else if (_panel) {
-      setState(() {
-        if (sideMenus && !_panelList) {
-          _panelList = true; // (a TV's side panel: from a menu back to the list of menus first)
-        } else {
-          _panel = false;
-        }
-      });
+      setState(() => _panel = false);
     } else if (_fullscreen) {
       _toggleFullscreen();
     } else if (widget.embedded) {
@@ -3284,10 +3666,12 @@ class _PlayerPageState extends State<_PlayerView> {
     _Tab.subtitles => _subOffset == 0 ? _subtitle : '$_subtitle · ${_subOffset > 0 ? '+' : ''}${_subOffset}s',
     _Tab.speed => _speedLabel(_speed),
     _Tab.more => [
-        if (!pz.Upscaler.chosen(AppSettings.upscaler.value).isOff) pz.Upscaler.chosen(AppSettings.upscaler.value).label,
+        if (!_media3 && !pz.Upscaler.chosen(AppSettings.upscaler.value).isOff) pz.Upscaler.chosen(AppSettings.upscaler.value).label,
+        if (_shape != PictureShape.fit) _shape.label,
         if (_zoom != 100) '$_zoom%',
         if (_sleepMinutes != null) 'Sleep',
       ].join(' · '),
+    _Tab.info => _report.value?.title ?? '',
   };
 
   @override
@@ -3304,17 +3688,26 @@ class _PlayerPageState extends State<_PlayerView> {
     final showInfo = !widget.embedded || widget.expanded;
     final dockH = (phone ? 112.0 : 118.0) + bottomInset;
     final barH = dockH + (showInfo ? (phone ? 96.0 : 124.0) : 0);
-    // (a TV's side panel takes the screen's height: the dock steps aside, as for the episodes)
-    _panelOverDock = _panel && (size.height < 520 || sideMenus);
+    // (a TV's menu takes the whole screen: the dock steps aside, as for the episodes)
+    _panelOverDock = _panel && (size.height < 520 || tvMenus);
     if (_mpvSubtitles && size.height > 0) {
       final rest = SubtitleStyle.basePosition;
       // bottom subtitles clear the controls while they show; top ones stay put
       _syncSubPos(rest);
     }
     // the whole width of a phone held upright; a phone on its side keeps the picture in view
-    final syncW = size.width < 640 ? size.width : (phone ? math.min(500.0, size.width * .62) : math.min(540.0, size.width * .5));
-    final episodesW = size.width < 640 ? size.width : (phone ? math.min(460.0, size.width * .6) : math.min(560.0, math.max(400.0, size.width * .5)));
+    // (on a TV both are the whole screen, like the menus: tv_menus.dart)
+    final syncW = tvMenus || size.width < 640 ? size.width : (phone ? math.min(500.0, size.width * .62) : math.min(540.0, size.width * .5));
+    final episodesW = tvMenus || size.width < 640 ? size.width : (phone ? math.min(460.0, size.width * .6) : math.min(560.0, math.max(400.0, size.width * .5)));
 
+    // Stretch follows the picture's box (a phone turned, a window resized): looked at once laid out
+    if (_shape == PictureShape.stretch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final box = (_videoKey.currentContext?.findRenderObject() as RenderBox?)?.size;
+        if (box != null && box != _shapeBox) unawaited(_applyShape());
+      });
+    }
     final dpadNow = InputModeTracker.isKeyboardMode(context);
     // a menu opened or closed since the last build: focus follows it (after this frame), and
     // back on the controls their idle clock starts over
@@ -3544,6 +3937,26 @@ class _PlayerPageState extends State<_PlayerView> {
                               onSettings: _openPanel,
                               onEpisodes: _store == null ? null : _toggleEpisodes,
                               onNext: _store == null && widget.anime == null ? null : _playNext,
+                              shapeLabel: _shape == PictureShape.fit ? null : _shape.label,
+                              onShape: () {
+                                _setShape(_shape.next, note: true);
+                                _poke(); // (the controls stay up to read what it changed to)
+                              },
+                              landscape: size.width > size.height,
+                              onRotate: _turnable ? _turn : null,
+                            )
+                          else if (tvMenus)
+                            TvDock(
+                              paused: !_playing,
+                              subtitlesOn: _subtitle != 'Off',
+                              onPause: _togglePause,
+                              onSubtitles: () => _openPanel(_Tab.subtitles),
+                              onAudio: () => _openPanel(_Tab.audio),
+                              onSources: () => _openPanel(_Tab.sources),
+                              onSettings: _openPanel,
+                              onInfo: () => _openPanel(_Tab.info),
+                              onEpisodes: _store == null ? null : _toggleEpisodes,
+                              onNext: _store == null && widget.anime == null ? null : _playNext,
                             )
                           else
                             PlayerDock(
@@ -3588,12 +4001,9 @@ class _PlayerPageState extends State<_PlayerView> {
                         dockH: dockH,
                         onTab: (t) => setState(() => _tab = t),
                         body: _body,
-                        // (on a TV: the side panel's list, what it shows over it, and the way in and out)
-                        list: _panelList,
-                        onList: (v) => setState(() => _panelList = v),
+                        // (a TV's screens: any menu's contents, and what each has in use)
+                        bodyOf: _pane,
                         value: _value,
-                        heading: widget.media.title,
-                        subheading: _ep == null ? null : [episodeLabel(_ep!.season, _ep!.number), ?_ep!.name].join('  ·  '),
                       ),
                     ),
                   ),
@@ -3605,7 +4015,7 @@ class _PlayerPageState extends State<_PlayerView> {
                   top: 0,
                   bottom: 0,
                   width: syncW,
-                  right: _sync ? 0 : -syncW,
+                  right: _sync || tvMenus ? 0 : -syncW,
                   child: IgnorePointer(
                     ignoring: !_sync,
                     child: AnimatedOpacity(
@@ -3645,7 +4055,7 @@ class _PlayerPageState extends State<_PlayerView> {
                     top: 0,
                     bottom: 0,
                     width: episodesW,
-                    right: _episodes ? 0 : -episodesW,
+                    right: _episodes || tvMenus ? 0 : -episodesW,
                     child: IgnorePointer(
                       ignoring: !_episodes,
                       child: AnimatedOpacity(
@@ -3852,7 +4262,10 @@ class _PlayerPageState extends State<_PlayerView> {
     );
   }
 
-  Widget _body(PanelFit fit) => switch (_tab) {
+  Widget _body(PanelFit fit) => _pane(_tab, fit);
+
+  /// What [tab]'s menu holds.
+  Widget _pane(_Tab tab, PanelFit fit) => switch (tab) {
     _Tab.sources when _films && _session != null => _filmSourcesPane(_session!),
     _Tab.sources => SourcesPane(
       now: _pick == null
@@ -3959,8 +4372,9 @@ class _PlayerPageState extends State<_PlayerView> {
         MenuChoice<String>(
           title: 'Channels',
           detail: 'Stereo folds surround down for headphones and TV speakers',
-          value: AppSettings.audioChannels.value,
-          options: const [('original', 'Original'), ('surround51', '5.1'), ('stereo', 'Stereo')],
+          // (Media3 has no 5.1 limit: it plays that choice as Original)
+          value: _media3 && AppSettings.audioChannels.value == 'surround51' ? 'original' : AppSettings.audioChannels.value,
+          options: [const ('original', 'Original'), if (!_media3) const ('surround51', '5.1'), const ('stereo', 'Stereo')],
           onChanged: AppSettings.audioChannels.set,
         ),
         MenuToggle(
@@ -4008,6 +4422,13 @@ class _PlayerPageState extends State<_PlayerView> {
     _Tab.more => MorePane(
       sections: [
         ('PICTURE', [
+          MenuChoice<PictureShape>(
+            title: 'Aspect ratio',
+            detail: 'Fill crops it to the screen, Stretch pulls it to it. 16:9, 4:3 and 21:9 last until the player closes',
+            value: _shape,
+            options: [for (final s in PictureShape.values) (s, s.label)],
+            onChanged: _setShape,
+          ),
           MenuStepper(
             title: 'Zoom',
             detail: 'Crop the black bars, or shrink the picture',
@@ -4017,18 +4438,25 @@ class _PlayerPageState extends State<_PlayerView> {
             onPlus: () => _setZoom(_zoom + 5),
             onReset: () => _setZoom(100),
           ),
-          MenuToggle(
-            title: 'Ambient lighting',
-            detail: 'Fills the black bars with a soft glow of the picture',
-            value: AppSettings.ambientLight.value,
-            onChanged: AppSettings.ambientLight.set,
-          ),
+          // (ambient lighting and upscaling are mpv shaders: not offered on a Media3 player)
+          if (!_media3)
+            MenuToggle(
+              title: 'Ambient lighting',
+              detail: 'Fills the black bars with a soft glow of the picture',
+              value: AppSettings.ambientLight.value,
+              onChanged: (on) {
+                AppSettings.ambientLight.set(on);
+                // (it glows in the black bars of a picture shown whole)
+                if (on && _shape != PictureShape.fit) _setShape(PictureShape.fit);
+              },
+            ),
         ]),
-        ('UPSCALING', [
-          // (on a TV only the ones its graphics chip runs smoothly: see Upscaler.offered)
-          for (final u in pz.Upscaler.offered)
-            MenuRow(title: u.label, detail: u.detail, selected: pz.Upscaler.chosen(AppSettings.upscaler.value).id == u.id, start: false, onTap: () => AppSettings.upscaler.set(u.id)),
-        ]),
+        if (!_media3)
+          ('UPSCALING', [
+            // (on a TV only the ones its graphics chip runs smoothly: see Upscaler.offered)
+            for (final u in pz.Upscaler.offered)
+              MenuRow(title: u.label, detail: u.detail, selected: pz.Upscaler.chosen(AppSettings.upscaler.value).id == u.id, start: false, onTap: () => AppSettings.upscaler.set(u.id)),
+          ]),
         if (!widget.party)
           ('SLEEP TIMER', [
             MenuChoice<int>(
@@ -4074,7 +4502,10 @@ class _PlayerPageState extends State<_PlayerView> {
           if (_canCopyLink)
             MenuRow(
               title: 'Copy link',
-              detail: _linkIsLocal ? 'Plays on this device only, while VyseTV stays open' : 'The stream address, to paste into another app',
+              // (a portal's address has its sign-in in it: said here, before it is pasted somewhere)
+              detail: _linkIsLocal
+                  ? 'Plays on this device only, while VyseTV stays open'
+                  : (widget.server is IptvPlayback ? "The stream address · it holds your portal's sign-in" : 'The stream address, to paste into another app'),
               onTap: _copyLink,
             ),
           // not in a watch party: another app would be handed the room's link
@@ -4082,8 +4513,19 @@ class _PlayerPageState extends State<_PlayerView> {
             for (final p in _externals)
               MenuRow(title: 'Open in ${p.name}', detail: 'From where you are · VyseTV pauses', chevron: true, onTap: () => _openExternal(p)),
         ]),
+        ('THIS VIDEO', [
+          MenuRow(
+            title: 'Stream info',
+            detail: 'What is playing, and a card for reporting a problem',
+            chevron: true,
+            start: false,
+            onTap: () => setState(() => _tab = _Tab.info),
+          ),
+        ]),
       ],
     ),
+    // (in the card it is reached from More, and goes back to it; a TV has a key for it)
+    _Tab.info => InfoPane(report: _report, onRefresh: () => unawaited(_refreshReport()), onBack: tvMenus ? null : () => setState(() => _tab = _Tab.more)),
   };
 }
 
@@ -4764,7 +5206,8 @@ class _MiniNext extends StatefulWidget {
 }
 
 class _MiniNextState extends State<_MiniNext> with SingleTickerProviderStateMixin {
-  late final _timer = AnimationController(vsync: this, duration: const Duration(seconds: 3));
+  // a clock, not a flourish: it keeps its length where animations are cut short (core/lean.dart)
+  late final _timer = AnimationController(vsync: this, duration: const Duration(seconds: 3), animationBehavior: AnimationBehavior.preserve);
 
   @override
   void initState() {

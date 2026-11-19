@@ -142,6 +142,14 @@ class AppSettings {
   static final audioChannels = Setting<String>('device.channels', 'original'); // original, surround51, stereo
   static final hdrOutput = Setting<bool>('device.hdr', true);
   static final matchRefreshRate = Setting<bool>('device.matchRefresh', false);
+  // The video engine on an Android TV: '' (not chosen: Media3), 'media3' or 'mpv'. Read through
+  // PlayerEngine (data/playback/player_engine.dart).
+  static final playerEngine = Setting<String>('device.engine', '');
+  // Fewer animations and less paint, for a TV's chip: '' (not chosen: on for an Android TV),
+  // 'on' or 'off'. Read through Lean (core/lean.dart).
+  static final leanMotion = Setting<String>('device.lean', '');
+  // The picture's shape on this screen: 'fit', 'fill' or 'stretch' (screens/player/picture_shape.dart).
+  static final pictureShape = Setting<String>('device.shape', 'fit');
   static final volumeLevelling = Setting<bool>('play.levelling', false);
   static final upscaler = Setting<String>('play.upscaler', 'none');
   static final ambientLight = Setting<bool>('play.ambient', false);
@@ -168,7 +176,7 @@ class AppSettings {
         subtitleLanguage, subtitleSize, subtitleColor,
         subtitleBackground, subtitleFont, subtitleBold, subtitleItalic, subtitleBackColor, subtitleOutline, subtitleOutlineColor,
         subtitleShadow, subtitleShadowColor, subtitleBlur, subtitleSpacing, subtitleTop, subtitleLift, subtitleOnPicture, subtitleAss,
-        audioDelayMs, audioPassthrough, audioChannels, hdrOutput, matchRefreshRate, volumeLevelling,
+        audioDelayMs, audioPassthrough, audioChannels, hdrOutput, matchRefreshRate, playerEngine, leanMotion, pictureShape, volumeLevelling,
         upscaler, ambientLight, partyLibrary, musicAutoplay, debridProvider, debridOn, updateAuto, updateSkipped, myListGrid, myListSort, partyMembers, partySounds, partyMuted, animeAdult, animeAudio,
       ];
 

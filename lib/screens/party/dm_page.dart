@@ -685,7 +685,7 @@ class _Bubble extends StatelessWidget {
             onLongPressStart: (d) => onMenu(d.globalPosition),
             child: Tooltip(
               message: _clock(m.created),
-              waitDuration: const Duration(milliseconds: 600),
+              waitDuration: tooltipWait(const Duration(milliseconds: 600)),
               child: Container(
                 constraints: BoxConstraints(maxWidth: maxW),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),

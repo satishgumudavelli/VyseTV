@@ -15,6 +15,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.SurfaceView
@@ -113,7 +114,6 @@ class ExoPlayerCore(private val activity: Activity) :
 
     private const val WATCHDOG_CHECK_INTERVAL_MS = 1000L
     private const val WATCHDOG_TIMEOUT_MS = 8000L
-    private const val DECODER_HANG_TIMEOUT_MS = 5000L
     private const val MAX_AUDIO_RECOVERY_ATTEMPTS = 2
     private const val MIN_PLAYBACK_SPEED = 0.25f
     private const val MAX_PLAYBACK_SPEED = 8f
@@ -123,6 +123,21 @@ class ExoPlayerCore(private val activity: Activity) :
     /** Fallback for stacks that only stringify the status instead of raising
      *  [HttpDataSource.InvalidResponseCodeException]. */
     private val RESPONSE_CODE_PATTERN = Regex("""\bResponse code: (\d{3})\b""")
+
+    // VyseTV: for the report card's account of a hand-over (see scrubbed)
+    private val ADDRESS_PATTERN = Regex("""[a-zA-Z][a-zA-Z0-9+.-]*://[^\s,;)\]}"']+""")
+    private const val MAX_DETAIL_CHARS = 400
+
+    /** VyseTV: the part of getStats a report card shows (see reportSnapshot). */
+    private val REPORT_KEYS = setOf(
+      "videoCodec", "videoMimeType", "videoWidth", "videoHeight", "videoFps", "videoBitrate", "videoDecoderName",
+      "videoRenderedFrames", "videoDroppedFrames", "colorTransfer", "hdrStaticInfo",
+      "audioCodec", "audioMimeType", "audioSampleRate", "audioChannels", "audioBitrate", "audioLanguage",
+      "audioDecoderName", "audioOutputEncoding", "audioLastSinkError", "tunneledPlayback",
+      "bufferedPositionMs", "currentPositionMs", "totalBufferedDurationMs", "playbackState",
+      "firstFrameMs", "sinceOpenMs", "rebuffers", "dvAutoMode", "dvAutoReason",
+      "dvConversionActive", "dvConversionMode", "dvConversionDebugMode", "dvSourceProfile", "dvPlaybackPath", "dvPlaybackReason"
+    )
 
     /** Per-frame "video is at X" logcat stream (tag AssFrameCb) for diagnosing
      *  ASS subtitle lag against the libass pipeline's render/swap lines. */
@@ -199,6 +214,11 @@ class ExoPlayerCore(private val activity: Activity) :
   private var lastAssMargins: IntArray? = null
   private var overlayLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
   private var lastVideoSize: VideoSize? = null
+
+  // VyseTV: a shape the viewer forced on the picture (16:9, 4:3, 21:9), width over height, or 0
+  // for the video's own. Applied as the pixel shape it comes to, so the picture's frame, the
+  // subtitle views and the libass margins all follow it (see shapedPixelRatio).
+  @Volatile private var aspectOverride: Float = 0f
   private var exoPlayer: ExoPlayer? = null
   private var renderersFactory: VyseRenderersFactory? = null
   private val subtitleDelayUs = AtomicLong(0L)
@@ -335,6 +355,15 @@ class ExoPlayerCore(private val activity: Activity) :
   private var videoDecoderRecoveryTotalAttempts: Int = 0
   private var videoDecoderRecoveryPositionMs: Long? = null
   private var firstFrameRendered: Boolean = false
+
+  // VyseTV: for the report card. When this video was opened, how long its first frame took,
+  // and how often it stopped to load again afterwards (a seek's own loading is not one).
+  private var openedAtMs: Long = 0L
+  private var firstFrameMs: Long? = null
+  private var rebufferCount: Int = 0
+  private var seekLoading: Boolean = false
+  private var lastAudioFormat: Format? = null
+  private var dvAutoDecision: DoviBridge.DvAutoDecision? = null
   var delegate: ExoPlayerDelegate? = null
   var debugLoggingEnabled: Boolean = false
   var isInitialized: Boolean = false
@@ -491,14 +520,66 @@ class ExoPlayerCore(private val activity: Activity) :
     delegate?.onEvent("end-file", mapOf("reason" to "eof"))
   }
 
+  // VyseTV: what the last hand-over to mpv was for, read by the plugin as it takes over so the
+  // app can say which: "audio", "video", "stream" (the network, the server or the address),
+  // "format" (the container), "stuck" or "error". Every hand-over used to read "Media3 can't
+  // play this one", a network timeout included, and a tester's report could not tell them apart.
+  @Volatile
+  var fallbackKind: String = "error"
+    private set
+
+  // VyseTV: the same hand-over in full, for the report card (the app's Stream info): the error's
+  // own name and what caused it, or what a watchdog measured. Never an address: see scrubbed().
+  @Volatile
+  var fallbackDetail: String = ""
+    private set
+
+  /** VyseTV: [text] with every address cut down to its host (links carry tokens and sign-ins). */
+  private fun scrubbed(text: String): String = ADDRESS_PATTERN.replace(text) { m ->
+    runCatching { Uri.parse(m.value).host }.getOrNull()?.takeIf { it.isNotEmpty() } ?: "(address)"
+  }.take(MAX_DETAIL_CHARS)
+
+  /** VyseTV: which part of playing an error is about, by media3's own error code ranges. */
+  private fun fallbackKindFor(error: PlaybackException, rendererMimeType: String?): String = when (error.errorCode) {
+    in 2000..2999 -> "stream"
+    in 3000..3999 -> "format"
+    in 4000..4999 -> when {
+      rendererMimeType?.startsWith("video/") == true -> "video"
+      rendererMimeType?.startsWith("audio/") == true -> "audio"
+      else -> "error"
+    }
+    in 5000..5999 -> "audio"
+    else -> "error"
+  }
+
+  /**
+   * VyseTV: an error for the report card: its name and number, the server's status when it is
+   * one, media3's own words, and what lies at the bottom of it (the timeout, the codec's error).
+   */
+  private fun playerErrorDetail(error: PlaybackException, httpStatus: Int?): String {
+    var root: Throwable? = error.cause
+    while (root?.cause != null) root = root.cause
+    val rootText = root?.let { "${it.javaClass.name.substringAfterLast('.')}: ${it.message}" }
+    return listOfNotNull(
+      "${PlaybackException.getErrorCodeName(error.errorCode)} (${error.errorCode})",
+      httpStatus?.let { "HTTP $it" },
+      error.message?.takeIf { it.isNotBlank() },
+      rootText
+    ).joinToString(" · ")
+  }
+
   private fun requestFormatFallback(
     mediaGeneration: Int,
     uri: String,
     positionMs: Long,
     playWhenReady: Boolean,
-    errorMessage: String
+    errorMessage: String,
+    kind: String = "error", // VyseTV
+    detail: String = errorMessage // VyseTV
   ): Boolean {
     if (mediaGeneration != currentMediaGeneration) return true
+    fallbackKind = kind
+    fallbackDetail = scrubbed(detail)
     val handled = delegate?.onFormatUnsupported(
       mediaGeneration = mediaGeneration,
       uri = uri,
@@ -570,6 +651,7 @@ class ExoPlayerCore(private val activity: Activity) :
     if (override != null) return override
 
     val decision = DoviBridge.getConversionDecision(activity)
+    dvAutoDecision = decision // VyseTV: kept for the report card
     emitLog("info", "dv-auto", decision.logMessage())
     return decision.mode
   }
@@ -728,6 +810,8 @@ class ExoPlayerCore(private val activity: Activity) :
         httpFactory = DefaultHttpDataSource.Factory()
           .setConnectTimeoutMs(15_000)
           .setReadTimeoutMs(10_000)
+          // VyseTV: stream hosts and TV providers redirect between http and https
+          .setAllowCrossProtocolRedirects(true)
       }
       httpDataSourceFactory = httpFactory
       dataSourceFactory = DefaultDataSource.Factory(activity, httpFactory)
@@ -1168,10 +1252,13 @@ class ExoPlayerCore(private val activity: Activity) :
 
     when (state) {
       Player.STATE_BUFFERING -> {
+        // VyseTV: a stop to load more, once the picture has shown and not for a seek
+        if (firstFrameMs != null && !seekLoading) rebufferCount++
         delegate?.onPropertyChange("paused-for-cache", true)
         armBufferingStallWatchdog()
       }
       Player.STATE_READY -> {
+        seekLoading = false // VyseTV
         cancelBufferingStallWatchdog()
         // Restore start position if it was lost during track reselection
         // (e.g. tunneling state change in onTracksChanged triggers renderer teardown)
@@ -1253,6 +1340,7 @@ class ExoPlayerCore(private val activity: Activity) :
     }
     if (audioGroup != null) {
       val af = audioGroup.mediaTrackGroup.getFormat(0)
+      lastAudioFormat = af // VyseTV
       emitLog("info", "tracks", "Audio: ${formatAudioSummary(af)}")
       if (af.sampleMimeType == MimeTypes.AUDIO_TRUEHD) {
         updateAudioDecoderPolicy("tracks changed", af)
@@ -1345,7 +1433,9 @@ class ExoPlayerCore(private val activity: Activity) :
         uri = uri,
         positionMs = effectivePosition,
         playWhenReady = exoPlayer?.playWhenReady ?: true,
-        errorMessage = error.message ?: "Unknown error"
+        errorMessage = error.message ?: "Unknown error",
+        kind = fallbackKindFor(error, rendererFormat?.sampleMimeType), // VyseTV
+        detail = playerErrorDetail(error, httpStatus)
       )
       return
     }
@@ -1759,11 +1849,42 @@ class ExoPlayerCore(private val activity: Activity) :
     updateSurfaceViewSize(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio)
   }
 
+  /** VyseTV: the pixel shape that shows a [videoWidth] by [videoHeight] picture at [aspectOverride]. */
+  private fun shapedPixelRatio(videoWidth: Int, videoHeight: Int, pixelRatio: Float): Float =
+    if (aspectOverride > 0f && videoWidth > 0 && videoHeight > 0) aspectOverride * videoHeight / videoWidth else pixelRatio
+
+  /**
+   * VyseTV: the picture's shape the viewer chose, as mpv's `video-aspect-override` writes it
+   * ("16:9", "1.3333"; "no", "-1" or "0" for the video's own). The plugin passes it on.
+   */
+  fun setAspectOverride(value: String) {
+    if (disposing) return
+    val ratio = parseAspect(value)
+    if (ratio == aspectOverride) return
+    aspectOverride = ratio
+    lastVideoSize?.let { vs ->
+      if (vs.width > 0 && vs.height > 0) updateSurfaceViewSize(vs.width, vs.height, vs.pixelWidthHeightRatio)
+    }
+  }
+
+  private fun parseAspect(value: String): Float {
+    val v = value.trim()
+    val parts = v.split(':')
+    val ratio = if (parts.size == 2) {
+      val w = parts[0].toFloatOrNull()
+      val h = parts[1].toFloatOrNull()
+      if (w != null && h != null && h > 0f) w / h else 0f
+    } else {
+      v.toFloatOrNull() ?: 0f
+    }
+    return if (ratio.isFinite() && ratio > 0.1f && ratio < 10f) ratio else 0f
+  }
+
   private fun updateSurfaceViewSize(videoWidth: Int, videoHeight: Int, pixelRatio: Float) {
     if (disposing) return
     if (videoWidth == 0 || videoHeight == 0) return
 
-    val videoAspect = (videoWidth * pixelRatio) / videoHeight
+    val videoAspect = (videoWidth * shapedPixelRatio(videoWidth, videoHeight, pixelRatio)) / videoHeight
     activity.runOnUiThread {
       videoAspectContainer?.setAspectRatio(videoAspect)
     }
@@ -1771,9 +1892,10 @@ class ExoPlayerCore(private val activity: Activity) :
     updateAssMargins()
   }
 
-  private fun updateSubtitleViewSize(videoWidth: Int, videoHeight: Int, pixelRatio: Float) {
+  private fun updateSubtitleViewSize(videoWidth: Int, videoHeight: Int, ownPixelRatio: Float) {
     if (disposing) return
     if (videoWidth == 0 || videoHeight == 0) return
+    val pixelRatio = shapedPixelRatio(videoWidth, videoHeight, ownPixelRatio) // VyseTV
 
     val contentView = activity.findViewById<ViewGroup>(android.R.id.content)
     val containerWidth = surfaceContainer?.width?.takeIf { it > 0 } ?: contentView.width
@@ -1846,7 +1968,7 @@ class ExoPlayerCore(private val activity: Activity) :
       val containerHeight = surfaceContainer?.height ?: 0
       if (containerWidth == 0 || containerHeight == 0) return@runOnUiThread
 
-      val videoAspect = (vs.width * vs.pixelWidthHeightRatio) / vs.height
+      val videoAspect = (vs.width * shapedPixelRatio(vs.width, vs.height, vs.pixelWidthHeightRatio)) / vs.height
       val containerAspect = containerWidth.toFloat() / containerHeight
       val resizeMode = videoAspectContainer?.resizeMode ?: AspectRatioFrameLayout.RESIZE_MODE_FIT
 
@@ -2849,16 +2971,39 @@ class ExoPlayerCore(private val activity: Activity) :
     val uri = currentMediaUri ?: return
     val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
     val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
-    if (!hasAnyVideoGroup || hasSelectedVideo) return
+    if (hasAnyVideoGroup && !hasSelectedVideo) {
+      if (retryWithDvConversion("video track not selected")) return
+      emitLog("warn", "fallback", "Video track present but not selected (unsupported codec)")
+      // VyseTV: the codecs go with the message, for the app to name
+      val videoCodecs = tracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }.joinToString { it.getTrackFormat(0).sampleMimeType ?: "?" }
+      requestFormatFallback(
+        mediaGeneration = mediaGeneration,
+        uri = uri,
+        positionMs = effectivePosition,
+        playWhenReady = exoPlayer?.playWhenReady ?: true,
+        errorMessage = "Video track present but no decoder available ($videoCodecs)",
+        kind = "video"
+      )
+      return
+    }
 
-    if (retryWithDvConversion("video track not selected")) return
-    emitLog("warn", "fallback", "Video track present but not selected (unsupported codec)")
+    // VyseTV: the same for the sound. A file whose every audio track is one that nothing here
+    // can decode plays on in silence: no error is raised, so nothing handed it over (testers:
+    // "no audio" on TrueHD and DTS-HD remuxes). mpv decodes them all.
+    // A track media3 would still try counts as playable (isSupported(true)): one that only
+    // "exceeds capabilities" (more channels than the TV's decoder declares) is picked by the
+    // selector and usually plays, and must not be taken away from it.
+    val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+    if (audioGroups.isEmpty() || audioGroups.any { it.isSupported(true) }) return
+    val codecs = audioGroups.joinToString { it.getTrackFormat(0).sampleMimeType ?: "?" }
+    emitLog("warn", "fallback", "Audio present but no track can be decoded ($codecs)")
     requestFormatFallback(
       mediaGeneration = mediaGeneration,
       uri = uri,
       positionMs = effectivePosition,
       playWhenReady = exoPlayer?.playWhenReady ?: true,
-      errorMessage = "Video track present but no decoder available"
+      errorMessage = "Audio track present but no decoder available ($codecs)",
+      kind = "audio"
     )
   }
 
@@ -3022,6 +3167,7 @@ class ExoPlayerCore(private val activity: Activity) :
       val mediaGeneration = mediaGenerationAt(eventTime) ?: return
       if (mediaGeneration != currentMediaGeneration) return
       hasRenderedVideoFrameForMedia = true
+      if (firstFrameMs == null) firstFrameMs = SystemClock.elapsedRealtime() - openedAtMs // VyseTV
       if (claimPlaybackOutputReady()) {
         emitLog("debug", "decoder-hang", "First frame rendered — decoder OK")
         logNativeDvFirstFrameIfNeeded()
@@ -3041,38 +3187,72 @@ class ExoPlayerCore(private val activity: Activity) :
     }
   }
 
+  // VyseTV: looked at every second, and the five seconds count only while the decoder has input
+  // and media waiting behind it (see DecoderHangPolicy). It was one look five seconds after the
+  // decoder was created, which a host slow to send the first frames could not pass.
   private fun startDecoderHangCheck(decoderName: String, mediaGeneration: Int) {
     cancelDecoderHangCheck()
     if (mediaGeneration != currentMediaGeneration || currentMediaUri == null) return
-    decoderHangRunnable = Runnable {
-      if (mediaGeneration != currentMediaGeneration) return@Runnable
-      if (firstFrameRendered) return@Runnable
-      val uri = currentMediaUri ?: return@Runnable
-      val player = exoPlayer ?: return@Runnable
+    var fedSinceMs = 0L // when the decoder last began to have what it needs; 0: it does not
+    val check = object : Runnable {
+      override fun run() {
+        if (decoderHangRunnable !== this) return
+        if (mediaGeneration != currentMediaGeneration || firstFrameRendered) {
+          decoderHangRunnable = null
+          return
+        }
+        val uri = currentMediaUri
+        val player = exoPlayer
+        if (uri == null || player == null) {
+          decoderHangRunnable = null
+          return
+        }
 
-      // Confirm via DecoderCounters: input queued but no output produced
-      val counters = player.videoDecoderCounters
-      val inputQueued = counters?.queuedInputBufferCount ?: 0
-      val outputTotal = (counters?.renderedOutputBufferCount ?: 0) +
-        (counters?.skippedOutputBufferCount ?: 0) +
-        (counters?.droppedBufferCount ?: 0)
+        // Confirm via DecoderCounters: input queued but no output produced
+        val counters = player.videoDecoderCounters
+        val inputQueued = counters?.queuedInputBufferCount ?: 0
+        val outputTotal = (counters?.renderedOutputBufferCount ?: 0) +
+          (counters?.skippedOutputBufferCount ?: 0) +
+          (counters?.droppedBufferCount ?: 0)
+        val bufferedAheadMs = player.totalBufferedDuration
+        val now = SystemClock.elapsedRealtime()
+        if (!DecoderHangPolicy.isFed(inputQueued, bufferedAheadMs)) {
+          fedSinceMs = 0L
+        } else if (fedSinceMs == 0L) {
+          fedSinceMs = now
+        }
+        val fedForMs = if (fedSinceMs == 0L) 0L else now - fedSinceMs
 
-      if (inputQueued > 0 && outputTotal == 0) {
-        emitLog("warn", "fallback", "Decoder hang: $decoderName queued $inputQueued buffers, 0 output after ${DECODER_HANG_TIMEOUT_MS}ms")
-        stopFrameWatchdog()
-        cancelDecoderHangCheck()
-        if (retryWithDvConversion("decoder hang: $decoderName")) return@Runnable
-        if (retryVideoDecoderInPlace("decoder hang: $decoderName")) return@Runnable
-        requestFormatFallback(
-          mediaGeneration = mediaGeneration,
-          uri = uri,
-          positionMs = effectivePosition,
-          playWhenReady = player.playWhenReady,
-          errorMessage = "Decoder hang: $decoderName accepted input but produced no output"
-        )
+        when (DecoderHangPolicy.evaluate(fedForMs, inputQueued, outputTotal, bufferedAheadMs)) {
+          DecoderHangPolicy.Verdict.DECODING -> decoderHangRunnable = null
+          DecoderHangPolicy.Verdict.STARVED,
+          DecoderHangPolicy.Verdict.WAITING -> handler.postDelayed(this, DecoderHangPolicy.CHECK_INTERVAL_MS)
+          DecoderHangPolicy.Verdict.HUNG -> {
+            emitLog(
+              "warn",
+              "fallback",
+              "Decoder hang: $decoderName queued $inputQueued buffers, 0 output after ${fedForMs}ms with ${bufferedAheadMs}ms buffered"
+            )
+            stopFrameWatchdog()
+            cancelDecoderHangCheck()
+            if (retryWithDvConversion("decoder hang: $decoderName")) return
+            if (retryVideoDecoderInPlace("decoder hang: $decoderName")) return
+            requestFormatFallback(
+              mediaGeneration = mediaGeneration,
+              uri = uri,
+              positionMs = effectivePosition,
+              playWhenReady = player.playWhenReady,
+              errorMessage = "Decoder hang: $decoderName accepted input but produced no output",
+              kind = "video", // VyseTV
+              detail = "Decoder hang: $decoderName took $inputQueued frames and showed none in ${fedForMs}ms, " +
+                "with ${bufferedAheadMs}ms of the video waiting"
+            )
+          }
+        }
       }
     }
-    handler.postDelayed(decoderHangRunnable!!, DECODER_HANG_TIMEOUT_MS)
+    decoderHangRunnable = check
+    handler.postDelayed(check, DecoderHangPolicy.CHECK_INTERVAL_MS)
   }
 
   private fun cancelDecoderHangCheck() {
@@ -3133,7 +3313,8 @@ class ExoPlayerCore(private val activity: Activity) :
             uri = uri,
             positionMs = player.currentPosition,
             playWhenReady = player.playWhenReady,
-            errorMessage = "Video track present but no decoder available"
+            errorMessage = "Video track present but no decoder available",
+            kind = "video" // VyseTV
           )
           return
         }
@@ -3150,7 +3331,9 @@ class ExoPlayerCore(private val activity: Activity) :
             uri = uri,
             positionMs = player.currentPosition,
             playWhenReady = player.playWhenReady,
-            errorMessage = "Black screen detected: 0 video frames rendered after ${elapsed}ms"
+            errorMessage = "Black screen detected: 0 video frames rendered after ${elapsed}ms",
+            kind = "video", // VyseTV
+            detail = "Black screen: playing for ${elapsed}ms with no new frame from ${decoderInitName ?: "the decoder"}"
           )
           return
         }
@@ -3388,7 +3571,10 @@ class ExoPlayerCore(private val activity: Activity) :
       // the beginning. Every other fallback path hands over the tracked position for the same reason.
       positionMs = maxOf(positionMs, effectivePosition),
       playWhenReady = playWhenReady,
-      errorMessage = "Playback stalled while buffering for ${stalledMs}ms"
+      errorMessage = "Playback stalled while buffering for ${stalledMs}ms",
+      kind = "stuck", // VyseTV
+      detail = "Stuck buffering for ${stalledMs}ms with ${player.bufferedPosition - positionMs}ms of the video waiting" +
+        (sinkError?.let { " · $it" } ?: "")
     )
   }
 
@@ -3435,6 +3621,12 @@ class ExoPlayerCore(private val activity: Activity) :
     loggedDirectAudioRecoveryBlocks.clear()
     currentVideoFormat = null
     firstFrameRendered = false
+    // VyseTV (the report card's clock and counts start with the video)
+    openedAtMs = SystemClock.elapsedRealtime()
+    firstFrameMs = null
+    rebufferCount = 0
+    seekLoading = false
+    lastAudioFormat = null
     hasRenderedVideoFrameForMedia = false
     lastRenderedFrameCount = -1
     lastRenderedFrameChangeMs = System.currentTimeMillis()
@@ -3819,6 +4011,7 @@ class ExoPlayerCore(private val activity: Activity) :
     // from open/reload recovery re-seek back over an early seek near zero once
     // ExoPlayer reports STATE_READY.
     pendingStartPositionMs = 0L
+    seekLoading = true // VyseTV: the loading that follows is the seek's, not a rebuffer
     player.seekTo(clampedPositionMs)
     lastPosition = clampedPositionMs
     lastKnownGoodPositionMs = clampedPositionMs
@@ -3919,7 +4112,9 @@ class ExoPlayerCore(private val activity: Activity) :
     val player = exoPlayer
     val mediaUri = currentMediaUri
     if (select && player != null && mediaUri != null && !currentMediaIsLive) {
-      if (isNew) {
+      // VyseTV: preparing again with the files attached, for a new file and for one that is
+      // attached but has no track (below).
+      fun prepareAgain() {
         val savedPosition = player.currentPosition
         val savedPlayWhenReady = player.playWhenReady
 
@@ -3941,6 +4136,9 @@ class ExoPlayerCore(private val activity: Activity) :
         // Same-state source replacement: media3 reports no change when the player was already
         // buffering, so arm here or this window keeps the previous one's watchdog and verdict.
         armBufferingStallWatchdog()
+      }
+      if (isNew) {
+        prepareAgain()
       } else {
         // Already attached — select the existing track via override. The
         // reported id carries media3's merge prefixes, so compare the tag.
@@ -3949,6 +4147,11 @@ class ExoPlayerCore(private val activity: Activity) :
           ?.key
         if (trackId != null) {
           selectSubtitleTrack(trackId)
+        } else {
+          // VyseTV: attached, but the player lists no track for it (the prepare it went in
+          // with was replaced, or never finished). Being asked for it again used to do
+          // nothing, and the subtitle never showed: prepare again with it, as for a new one.
+          prepareAgain()
         }
       }
     }
@@ -4165,8 +4368,10 @@ class ExoPlayerCore(private val activity: Activity) :
 
   fun getStats(): Map<String, Any?> {
     val player = exoPlayer ?: return emptyMap()
-    val videoFormat = player.videoFormat
-    val audioFormat = player.audioFormat
+    // VyseTV: the formats last selected stand in once an error has taken the renderers down, so
+    // a report made as the video is handed to mpv still says what the video was
+    val videoFormat = player.videoFormat ?: currentVideoFormat
+    val audioFormat = player.audioFormat ?: lastAudioFormat
     val audioTrackConfig = lastAudioTrackConfig
 
     // Get decoder info from the format's codecs field and check if hardware accelerated
@@ -4233,6 +4438,7 @@ class ExoPlayerCore(private val activity: Activity) :
       // Audio metrics
       "audioCodec" to audioFormat?.codecs,
       "audioMimeType" to audioFormat?.sampleMimeType,
+      "audioLanguage" to audioFormat?.language, // VyseTV
       "audioSampleRate" to audioFormat?.sampleRate,
       "audioChannels" to audioFormat?.channelCount,
       "audioBitrate" to audioFormat?.bitrate?.takeIf { it > 0 },
@@ -4265,6 +4471,12 @@ class ExoPlayerCore(private val activity: Activity) :
       "playbackSpeed" to player.playbackParameters.speed,
       "isPlaying" to player.isPlaying,
       "playbackState" to player.playbackState,
+      // VyseTV: the report card's outcome and its Dolby Vision decision
+      "firstFrameMs" to firstFrameMs,
+      "sinceOpenMs" to (SystemClock.elapsedRealtime() - openedAtMs),
+      "rebuffers" to rebufferCount,
+      "dvAutoMode" to dvAutoDecision?.mode?.name,
+      "dvAutoReason" to dvAutoDecision?.reason,
       // DV conversion (query extractor's track output, which is set during extraction)
       *(
         activeDoviMkvWrapper?.doviTrackOutput
@@ -4290,6 +4502,12 @@ class ExoPlayerCore(private val activity: Activity) :
       }
     )
   }
+
+  /**
+   * VyseTV: what a report card keeps of [getStats], taken as this player gives the video up (it
+   * is disposed straight after, and mpv cannot say what Media3 saw).
+   */
+  fun reportSnapshot(): Map<String, Any?> = runCatching { getStats().filterKeys { it in REPORT_KEYS } }.getOrDefault(emptyMap())
 
   private fun getVideoDecoderInfo(videoFormat: androidx.media3.common.Format?): String? {
     if (videoFormat == null) return null

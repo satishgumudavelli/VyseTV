@@ -19,7 +19,8 @@ class IntroScreen extends StatefulWidget {
 }
 
 class _IntroScreenState extends State<IntroScreen> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 3600));
+  // (the boot animation plays in full everywhere: it is shown once, over nothing else)
+  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 3600), animationBehavior: AnimationBehavior.preserve);
   bool _leaving = false;
 
   Animation<double> _seg(double a, double b, [Curve curve = Curves.easeOutCubic]) =>

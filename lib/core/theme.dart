@@ -2,6 +2,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'platform/platform_detector.dart' show PlatformDetector;
+
 class VyseColors {
   static const bg = Color(0xFF07080F);
   static const surface = Color(0xFF0E1020);
@@ -17,8 +19,19 @@ class VyseColors {
   static const star = Color(0xFFFFC23A);
 }
 
+/// How long a pointer rests on a control before its tooltip opens: [pointer] where there is a
+/// mouse, never on a TV. A TV is driven by its remote, and a pointer parked on the screen (a
+/// remote with a touchpad, an air mouse) opened "Favorite" over a card the remote was not on.
+/// The tooltip itself stays in the tree, so a screen reader still reads it as the control's name.
+Duration tooltipWait([Duration pointer = const Duration(milliseconds: 500)]) => PlatformDetector.isTV() ? const Duration(days: 365) : pointer;
+
 ThemeData buildVyseTheme() {
+  // A TV is driven by its remote. Nothing lights up under a pointer that happens to be parked
+  // on the screen (a remote with a touchpad, an air mouse) while the remote's focus is somewhere
+  // else. The app's own controls see to that themselves (Pressable); this is for Material's.
+  final tv = PlatformDetector.isTV();
   final base = ThemeData(
+    hoverColor: tv ? Colors.transparent : null,
     brightness: Brightness.dark,
     useMaterial3: true,
     // google_fonts 9 speaks material_ui's TextTheme, so take just the family (this also starts the download).
@@ -33,12 +46,17 @@ ThemeData buildVyseTheme() {
     highlightColor: Colors.transparent,
   );
   return base.copyWith(
+    iconButtonTheme: tv
+        ? IconButtonThemeData(
+            style: IconButton.styleFrom(hoverColor: Colors.transparent, focusColor: Colors.white.withValues(alpha: .1), highlightColor: Colors.white.withValues(alpha: .12)),
+          )
+        : null,
     textTheme: base.textTheme.apply(
       bodyColor: VyseColors.text,
       displayColor: VyseColors.text,
     ),
     tooltipTheme: TooltipThemeData(
-      waitDuration: const Duration(milliseconds: 500),
+      waitDuration: tooltipWait(),
       decoration: BoxDecoration(
         color: VyseColors.surfaceHi,
         borderRadius: BorderRadius.circular(8),

@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart';
 import '../../core/nav_sections.dart';
 import '../../mpv/mpv.dart' show Upscaler;
 import '../app_settings.dart';
+import '../../core/lean.dart';
 import '../playback/intro_db.dart' show SegmentKind;
+import '../playback/player_engine.dart';
 import '../sources/addons.dart';
 import '../sources/debrid/debrid.dart';
 import '../sources/film_sources/film_sources.dart' show FilmSource;
@@ -90,15 +92,18 @@ class _Toggle extends PhoneItem {
 
 /// One of a few values: pills, colour dots, or a list for long ones ([kind] `select`).
 class _Choice<T> extends PhoneItem {
-  _Choice(this.setting, String title, this.options, {String? sub, this.kind = 'choice', this.colors = const {}}) : super(setting.key, title, sub);
+  _Choice(this.setting, String title, this.options, {String? sub, this.kind = 'choice', this.colors = const {}, this.shown}) : super(setting.key, title, sub);
   final Setting<T> setting;
   final List<(T, String)> options;
   final Map<T, int> colors;
+
+  /// The option to show as picked for a saved value, when that value is not one of [options].
+  final T Function(T)? shown;
   @override
   final String kind;
   @override
   Map<String, Object?> get fields => {
-    'value': setting.value,
+    'value': shown?.call(setting.value) ?? setting.value,
     'options': [
       for (final (v, l) in options) {'v': v, 'l': l, if (colors[v] case final c?) 'c': cssColor(c)},
     ],
@@ -339,6 +344,60 @@ class _DebridKey extends PhoneItem {
   }
 }
 
+/// The lean way of drawing (core/lean.dart), on or off: on unless the TV's owner says otherwise.
+class _Lean extends PhoneItem {
+  _Lean()
+    : super(
+        'device.lean',
+        'Lighter interface',
+        'Fewer animations and effects, so VyseTV stays quick on this TV. Switch it off for the full look if your TV keeps up',
+      );
+  @override
+  String get kind => 'toggle';
+  @override
+  Map<String, Object?> get fields => {'value': Lean.on};
+  @override
+  List<Listenable> get watched => [Lean.changes];
+  @override
+  Future<PhoneTook?> take(Map<String, Object?> change) async {
+    final v = change['v'];
+    if (v is! bool) return null;
+    Lean.choose(v);
+    return PhoneTook('$title: ${v ? 'on' : 'off'}');
+  }
+}
+
+/// Android TV: the video engine. Changing it changes what else is on the page: what only mpv
+/// can do is left out while Media3 is the engine.
+class _Engine extends PhoneItem {
+  _Engine()
+    : super(
+        'device.engine',
+        'Player engine',
+        "Media3 is Android's own player; a video it can't play switches to mpv by itself. "
+            'Upscaling, ambient lighting, the 5.1 limit and some subtitle styling need mpv. Applies from the next video',
+      );
+  @override
+  String get kind => 'choice';
+  @override
+  Map<String, Object?> get fields => {
+    'value': PlayerEngine.current,
+    'options': const [
+      {'v': PlayerEngine.media3, 'l': 'Media3'},
+      {'v': PlayerEngine.mpv, 'l': 'mpv'},
+    ],
+  };
+  @override
+  List<Listenable> get watched => [PlayerEngine.changes];
+  @override
+  Future<PhoneTook?> take(Map<String, Object?> change) async {
+    final v = change['v'];
+    if (v != PlayerEngine.media3 && v != PlayerEngine.mpv) return null;
+    PlayerEngine.choose(v as String);
+    return PhoneTook('Player engine: ${v == PlayerEngine.media3 ? 'Media3' : 'mpv'}');
+  }
+}
+
 class _Action extends PhoneItem {
   _Action(String id, String title, {String? sub, required this.button, required this.confirm, required this.run}) : super(id, title, sub);
   final String button;
@@ -365,6 +424,8 @@ String cssColor(int argb) {
 /// The sections, as Settings has them. [fonts]: the subtitle fonts this device has
 /// (SubtitleStyle.available()).
 List<PhoneSection> phoneSections({required List<SubtitleFontChoice> fonts}) {
+  // Media3 is the engine: what only mpv can do is left out (it is back with mpv)
+  final m3 = PlayerEngine.isMedia3;
   return [
     PhoneSection('playback', 'Playback', 'How videos play by default.', [
       _Toggle(AppSettings.streamingMode, 'Streaming mode', "On: videos play right away from VyseTV's servers. Off: pick a source from your addons first"),
@@ -382,45 +443,54 @@ List<PhoneSection> phoneSections({required List<SubtitleFontChoice> fonts}) {
         _SkipButton(k, name),
     ]),
     PhoneSection('player', 'Sound and picture', 'Set for this TV only.', [
+      if (PlayerEngine.offered) _Engine(),
       _Stepper(AppSettings.audioDelayMs, 'Audio sync', min: -5000, max: 5000, step: 50, fmt: 'delay', zero: 'In sync', sub: 'Fixes lip-sync. + plays the sound later'),
-      _Choice<String>(AppSettings.audioChannels, 'Channels', const [('original', 'Original'), ('surround51', '5.1'), ('stereo', 'Stereo')], sub: 'Stereo folds surround down for headphones and TV speakers'),
+      _Choice<String>(AppSettings.audioChannels, 'Channels', [const ('original', 'Original'), if (!m3) const ('surround51', '5.1'), const ('stereo', 'Stereo')], sub: 'Stereo folds surround down for headphones and TV speakers',
+          // (Media3 has no 5.1 limit: it plays that choice as Original)
+          shown: m3 ? (v) => v == 'surround51' ? 'original' : v : null),
       _Toggle(AppSettings.volumeLevelling, 'Volume levelling', 'Evens out quiet talk and loud action'),
       if (!Platform.isIOS) _Toggle(AppSettings.audioPassthrough, 'Passthrough', 'Sends Dolby and DTS untouched to a receiver. Not with levelling, stereo or other speeds'),
-      _Choice<String>(AppSettings.upscaler, 'Upscaling', [for (final u in Upscaler.offered) (u.id, u.label)]),
-      _Toggle(AppSettings.ambientLight, 'Ambient lighting', 'Fills the black bars with a soft glow of the picture'),
+      if (!m3) _Choice<String>(AppSettings.upscaler, 'Upscaling', [for (final u in Upscaler.offered) (u.id, u.label)]),
+      if (!m3) _Toggle(AppSettings.ambientLight, 'Ambient lighting', 'Fills the black bars with a soft glow of the picture'),
       if (Platform.isWindows) _Toggle(AppSettings.hdrOutput, 'HDR', 'Real HDR on an HDR screen. Off maps it to SDR'),
       if (Platform.isWindows || Platform.isAndroid) _Toggle(AppSettings.matchRefreshRate, 'Match refresh rate', "Switches the screen to the video's frame rate"),
     ]),
     PhoneSection('subtitles', 'Subtitles', 'Default captions for the player.', [
       _Choice<String>(AppSettings.subtitleLanguage, 'Default language', [for (final l in subtitleLanguages) (l, l)], kind: 'select', sub: "If a video doesn't have it, no subtitles are loaded."),
       _Group('Caption style'),
-      _Choice<String>(AppSettings.subtitleFont, 'Font', [
-        for (final f in fonts) (f.family == SubtitleStyle.defaultFamily ? '' : f.family, f.name),
-      ], kind: 'select', sub: 'Go Noto covers every language. Other fonts fall back to it for letters they lack.'),
+      if (!m3)
+        _Choice<String>(AppSettings.subtitleFont, 'Font', [
+          for (final f in fonts) (f.family == SubtitleStyle.defaultFamily ? '' : f.family, f.name),
+        ], kind: 'select', sub: 'Go Noto covers every language. Other fonts fall back to it for letters they lack.'),
       _Toggle(AppSettings.subtitleBold, 'Bold'),
       _Toggle(AppSettings.subtitleItalic, 'Italic'),
       _Stepper(AppSettings.subtitleSize, 'Text size', min: captionSizeMin, max: captionSizeMax, step: captionSizeStep),
       _Choice<int>(AppSettings.subtitleColor, 'Text colour', [for (final c in captionColors) (c, '')], kind: 'colors', colors: {for (final c in captionColors) c: c}),
-      _Stepper(AppSettings.subtitleSpacing, 'Letter spacing', min: -20, max: 50, step: 5, fmt: 'tenths', zero: 'Normal'),
+      if (!m3) _Stepper(AppSettings.subtitleSpacing, 'Letter spacing', min: -20, max: 50, step: 5, fmt: 'tenths', zero: 'Normal'),
       _Group('Background box'),
-      _Choice<int>(AppSettings.subtitleBackground, 'Box', [for (final v in captionBoxLevels) (v, v == 0 ? 'None' : '$v%')], sub: 'A box behind the text. With no box, the outline and shadow below are used.'),
+      _Choice<int>(AppSettings.subtitleBackground, 'Box', [for (final v in captionBoxLevels) (v, v == 0 ? 'None' : '$v%')], sub: m3 ? 'A box behind the text. With no box, the outline below is used.' : 'A box behind the text. With no box, the outline and shadow below are used.'),
       _Choice<int>(AppSettings.subtitleBackColor, 'Box colour', [for (final c in captionBoxColors) (c, '')], kind: 'colors', colors: {for (final c in captionBoxColors) c: c}),
-      _Group('Outline and shadow'),
-      _Stepper(AppSettings.subtitleOutline, 'Outline', min: 0, max: 80, step: 5, fmt: 'tenths', zero: 'None'),
+      _Group(m3 ? 'Outline' : 'Outline and shadow'),
+      _Stepper(AppSettings.subtitleOutline, 'Outline', min: 0, max: 80, step: 5, fmt: 'tenths', zero: 'None', sub: m3 ? 'On or off: Media3 draws it at one thickness' : null),
       _Choice<int>(AppSettings.subtitleOutlineColor, 'Outline colour', [for (final c in captionOutlineColors) (c, '')], kind: 'colors', colors: {for (final c in captionOutlineColors) c: c}),
-      _Stepper(AppSettings.subtitleShadow, 'Shadow', min: 0, max: 60, step: 5, fmt: 'tenths', zero: 'None'),
-      _Choice<int>(AppSettings.subtitleShadowColor, 'Shadow strength', const [(0x60000000, 'Soft'), (0xA0000000, 'Medium'), (0xFF000000, 'Strong')]),
-      _Stepper(AppSettings.subtitleBlur, 'Soft edges', min: 0, max: 30, step: 5, fmt: 'tenths', zero: 'Off', sub: 'Blurs the outline a little'),
+      if (!m3) ...[
+        _Stepper(AppSettings.subtitleShadow, 'Shadow', min: 0, max: 60, step: 5, fmt: 'tenths', zero: 'None'),
+        _Choice<int>(AppSettings.subtitleShadowColor, 'Shadow strength', const [(0x60000000, 'Soft'), (0xA0000000, 'Medium'), (0xFF000000, 'Strong')]),
+        _Stepper(AppSettings.subtitleBlur, 'Soft edges', min: 0, max: 30, step: 5, fmt: 'tenths', zero: 'Off', sub: 'Blurs the outline a little'),
+      ],
       _Group('Position'),
       _Choice<bool>(AppSettings.subtitleTop, 'Place at', const [(false, 'Bottom'), (true, 'Top')]),
       _Stepper(AppSettings.subtitleLift, 'Distance from the edge', min: 0, max: 45, step: 1, fmt: 'percent', zero: 'Edge', sub: "Of the screen's height. Bottom subtitles still move up while the controls show."),
       _Toggle(AppSettings.subtitleOnPicture, 'Keep on the picture', "Never put subtitles in a film's black bars"),
-      _Group('Styled subtitles'),
-      _Choice<String>(AppSettings.subtitleAss, 'Show them', const [('scale', 'Keep as made'), ('force', 'Use my style'), ('strip', 'Plain')], sub: 'Anime fansubs (ASS/SSA) often bring their own fonts, colours, signs and karaoke.'),
+      if (!m3) ...[
+        _Group('Styled subtitles'),
+        _Choice<String>(AppSettings.subtitleAss, 'Show them', const [('scale', 'Keep as made'), ('force', 'Use my style'), ('strip', 'Plain')], sub: 'Anime fansubs (ASS/SSA) often bring their own fonts, colours, signs and karaoke.'),
+      ],
       _Action('subs.reset', 'Caption style', sub: 'Back to how VyseTV draws subtitles out of the box', button: 'Reset', confirm: 'Reset the caption style on the TV?', run: SubtitleStyle.resetCaption),
     ]),
     PhoneSection('appearance', 'Appearance', 'The light behind every page, and what the navbar shows.', [
       _Choice<String>(AppSettings.themeId, 'Look', [for (final t in appThemes) (t.id, t.name)], colors: {for (final t in appThemes) t.id: t.color.toARGB32()}),
+      _Lean(),
       _Order<NavItem>(
         'nav',
         'Navigation',

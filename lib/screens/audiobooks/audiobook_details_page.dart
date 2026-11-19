@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/audiobooks/audiobook_player.dart';
 import '../../data/music/music_player.dart' show fmtClock;
 import '../../models/audiobook/audiobook_model.dart';
@@ -62,7 +63,15 @@ class _AudiobookDetailsPageState extends State<AudiobookDetailsPage> {
           right: 0,
           height: phone ? 380 : 480,
           child: IgnorePointer(
-            child: ShaderMask(
+            // Lean (a TV): the same wash without the three off-screen buffers. Over a page of
+            // one colour, a picture faded and masked away is that picture under veils of the
+            // page's colour, and those are plain draws (ArtWash, Scrim).
+            child: Lean.on
+                ? Stack(fit: StackFit.expand, children: [
+                    ArtWash(url: b.coverImage, sigma: 44, filter: ArtWash.veil(VyseColors.bg.withValues(alpha: .55))),
+                    const Scrim.bottom(alphas: [1, 0], stops: [0, 1]),
+                  ])
+                : ShaderMask(
               blendMode: BlendMode.dstIn,
               shaderCallback: (r) => const LinearGradient(
                 begin: Alignment.topCenter,

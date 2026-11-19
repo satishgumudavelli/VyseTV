@@ -111,6 +111,7 @@ class AccountSync {
       t.cancel();
     }
     _timers.clear();
+    _sending.clear();
     _ids.clear();
   }
 
@@ -229,20 +230,51 @@ class AccountSync {
       final r = e.record;
       if (r == null || _user == null) return;
       final kind = r.getStringValue('kind'), key = r.getStringValue('key');
-      final src = _sources[kind];
-      if (src == null) return;
+      if (!_sources.containsKey(kind)) return;
       if (e.action == 'delete') {
         _ids.remove('$kind/$key');
         return;
       }
       _ids['$kind/$key'] = r.id;
-      final remote = _Remote.of(r);
-      final k = _known[kind]?[key];
-      final same = k != null && k.deleted == remote.deleted && (remote.deleted || k.hash == _hash(remote.data));
-      if (same) return; // our own change coming back
-      if (k != null && remote.time < k.time) return; // older than what we have
-      _applyRemote(src, key, remote);
+      _onRemote(kind, key, _Remote.of(r));
     });
+  }
+
+  /// The account says an item changed: another device's change, or this one's own coming back.
+  static void _onRemote(String kind, String key, _Remote remote) {
+    final src = _sources[kind];
+    if (src == null || _user == null) return;
+    final k = _known[kind]?[key];
+    final same = k != null && k.deleted == remote.deleted && (remote.deleted || k.hash == _hash(remote.data));
+    if (same) return; // our own change coming back
+    if (k != null && remote.time < k.time) return; // older than what we have
+    _applyRemote(src, key, remote);
+  }
+
+  /// Tests: an item's news from the account, as the live connection would bring it.
+  @visibleForTesting
+  static void debugRemote(String kind, String key, Map<String, dynamic> data, int time) => _onRemote(kind, key, _Remote('test', data, time, false));
+
+  /// Tests: stands in for the account (signed in as [user], nothing known yet), and for the
+  /// request that sends one item to it.
+  @visibleForTesting
+  static void debugSignIn(String? user, {Future<void> Function(String kind, String key, Map<String, dynamic> body)? send}) {
+    _stop();
+    _user = user;
+    _known = {};
+    debugSend = send;
+  }
+
+  @visibleForTesting
+  static Future<void> Function(String kind, String key, Map<String, dynamic> body)? debugSend;
+
+  /// Tests: the sources, without an account to follow.
+  @visibleForTesting
+  static void debugSources(List<SyncSource> sources) {
+    for (final s in sources) {
+      _sources[s.kind] = s;
+      s.changes.addListener(() => _onLocal(s.kind));
+    }
   }
 
   // ── changes made on this device ──
@@ -253,7 +285,13 @@ class AccountSync {
     _timers[kind] = Timer(const Duration(milliseconds: 300), () => _pushChanges(kind));
   }
 
-  static Future<void> _pushChanges(String kind) async {
+  // One send at a time for each kind: two of the same item, started close together, could
+  // reach the account in the wrong order and leave it with the older one.
+  static final _sending = <String, Future<void>>{};
+  static Future<void> _pushChanges(String kind) =>
+      _sending[kind] = (_sending[kind] ?? Future<void>.value()).then((_) => _pushNow(kind)).catchError((Object _) {});
+
+  static Future<void> _pushNow(String kind) async {
     await _merging; // never race the full merge
     final src = _sources[kind];
     if (src == null || _user == null) return;
@@ -291,8 +329,38 @@ class AccountSync {
       'deleted': data == null,
     };
 
+    // An item counts as known from the moment it is sent, not from the account's answer. The
+    // account's own news of the change can get here before that answer, and it has to be
+    // recognised as this device's: it used to be taken for another device's change and put
+    // back over whatever had been changed here since (a number stepped up twice dropped back
+    // by one, by itself). If the send fails the item is forgotten again, and goes out later.
+    final mine = <String, _Known>{}, before = <String, _Known?>{};
     void remember(String kind, String key, Map<String, dynamic>? data, int t) {
-      (_known[kind] ??= {})[key] = _Known(data == null ? 0 : _hash(data), t, data == null);
+      final known = _known[kind] ??= {};
+      before['$kind/$key'] = known[key];
+      known[key] = mine['$kind/$key'] = _Known(data == null ? 0 : _hash(data), t, data == null);
+    }
+
+    void forget(String kind, String key) {
+      final known = _known[kind];
+      if (known == null || !identical(known[key], mine['$kind/$key'])) return; // something newer is recorded
+      final was = before['$kind/$key'];
+      if (was == null) {
+        known.remove(key);
+      } else {
+        known[key] = was;
+      }
+    }
+
+    Future<void> one((String, String, Map<String, dynamic>?, int) up) async {
+      final (kind, key, data, t) = up;
+      remember(kind, key, data, t);
+      try {
+        await _pushOne(body(kind, key, data, t), kind, key);
+      } catch (_) {
+        forget(kind, key);
+        rethrow;
+      }
     }
 
     // Many at once (the first sync): batches of 100.
@@ -307,33 +375,43 @@ class AccountSync {
           } else {
             batch.collection('user_items').create(body: body(kind, key, data, t));
           }
+          remember(kind, key, data, t);
         }
+        void forgetChunk() {
+          for (final (kind, key, _, _) in chunk) {
+            forget(kind, key);
+          }
+        }
+
         try {
           final results = await batch.send();
           for (var j = 0; j < chunk.length && j < results.length; j++) {
-            final (kind, key, data, t) = chunk[j];
+            final (kind, key, _, _) = chunk[j];
             final b = results[j].body;
             if (b is Map && b['id'] is String) _ids['$kind/$key'] = b['id'] as String;
-            remember(kind, key, data, t);
           }
         } on ClientException catch (e) {
+          forgetChunk();
           if (_offline(e)) rethrow;
           // a row may already exist (another device); fall back to one at a time
-          for (final (kind, key, data, t) in chunk) {
-            await _pushOne(body(kind, key, data, t), kind, key);
-            remember(kind, key, data, t);
+          for (final up in chunk) {
+            await one(up);
           }
+        } catch (_) {
+          forgetChunk();
+          rethrow;
         }
       }
       return;
     }
-    for (final (kind, key, data, t) in ups) {
-      await _pushOne(body(kind, key, data, t), kind, key);
-      remember(kind, key, data, t);
+    for (final up in ups) {
+      await one(up);
     }
   }
 
   static Future<void> _pushOne(Map<String, dynamic> body, String kind, String key) async {
+    final send = debugSend;
+    if (send != null) return send(kind, key, body);
     final id = _ids['$kind/$key'];
     try {
       final rec = id != null ? await _col.update(id, body: body) : await _col.create(body: body);

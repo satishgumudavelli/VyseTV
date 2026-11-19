@@ -1,6 +1,7 @@
 package com.vyse.player.exoplayer
 
 import android.app.Activity
+import android.os.SystemClock
 import android.util.Log
 import com.vyse.libass.media.AssHandler
 import com.vyse.player.mpv.MpvPlayerCore
@@ -428,6 +429,7 @@ class ExoPlayerPlugin :
     )
     terminalEventGeneration = null
     currentExternalSubtitles = request.externalSubtitles
+    openedAtMs = SystemClock.elapsedRealtime() // VyseTV: a hand-over says how long after this it came
 
     if (fallbackInProgress) {
       pendingOpen?.let(::completeSupersededOpen)
@@ -1242,6 +1244,8 @@ class ExoPlayerPlugin :
       // events to the visible screen (Dart sets 'yes' for cover mode / zoom > 1)
       "sub-ass-force-margins" -> playerCore?.setAssForceMargins(value == "yes")
       "force-seekable" -> playerCore?.setForceSeekable(value == "yes")
+      // VyseTV: the picture's shape the viewer forced (16:9, 4:3, 21:9), mpv's own way of saying it
+      "video-aspect-override" -> playerCore?.setAspectOverride(value)
     }
 
     // Before fallback this is queue acceptance, not a completed MPV write.
@@ -1296,8 +1300,28 @@ class ExoPlayerPlugin :
     channels.emitEvent(name, data)
   }
 
+  // VyseTV: what the hand-over is for, sent with "backend-switched" (ExoPlayerCore.fallbackKind).
+  private var fallbackKind: String = "error"
+  private var fallbackReason: String = ""
+
+  // VyseTV: and for the app's report card: the same in full (ExoPlayerCore.fallbackDetail), how
+  // long after the open it came, and what Media3 knew of the video as it gave it up.
+  private var fallbackDetail: String = ""
+  private var fallbackAfterMs: Long = 0L
+  private var fallbackStats: Map<String, Any?> = emptyMap()
+  private var openedAtMs: Long = 0L
+
   private fun notifyBackendSwitched() {
-    channels.emitEvent("backend-switched")
+    channels.emitEvent(
+      "backend-switched",
+      mapOf(
+        "kind" to fallbackKind,
+        "reason" to fallbackReason,
+        "detail" to fallbackDetail,
+        "afterMs" to fallbackAfterMs,
+        "stats" to fallbackStats
+      )
+    )
   }
 
   private fun appendExternalSubtitleOptions(
@@ -1446,6 +1470,12 @@ class ExoPlayerPlugin :
     }
 
     val currentActivity = activity ?: return false
+    // VyseTV (read now: the core is disposed below)
+    fallbackKind = playerCore?.fallbackKind ?: "error"
+    fallbackReason = errorMessage
+    fallbackDetail = playerCore?.fallbackDetail?.takeIf { it.isNotEmpty() } ?: errorMessage
+    fallbackAfterMs = if (openedAtMs > 0L) SystemClock.elapsedRealtime() - openedAtMs else 0L
+    fallbackStats = playerCore?.reportSnapshot() ?: emptyMap()
     val fallbackRequest = MediaOpenRequest(
       mediaGeneration = mediaGeneration,
       uri = uri,

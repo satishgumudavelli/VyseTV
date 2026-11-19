@@ -2,9 +2,11 @@ import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SliverConstraints, SliverGridLayout, SliverGridRegularTileLayout;
 
 import '../core/layout.dart';
 import '../core/theme.dart';
+import '../core/lean.dart';
 import '../dpad/dpad_root.dart' show backBindings;
 import '../dpad/dpad_traversal.dart';
 import '../dpad/input_mode_tracker.dart';
@@ -25,8 +27,12 @@ double pageBottom(BuildContext context) =>
 class PageGlow extends StatelessWidget {
   const PageGlow({super.key});
 
+  // (not on the weakest TV boxes, core/lean.dart: it is a third of the screen blended through a
+  // round gradient for every frame, to look at)
   @override
-  Widget build(BuildContext context) => IgnorePointer(
+  Widget build(BuildContext context) => Lean.weak
+      ? const SizedBox.shrink()
+      : IgnorePointer(
         child: Container(
           width: 640,
           height: 640,
@@ -329,10 +335,22 @@ class EmptyState extends StatelessWidget {
 
 /// Network image with the app's placeholder and fallback.
 class NetImage extends StatelessWidget {
-  const NetImage({super.key, required this.url, this.fit = BoxFit.cover, this.fallback = Icons.image_not_supported_outlined});
+  const NetImage({super.key, required this.url, this.fit = BoxFit.cover, this.fallback = Icons.image_not_supported_outlined, this.decodeWidth});
   final String? url;
   final BoxFit fit;
   final IconData fallback;
+
+  /// How wide to decode the picture, in real pixels: about as wide as it is shown. Left out it
+  /// is decoded as big as its file, which for a wall of posters from a source that sends them
+  /// two or three thousand pixels tall is a great deal of memory and a long wait on a TV box.
+  /// (See [decodeWidthFor].)
+  final int? decodeWidth;
+
+  /// A decode width for a picture shown [shown] logical pixels wide here: its real pixels,
+  /// rounded up to a step so that a card a few pixels wider or narrower uses the same copy.
+  /// (Nothing for a width that is not known yet: the picture is then decoded as it is.)
+  static int? decodeWidthFor(BuildContext context, double shown) =>
+      shown.isFinite && shown > 0 ? (((shown * MediaQuery.devicePixelRatioOf(context)) / 96).ceil() * 96).clamp(96, 1440) : null;
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +362,7 @@ class NetImage extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: url!,
       fit: fit,
+      memCacheWidth: decodeWidth,
       fadeInDuration: const Duration(milliseconds: 300),
       placeholder: (_, _) => const ColoredBox(color: VyseColors.surface),
       errorWidget: (_, _, _) => empty,
@@ -362,18 +381,38 @@ Widget captionedGrid({
   double spacing = 12,
   double runSpacing = 16,
 }) =>
-    SliverLayoutBuilder(builder: (context, c) {
-      final cross = c.crossAxisExtent;
-      final cols = math.max(1, ((cross + spacing) / (maxWidth + spacing)).ceil());
-      final w = (cross - spacing * (cols - 1)) / cols;
-      return SliverGrid.builder(
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cols,
-          mainAxisSpacing: runSpacing,
-          crossAxisSpacing: spacing,
-          mainAxisExtent: w * aspect + caption,
-        ),
-        itemCount: itemCount,
-        itemBuilder: itemBuilder,
-      );
-    });
+    SliverGrid.builder(
+      gridDelegate: _CaptionedGridDelegate(maxWidth: maxWidth, aspect: aspect, caption: caption, spacing: spacing, runSpacing: runSpacing),
+      itemCount: itemCount,
+      itemBuilder: itemBuilder,
+    );
+
+/// The layout of [captionedGrid], worked out from the width as the grid is laid out.
+///
+/// It used to be worked out in a SliverLayoutBuilder, which builds again whenever the sliver's
+/// constraints change, and those hold the scroll offset: every cell on screen was built again
+/// for every frame of a scroll. A playlist of eleven thousand channels "lagged" on a TV for it.
+class _CaptionedGridDelegate extends SliverGridDelegate {
+  const _CaptionedGridDelegate({required this.maxWidth, required this.aspect, required this.caption, required this.spacing, required this.runSpacing});
+  final double maxWidth, aspect, caption, spacing, runSpacing;
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    final cross = constraints.crossAxisExtent;
+    final cols = math.max(1, ((cross + spacing) / (maxWidth + spacing)).ceil());
+    final w = math.max(0.0, cross - spacing * (cols - 1)) / cols;
+    final h = w * aspect + caption;
+    return SliverGridRegularTileLayout(
+      crossAxisCount: cols,
+      mainAxisStride: h + runSpacing,
+      crossAxisStride: w + spacing,
+      childMainAxisExtent: h,
+      childCrossAxisExtent: w,
+      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_CaptionedGridDelegate old) =>
+      old.maxWidth != maxWidth || old.aspect != aspect || old.caption != caption || old.spacing != spacing || old.runSpacing != runSpacing;
+}

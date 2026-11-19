@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme.dart';
+import '../core/lean.dart';
 import '../dpad/dpad_traversal.dart' show DpadLoading;
 import '../dpad/focus_theme.dart';
 import '../dpad/focusable_wrapper.dart';
@@ -107,7 +109,8 @@ class _PressableState extends State<Pressable> {
   @override
   Widget build(BuildContext context) {
     // focus only shows, and only counts as hover, while a D-pad is in charge
-    final focusShown = _focused && InputModeTracker.isKeyboardMode(context);
+    final keys = InputModeTracker.isKeyboardMode(context);
+    final focusShown = _focused && keys;
     Widget child = FocusableWrapper(
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
@@ -137,7 +140,10 @@ class _PressableState extends State<Pressable> {
           onTapUp: (_) => setState(() => _pressed = false),
           onTapCancel: () => setState(() => _pressed = false),
           onTap: widget.onTap,
-          child: widget.builder(context, _hovered || focusShown, _pressed),
+          // While a D-pad is in charge a pointer lights nothing up. A mouse parked on the
+          // screen (a remote with a touchpad, an air mouse) left the card under it lit, beside
+          // the one the remote was really on: "a white border ... like a shadow".
+          child: widget.builder(context, keys ? focusShown : _hovered, _pressed),
         ),
       ),
     );
@@ -348,6 +354,188 @@ class Glass extends StatelessWidget {
 /// cheap on a desktop GPU but one of the costliest things a phone does while scrolling.
 final bool lightEffects = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+/// A gradient of the page's colour over a picture, from one edge, clear from its last stop on.
+///
+/// It is laid only as far as it reaches. A gradient over the whole picture is the whole picture
+/// blended again for every frame, and most of it blends nothing: the pixels are the same, there
+/// are just fewer of them.
+class Scrim extends StatelessWidget {
+  const Scrim.left({super.key, required this.alphas, required this.stops, this.color = VyseColors.bg})
+    : _from = Alignment.centerLeft,
+      _to = Alignment.centerRight;
+  const Scrim.bottom({super.key, required this.alphas, required this.stops, this.color = VyseColors.bg})
+    : _from = Alignment.bottomCenter,
+      _to = Alignment.topCenter;
+  const Scrim.top({super.key, required this.alphas, required this.stops, this.color = VyseColors.bg})
+    : _from = Alignment.topCenter,
+      _to = Alignment.bottomCenter;
+
+  /// How much of [color] at each of [stops]; the last is 0.
+  final List<double> alphas;
+
+  /// Where each of [alphas] sits, as a fraction of the whole box from the scrim's edge. The
+  /// last one is how far the scrim reaches.
+  final List<double> stops;
+  final Color color;
+  final Alignment _from, _to;
+
+  @override
+  Widget build(BuildContext context) {
+    assert(alphas.last == 0 && alphas.length == stops.length);
+    final reach = stops.last;
+    final across = _from.y == 0;
+    return FractionallySizedBox(
+      alignment: _from,
+      widthFactor: across ? reach : null,
+      heightFactor: across ? null : reach,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: _from,
+            end: _to,
+            colors: [for (final a in alphas) color.withValues(alpha: a)],
+            stops: [for (final s in stops) s / reach],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A picture as a soft wash of its colours behind a page: what a heavy blur of it looks like.
+///
+/// A real blur (ImageFiltered) draws the picture into an off-screen buffer and blurs that again
+/// for every frame the page draws, which a desktop doesn't notice and a TV box cannot afford.
+/// This decodes the picture a few dozen pixels wide and lets the stretch do the blurring: one
+/// draw, and a picture in memory a thousand times smaller. For the lean interface
+/// (core/lean.dart).
+class ArtWash extends StatelessWidget {
+  const ArtWash({super.key, required this.url, this.sigma = 40, this.filter, this.alignment = Alignment.center});
+  final String? url;
+
+  /// The blur this stands in for: a heavier one is decoded smaller.
+  final double sigma;
+
+  /// Painted with the picture, in the same draw: a dim, a tint.
+  final ColorFilter? filter;
+  final Alignment alignment;
+
+  /// [color] laid over the picture, as a filter for [filter]: what a see-through box of that
+  /// colour over it comes to (and, over a page of that colour, the picture at 1 - alpha).
+  static ColorFilter veil(Color color) => ColorFilter.mode(color, BlendMode.srcOver);
+
+  /// The colour matrix [m] (as for ColorFilter.matrix) and then a veil of [color], as one filter.
+  static ColorFilter matrixThenVeil(List<double> m, Color color) {
+    final a = color.a, k = 1 - a;
+    final add = [color.r, color.g, color.b];
+    return ColorFilter.matrix([
+      for (var row = 0; row < 3; row++) ...[
+        for (var col = 0; col < 4; col++) m[row * 5 + col] * k,
+        m[row * 5 + 4] * k + add[row] * 255 * a,
+      ],
+      ...m.sublist(15),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final u = url;
+    if (u == null || u.isEmpty) return const SizedBox.expand();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        image: DecorationImage(
+          image: ResizeImage(CachedNetworkImageProvider(u), width: (1600 / sigma).round().clamp(16, 48)),
+          fit: BoxFit.cover,
+          alignment: alignment,
+          colorFilter: filter,
+          onError: (_, _) {},
+        ),
+      ),
+      child: const SizedBox.expand(),
+    );
+  }
+}
+
+/// The dim over a backdrop picture, as one colour to paint the picture with (its colour
+/// filter): [base] with the page at its top.
+///
+/// Lean (a TV, core/lean.dart): it also deepens as [scroll] moves down, where the page used to
+/// lay a see-through box over the whole screen: that box was the whole screen blended again
+/// for every frame the page stood scrolled, which on a TV is most of the time. (Veils of one
+/// colour come to the same picture in any order, so nothing looks different.) It deepens in
+/// steps too small to see, so the picture is built again a few dozen times over the first
+/// stretch of a scroll and not for every pixel of it.
+///
+/// Elsewhere it stays at [base] and the page lays its box as before.
+class ScrollVeil extends StatefulWidget {
+  const ScrollVeil({super.key, required this.scroll, required this.base, required this.builder});
+  final ScrollController scroll;
+  final double base;
+  final Widget Function(BuildContext context, Color veil) builder;
+
+  // (as the pages' own darkening box: up to .55 more, over the first 500 pixels)
+  static const _deepen = .55, _over = 500.0, _steps = 32;
+
+  @override
+  State<ScrollVeil> createState() => _ScrollVeilState();
+}
+
+class _ScrollVeilState extends State<ScrollVeil> {
+  int _step = 0;
+
+  int _read() {
+    final s = widget.scroll;
+    if (!Lean.on || !s.hasClients) return 0;
+    return ((s.offset / ScrollVeil._over).clamp(0.0, 1.0) * ScrollVeil._steps).round();
+  }
+
+  void _moved() {
+    final step = _read();
+    if (step != _step && mounted) setState(() => _step = step);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scroll.addListener(_moved);
+    _step = _read();
+  }
+
+  @override
+  void didUpdateWidget(ScrollVeil old) {
+    super.didUpdateWidget(old);
+    if (old.scroll == widget.scroll) return;
+    old.scroll.removeListener(_moved);
+    widget.scroll.addListener(_moved);
+  }
+
+  @override
+  void dispose() {
+    widget.scroll.removeListener(_moved);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final more = Lean.on ? ScrollVeil._deepen * _step / ScrollVeil._steps : 0.0;
+    return widget.builder(context, VyseColors.bg.withValues(alpha: 1 - (1 - widget.base) * (1 - more)));
+  }
+}
+
+/// A scrolling list that melts away at its ends rather than being cut, through [shader].
+///
+/// The melt is an off-screen copy of the whole list, drawn again for every frame. Lean (a TV,
+/// core/lean.dart): the list alone, cut at its edge.
+class EdgeFade extends StatelessWidget {
+  const EdgeFade({super.key, required this.shader, required this.child});
+  final ShaderCallback shader;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      Lean.on ? child : ShaderMask(blendMode: BlendMode.dstIn, shaderCallback: shader, child: child);
+}
+
 class VyseMark extends StatelessWidget {
   const VyseMark({super.key, this.size = 32});
   final double size;
@@ -393,9 +581,14 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
   late final _t = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
   Timer? _timer;
 
+  // Lean (a TV): it is simply there. A row fading up is its whole width drawn through an
+  // off-screen buffer for forty frames, and a page of rows did that one after the other.
+  final _plain = Lean.on;
+
   @override
   void initState() {
     super.initState();
+    if (_plain) return;
     _timer = Timer(widget.delay, () => mounted ? _c.forward() : null);
   }
 
@@ -407,7 +600,9 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
+  Widget build(BuildContext context) => _plain
+      ? widget.child
+      : AnimatedBuilder(
         animation: _t,
         child: widget.child,
         builder: (_, child) => Opacity(
@@ -430,25 +625,33 @@ class Shimmer extends StatefulWidget {
 }
 
 class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat();
+  // Lean (a TV): the blocks stand still. The sheen is an off-screen buffer redrawn for every
+  // frame for as long as anything is loading, and on a slow network that is most of the time.
+  late final AnimationController? _c = Lean.on ? null : (AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat());
 
   @override
   void dispose() {
-    _c.dispose();
+    _c?.dispose();
     super.dispose();
   }
 
   // (marked as loading for a D-pad: a first focus waits for what this stands in for, rather
   // than going to a control further down the page)
   @override
-  Widget build(BuildContext context) => DpadLoading(
+  Widget build(BuildContext context) {
+    final c = _c;
+    if (c == null) return DpadLoading(child: widget.child);
+    return _sheen(c);
+  }
+
+  Widget _sheen(AnimationController c) => DpadLoading(
         child: AnimatedBuilder(
-          animation: _c,
+          animation: c,
           child: widget.child,
           builder: (_, child) => ShaderMask(
             blendMode: BlendMode.srcATop,
             shaderCallback: (bounds) {
-              final dx = bounds.width * 3 * _c.value - bounds.width;
+              final dx = bounds.width * 3 * c.value - bounds.width;
               return LinearGradient(
                 colors: const [VyseColors.surface, VyseColors.surfaceHi, VyseColors.surface],
                 stops: const [.35, .5, .65],

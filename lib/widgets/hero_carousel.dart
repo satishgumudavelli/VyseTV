@@ -8,6 +8,7 @@ import '../core/layout.dart';
 import '../core/nav.dart';
 import '../core/logs/perf.dart';
 import '../core/theme.dart';
+import '../core/lean.dart';
 import '../data/catalog/tmdb.dart';
 import '../screens/player/player_page.dart';
 
@@ -74,7 +75,15 @@ class HeroCarouselState extends State<HeroCarousel> {
 
   void _schedule() {
     _auto?.cancel();
-    _auto = Timer(_slide, next);
+    _auto = Timer(_slide, _autoNext);
+  }
+
+  /// The slide show's own step. Lean (a TV): not while the hero is scrolled off the screen,
+  /// where a new slide is a full-screen picture fetched, decoded and uploaded for nobody.
+  void _autoNext() {
+    final s = widget.scroll;
+    if (Lean.on && s.hasClients && s.offset >= widget.height) return _schedule();
+    next();
   }
 
   void next() => go(_index + 1);
@@ -98,7 +107,7 @@ class HeroCarouselState extends State<HeroCarousel> {
     if (phone) {
       HomeFeed.instance.phoneArt(nextMedia).then((u) => warm(u ?? nextMedia.backdrop('w780')));
     } else {
-      warm(nextMedia.backdrop('original'));
+      warm(nextMedia.backdrop(backdropSize));
     }
   }
 
@@ -269,7 +278,7 @@ class _Backdrop extends StatelessWidget {
           )
         : _Drift(
             key: ValueKey(media.id),
-            url: media.backdrop('original'),
+            url: media.backdrop(backdropSize),
           ),
   );
 }
@@ -278,8 +287,15 @@ class _Backdrop extends StatelessWidget {
 /// (TMDB originals can be 4K+, which is a lot of texture to push every frame).
 int screenDecodeWidth(BuildContext context) {
   final mq = MediaQuery.of(context);
-  return (mq.size.width * mq.devicePixelRatio).round().clamp(640, 3840);
+  final w = (mq.size.width * mq.devicePixelRatio).round().clamp(640, 3840);
+  // the weakest TV boxes: no wider than the file they are given ([backdropSize])
+  return Lean.weak ? math.min(w, 1280) : w;
 }
+
+/// Which copy of a backdrop fills the screen: TMDB's original, or on the weakest TV boxes its
+/// 1280-wide one. An original can be 4K: megabytes to fetch, a long decode on a slow chip and
+/// 8 MB of texture to upload, for a picture that sits under a scrim.
+String get backdropSize => Lean.weak ? 'w1280' : 'original';
 
 /// Whether the hero's picture holds still: on a TV. Its slow push-in redrew the whole screen
 /// every frame for as long as Home was open, and a TV's graphics chip pays for that twice (the
@@ -337,45 +353,13 @@ class _Scrims extends StatelessWidget {
       return Stack(
         fit: StackFit.expand,
         children: [
+          // (each one is laid only as far as it reaches, not over the whole picture: Scrim)
           // left fade behind poster + text (normal mode only)
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  bg.withValues(alpha: .88 * (1 - t)),
-                  bg.withValues(alpha: .55 * (1 - t)),
-                  bg.withValues(alpha: 0),
-                ],
-                stops: const [0, .38, .68],
-              ),
-            ),
-          ),
+          if (t < 1) Scrim.left(alphas: [.88 * (1 - t), .55 * (1 - t), 0], stops: const [0, .38, .68]),
           // bottom melt into the page
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [
-                  bg,
-                  bg.withValues(alpha: .78 - .18 * t),
-                  bg.withValues(alpha: 0),
-                ],
-                stops: [0, .22 + .06 * t, .6],
-              ),
-            ),
-          ),
+          Scrim.bottom(alphas: [1, .78 - .18 * t, 0], stops: [0, .22 + .06 * t, .6]),
           // top shade so window controls and the rail logo stay readable
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [bg.withValues(alpha: .45), bg.withValues(alpha: 0)],
-                stops: const [0, .22],
-              ),
-            ),
-          ),
+          const Scrim.top(alphas: [.45, 0], stops: [0, .22]),
           // a soft pool of shadow under centred text
           if (t > 0)
             DecoratedBox(

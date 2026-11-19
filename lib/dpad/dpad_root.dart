@@ -170,7 +170,8 @@ class _DpadRootState extends State<DpadRoot> with TickerProviderStateMixin {
   final _policy = DpadTraversalPolicy();
   late final _actions = <Type, Action<Intent>>{DirectionalFocusIntent: _MoveAction(this)};
 
-  late final AnimationController _ring = AnimationController(vsync: this, duration: const Duration(milliseconds: 150));
+  // (kept at its length where animations are cut short, core/lean.dart: the ring is what the eye follows)
+  late final AnimationController _ring = AnimationController(vsync: this, duration: const Duration(milliseconds: 150), animationBehavior: AnimationBehavior.preserve);
 
   /// Ticks while the focused control may be moving (a list scrolling under it), so the ring
   /// follows it; idle otherwise, so a still screen costs nothing.

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../core/layout.dart';
 import '../../core/nav.dart';
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../data/manga/manga_library.dart';
 import '../../models/manga/manga.dart';
 import '../../models/manga/manga_chapter.dart';
@@ -304,33 +305,26 @@ class _Backdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     const bg = VyseColors.bg;
     return Stack(fit: StackFit.expand, children: [
-      if (url != null)
-        ClipRect(
-          child: ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36, tileMode: TileMode.clamp),
-            child: Transform.scale(scale: 1.15, child: NetImage(url: url)),
+      // Lean (a TV): the cover as a wash of its colours, dim and all, in one draw. A live blur
+      // is an off-screen copy of the screen blurred again for every frame (ArtWash).
+      if (Lean.on)
+        ScrollVeil(scroll: scroll, base: .58, builder: (context, dim) => ArtWash(url: url, sigma: 36, filter: ArtWash.veil(dim)))
+      else ...[
+        if (url != null)
+          ClipRect(
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36, tileMode: TileMode.clamp),
+              child: Transform.scale(scale: 1.15, child: NetImage(url: url)),
+            ),
           ),
-        ),
-      ColoredBox(color: bg.withValues(alpha: .58)),
-      DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [bg.withValues(alpha: .75), bg.withValues(alpha: .2), bg.withValues(alpha: 0)],
-            stops: const [0, .45, .8],
-          ),
-        ),
-      ),
-      DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: [bg, bg.withValues(alpha: .6), bg.withValues(alpha: 0)],
-            stops: const [0, .3, .65],
-          ),
-        ),
-      ),
-      IgnorePointer(
+        ColoredBox(color: bg.withValues(alpha: .58)),
+      ],
+      // (each laid only as far as it reaches: Scrim)
+      const Scrim.left(alphas: [.75, .2, 0], stops: [0, .45, .8]),
+      const Scrim.bottom(alphas: [1, .6, 0], stops: [0, .3, .65]),
+      // (lean: the wash's own veil deepens with the scroll instead, ScrollVeil)
+      if (!Lean.on)
+        IgnorePointer(
         child: ListenableBuilder(
           listenable: scroll,
           builder: (context, _) {

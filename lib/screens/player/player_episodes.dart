@@ -10,6 +10,7 @@ import '../../data/catalog/tmdb.dart';
 import '../../widgets/common.dart';
 import 'player_menus.dart';
 import 'player_page.dart' show PlayerEpisode;
+import 'tv_menus.dart';
 
 class EpisodeInfo {
   const EpisodeInfo(this.season, this.number, this.name, this.overview, this.still, this.runtime, this.aired);
@@ -174,8 +175,117 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
     },
   );
 
+  // ── On a TV: the whole screen ──
+
+  /// Tells when the ring comes onto [child].
+  static Widget _onRing(VoidCallback arrived, Widget child) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onFocusChange: (has) {
+      if (has) arrived();
+    },
+    child: child,
+  );
+
+  static String _seasonName(int number) => number == 0 ? 'Specials' : 'Season $number';
+
+  /// How tall an episode's row is on a TV: its picture (148 wide, 16:9), 8 round it and 2
+  /// between rows.
+  static const _tvRow = 104.0;
+
+  /// On a TV the episodes are a screen like the player's menus (tv_menus.dart): the seasons in
+  /// one column and, beside it, the episodes of the season the ring is on. OK on a season goes
+  /// on into its episodes.
+  Widget _tv(BuildContext context) => TvMenuScreen(
+        child: TvMenuScope(
+          child: TvMenuFrame(
+            title: 'Episodes',
+            detail: widget.store.show.title,
+            child: FutureBuilder<List<Season>>(
+              future: widget.store.seasons,
+              builder: (context, snap) {
+                final seasons = snap.data ?? const <Season>[];
+                final many = seasons.length > 1;
+                return TvRails([
+                  if (many)
+                    TvRail(
+                      title: 'Seasons',
+                      width: 190,
+                      children: [
+                        for (final s in seasons)
+                          _onRing(
+                            () {
+                              if (_season != s.number) setState(() => _season = s.number);
+                            },
+                            MenuRow(
+                              title: _seasonName(s.number),
+                              detail: s.number == widget.current.season ? 'Playing' : null,
+                              selected: s.number == _season,
+                              start: false, // (the screen opens on an episode, in the next column)
+                              entry: s.number == _season,
+                              onTap: () {
+                                setState(() => _season = s.number);
+                                stepRightSoon(this);
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  _tvEpisodes(many ? 650 : 760),
+                ]);
+              },
+            ),
+          ),
+        ),
+  );
+
+  Widget _tvEpisodes(double width) => FutureBuilder<List<EpisodeInfo>>(
+    key: ValueKey(_season),
+    future: widget.store.season(_season),
+    builder: (context, snap) {
+      final title = _seasonName(_season);
+      if (snap.hasError) {
+        return TvRail(
+          title: title,
+          width: width,
+          children: [MenuRow(title: "Couldn't load episodes", detail: 'OK tries again', start: true, onTap: () => setState(() {}))],
+        );
+      }
+      final all = snap.data;
+      if (all == null) return TvRail(title: title, width: width, children: const [TvNote('Loading…', busy: true)]);
+      final eps = widget.store.shown(all, widget.current);
+      // (as in the panel: it opens on the episode after the one playing)
+      final at = eps.indexWhere((e) => e.season == widget.current.season && e.number == widget.current.number);
+      final start = at < 0 ? null : (at + 1 < eps.length && !eps[at + 1].upcoming ? eps[at + 1] : (at > 0 ? eps[at - 1] : null));
+      final into = start ?? eps.where((e) => !e.upcoming).firstOrNull;
+      // (only the rows on screen are built: a season can run to hundreds of episodes. It opens
+      // with the one playing at the top and the next, where the ring starts, under it.)
+      return TvRail.lazy(
+        title: title,
+        width: width,
+        count: eps.length,
+        itemCount: eps.length,
+        itemExtent: _tvRow,
+        startAt: at,
+        itemBuilder: (context, i) {
+          final e = eps[i];
+          final playing = e.season == widget.current.season && e.number == widget.current.number;
+          return _EpisodeRow(
+            key: playing ? _currentKey : null,
+            episode: e,
+            compact: false,
+            playing: playing,
+            start: identical(e, start),
+            entry: identical(e, into),
+            onTap: e.upcoming ? null : () => widget.onPick(e),
+          );
+        },
+      );
+    },
+  );
+
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
+  Widget build(BuildContext context) => tvMenus ? _tv(context) : LayoutBuilder(
     builder: (context, box) {
       final top = Layout.windowChrome(context);
       final safe = MediaQuery.paddingOf(context);
@@ -267,9 +377,8 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
                         _revealedFor = k;
                         _reveal();
                       }
-                      return ShaderMask(
-                        blendMode: BlendMode.dstIn,
-                        shaderCallback: (r) => LinearGradient(
+                      return EdgeFade(
+                        shader: (r) => LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
@@ -344,9 +453,12 @@ class _SeasonPill extends StatelessWidget {
 }
 
 class _EpisodeRow extends StatelessWidget {
-  const _EpisodeRow({super.key, required this.episode, required this.playing, required this.compact, required this.onTap, this.short = false, this.start = false});
+  const _EpisodeRow({super.key, required this.episode, required this.playing, required this.compact, required this.onTap, this.short = false, this.start = false, this.entry = false});
   final EpisodeInfo episode;
   final bool playing;
+
+  /// A TV's column of episodes: where a D-pad lands coming into it from the seasons.
+  final bool entry;
 
   /// Where a D-pad lands when the list opens.
   final bool start;
@@ -367,6 +479,7 @@ class _EpisodeRow extends StatelessWidget {
       child: Pressable(
         onTap: playing ? null : onTap,
         autofocus: start,
+        railEntry: entry,
         builder: (context, hovered, pressed) => AnimatedScale(
           scale: pressed ? .985 : 1,
           duration: const Duration(milliseconds: 120),
@@ -486,7 +599,8 @@ class UpNextCard extends StatefulWidget {
 }
 
 class _UpNextCardState extends State<UpNextCard> with SingleTickerProviderStateMixin {
-  late final _timer = AnimationController(vsync: this, duration: widget.countdown);
+  // a clock, not a flourish: it keeps its length where animations are cut short (core/lean.dart)
+  late final _timer = AnimationController(vsync: this, duration: widget.countdown, animationBehavior: AnimationBehavior.preserve);
 
   @override
   void initState() {

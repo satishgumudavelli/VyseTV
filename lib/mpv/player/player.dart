@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../support/audio_channel_limit.dart';
 import '../support/playback_rate.dart';
 import '../models.dart';
@@ -394,6 +396,27 @@ abstract class Player {
   (int, int) get currentVideoSize;
   Stream<(int, int)> get videoSize;
 
+  /// VyseTV: whether an mpv core is doing the playing. Always, on the mpv backends; on the
+  /// Android Media3 backend only once it has handed the video over to its mpv fallback.
+  /// mpv's own properties and commands only mean something while this is true.
+  bool get mpvCore;
+
+  /// VyseTV: on the Android Media3 backend, once it has handed the video to its mpv fallback:
+  /// what for ('audio', 'video', 'stream', 'format', 'stuck' or 'error') and the plugin's own
+  /// words for it. Null on every other backend, and before a hand-over.
+  ({String kind, String reason})? get handOver;
+
+  /// VyseTV: the rest of what the plugin said with a hand-over, for the report card
+  /// (data/playback/playback_report.dart): 'detail' (the error's own name and cause, or what a
+  /// watchdog measured), 'afterMs' (how long after the open) and 'stats' (what Media3 knew of
+  /// the video as it gave it up). Null where [handOver] is.
+  Map<String, Object?>? get handOverFacts;
+
+  /// VyseTV: shows the subtitle file at [uri] now. True when this backend took it: the Android
+  /// Media3 one (and its mpv fallback), which have no `sub-add`. False on the mpv backends,
+  /// where VyseTV loads subtitle files with mpv's own commands.
+  Future<bool> addSubtitleFile(String uri, {String? title, String? language});
+
   /// Dispose of the player and release resources.
   ///
   /// [preserveDisplayMode] keeps any native display-mode hint active while a
@@ -420,6 +443,8 @@ abstract class Player {
   /// software ones, where DV reshaping can actually happen (see
   /// MpvPlayerCore.initialVideoOutput; #2010).
   factory Player({bool? useExoPlayer, bool hardwareDecoding = true}) {
+    // VyseTV: tests run on a PC; with this on, asking for ExoPlayer gets its Dart side there too.
+    if (useExoPlayer == true && debugExoOnAnyPlatform) return PlayerAndroid();
     if (Platform.isAndroid) {
       // Default to MPV on Android, with ExoPlayer as the opt-in alternative.
       // The caller should pass useExoPlayer based on SettingsService.useExoPlayer.
@@ -440,6 +465,10 @@ abstract class Player {
     }
     throw UnsupportedError('Player is not supported on this platform');
   }
+
+  /// VyseTV, for tests: see the factory above.
+  @visibleForTesting
+  static bool debugExoOnAnyPlatform = false;
 
   /// Creates the dedicated audio-only player used for music playback.
   ///

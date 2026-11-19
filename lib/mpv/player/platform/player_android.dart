@@ -33,6 +33,34 @@ class PlayerAndroid extends PlayerBase {
 
   bool get usingMpvFallback => _usingMpvFallback;
 
+  // VyseTV (see Player.mpvCore, Player.addSubtitleFile).
+  @override
+  bool get mpvCore => _usingMpvFallback;
+
+  // VyseTV: what the plugin said the hand-over was for (see Player.handOver).
+  ({String kind, String reason})? _handOver;
+
+  @override
+  ({String kind, String reason})? get handOver => _usingMpvFallback ? _handOver : null;
+
+  // VyseTV: and the rest of it (see Player.handOverFacts).
+  Map<String, Object?>? _handOverFacts;
+
+  @override
+  Map<String, Object?>? get handOverFacts => _usingMpvFallback ? _handOverFacts : null;
+
+  /// The plugin's own `addSubtitleTrack`: Media3 attaches the file and prepares the video again
+  /// at the same spot (it only takes subtitle files when it prepares); the mpv fallback runs
+  /// `sub-add`. With nothing open yet there is nothing to add it to: the file goes in with
+  /// [open], as one of its `externalSubtitles`.
+  @override
+  Future<bool> addSubtitleFile(String uri, {String? title, String? language}) async {
+    if (disposed) return false;
+    if (!initialized) return true;
+    await invoke('addSubtitleTrack', {'uri': uri, 'title': title, 'language': language, 'select': true});
+    return true;
+  }
+
   /// Subtitles are hidden through the player's visibility toggle. Sticky
   /// across media opens, like mpv's global `sub-visibility`, so an episode
   /// change cannot put them back on screen.
@@ -86,6 +114,15 @@ class PlayerAndroid extends PlayerBase {
       // mpv's track-list instead of immediately applying with ExoPlayer IDs.
       final wasUsingMpvFallback = _usingMpvFallback;
       _usingMpvFallback = true;
+      // VyseTV
+      final kind = data?['kind'], reason = data?['reason'];
+      _handOver = (kind: kind is String && kind.isNotEmpty ? kind : 'error', reason: reason is String ? reason : '');
+      final stats = data?['stats'];
+      _handOverFacts = {
+        'detail': data?['detail'] is String ? data!['detail'] : '',
+        'afterMs': data?['afterMs'] is num ? (data!['afterMs'] as num).toInt() : null,
+        'stats': stats is Map ? stats.cast<String, Object?>() : const <String, Object?>{},
+      };
       if (!wasUsingMpvFallback) {
         clearTracks();
       }

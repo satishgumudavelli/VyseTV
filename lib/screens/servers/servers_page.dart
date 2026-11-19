@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/layout.dart';
 import '../../core/nav.dart' show ShellRoute;
 import '../../core/theme.dart';
+import '../../core/lean.dart';
 import '../../media_servers/media_servers.dart';
 import '../../media_servers/server_playback.dart';
 import '../../media_servers/media/media_hub.dart';
@@ -261,7 +262,7 @@ class _Stack extends StatefulWidget {
 }
 
 class _StackState extends State<_Stack> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
+  late final _c = Lean.loop(AnimationController(vsync: this, duration: const Duration(seconds: 6)));
 
   @override
   void dispose() {

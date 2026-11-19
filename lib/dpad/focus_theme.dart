@@ -17,6 +17,11 @@ class FocusTheme {
   static const double playerControlFocusScale = 1.12;
   // VyseTV: 2 px (upstream: 2.5) and a tighter glow, to sit with VyseTV's thin outlines.
   static const double focusBorderWidth = 2;
+
+  /// Where the ring goes for a control that is only text (a link in a line of them: a studio's
+  /// name, an artist's). It has no room of its own: drawn inside its edge the ring cuts through
+  /// the first and last letters, so it goes round the text, this far outside it.
+  static const EdgeInsets textLinkInset = EdgeInsets.symmetric(horizontal: -5, vertical: -2);
   static const double defaultBorderRadius = 8.0;
   static const double focusGlowInnerBlurRadius = 12;
   static const double focusGlowOuterBlurRadius = 26;
