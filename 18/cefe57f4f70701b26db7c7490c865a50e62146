@@ -1,0 +1,22 @@
+scripts/install_linux_local.sh
+  s_141489c594600d::t_cc8f9f01d2f42b 52
+  s_141489c594600d::t_ea3fd169ab3a5c 49-51
+  s_141489c594600d::t_5ce4fe7ab67b58 1-48,53-56
+  s_141489c594600d::t_9f2530110146e4 57-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18cefe57f4f70701b26db7c7490c865a50e62146",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
