@@ -1,0 +1,1238 @@
+windows/runner/mpv/display_mode_manager.h
+  s_141489c594600d::t_ed520f9f3cb3d6 148
+android/app/src/main/AndroidManifest.xml
+  s_141489c594600d::t_ed520f9f3cb3d6 18-20,30-31,53,72-76,93-95
+  s_141489c594600d::t_7da244f6fbd5a3 96
+lib/media_servers/services/server_registry.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-37
+lib/media_servers/services/trackers/tracker_session_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-13
+lib/widgets/dialogs/update_dialog.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-266
+lib/media_servers/utils/plex_library_section_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-34
+lib/core/platform/device_performance.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-245
+android/libass/src/main/java/com/vyse/libass/media/extractor/AssMatroskaExtractor.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-169
+lib/media_servers/services/favorite_channels_repository.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-107
+lib/media_servers/utils/device_identity.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-152
+lib/media_servers/support/mpv.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2
+lib/media_servers/utils/global_key_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-23
+test/dpad/bed/phase7_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-105
+android/app/src/main/kotlin/com/vyse/player/shared/DeviceQuirks.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-99
+lib/media_servers/media/media_filter.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-202
+android/settings.gradle.kts
+  s_141489c594600d::t_ed520f9f3cb3d6 28
+lib/screens/party/member_list.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7
+android/libass/consumer-rules.pro
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2
+lib/media_servers/utils/iso_639_data.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-406
+android/app/src/main/kotlin/com/vyse/player/exoplayer/SurfaceTxProbe.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-44
+lib/screens/party/rooms_view.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 6
+lib/media_servers/services/jellyfin_lan_discovery_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-93
+test/dpad/t3_crawl_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-277
+windows/runner/CMakeLists.txt
+  s_141489c594600d::t_ed520f9f3cb3d6 39
+android/app/src/main/kotlin/com/vyse/player/mpv/DemuxerBudget.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-205
+lib/media_servers/media/media_sort.freezed.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-280
+lib/screens/player/subtitle_sync_panel.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-608
+windows/runner/mpv/mpv_plugin.h
+  s_141489c594600d::t_ed520f9f3cb3d6 27,38,42
+lib/media_servers/utils/media_event_keys.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-48
+android/app/src/main/kotlin/com/vyse/player/exoplayer/MatroskaLatmSupport.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-65
+lib/media_servers/services/track_selection_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1303
+lib/screens/live_tv/live_tv_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-544
+lib/media_servers/models/livetv_program.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-191
+lib/media_servers/models/plex/plex_home.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-22
+lib/media_servers/services/plex_client/parts/collections.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-356
+android/app/src/main/kotlin/com/vyse/player/exoplayer/IecCarrierPacker.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-50
+android/app/src/main/kotlin/com/vyse/player/shared/SurfacePlayerCore.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-28
+android/libass/src/main/java/com/vyse/libass/media/parser/AssHeaderParser.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-44
+lib/screens/home/continue_watching.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-330
+lib/screens/profile/account_sheet.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-671
+test/dpad/t4_journeys_phone_edit_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-144
+lib/mpv/support/player_settings.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2
+lib/data/live_tv/live_guide.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-211
+lib/media_servers/utils/subtitle_forced_semantics.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-16
+android/app/src/main/kotlin/com/vyse/player/exoplayer/DtsHdIecPacker.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-308
+windows/runner/mpv/mpv_player.h
+  s_141489c594600d::t_ed520f9f3cb3d6 56-58,139,145-146,150
+test/dpad/t4_journeys_phase7_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-331
+lib/screens/live_tv/live_tv_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-497
+test/dpad/look_phase9_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+test/dpad/t3_walk_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-32
+lib/media_servers/services/api_cache.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-116
+lib/media_servers/media/library_query.freezed.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1127
+lib/widgets/media_rows.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 10-13,69-72,97-98,117,124,168-169,173,210,216-218,222-223,541-542
+  s_141489c594600d::t_2ce891b07ef594 574
+android/app/src/main/kotlin/com/vyse/player/mpv/DecoderOptions.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-40
+android/app/src/main/kotlin/com/vyse/player/exoplayer/DvBitstreamSanitizer.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-172
+lib/media_servers/models/jellyfin/jellyfin_account_preferences.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-101
+lib/media_servers/services/jellyfin_trickplay_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-203
+lib/media_servers/utils/external_ids.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-248
+lib/data/audiobooks/audiobook_player.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-363
+lib/media_servers/utils/json_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-163
+lib/media_servers/media/media_item.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-273
+lib/screens/servers/server_item_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 9-11
+lib/data/sources/debrid/utils/parse_torrent_title.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-369
+lib/media_servers/support/sentry_stub.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-16
+macos/Runner/MpvPlayer/MpvAudioPlayerPlugin.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 9,31,37
+test/dpad/t3_walk_phase9_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-42
+lib/media_servers/media/media_rating.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-50
+lib/media_servers/services/jellyfin_client/parts/playlists.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-231
+lib/data/sources/film_sources/source_settings.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-40
+lib/media_servers/utils/platform_http_client_io.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-57
+lib/data/sources/knaben.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-229
+lib/media_servers/media/media_hub.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-143
+lib/media_servers/media/media_library.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-55
+lib/media_servers/models/plex/plex_config.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-111
+test/dpad/bed/fake_net.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-303
+android/app/src/main/kotlin/com/vyse/player/shared/MpvContentUriResolver.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-69
+lib/mpv/player/platform/player_android_mpv.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 4,6
+test/dpad/t4_journeys_live_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-308
+lib/dpad/transport_keys.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-54
+lib/mpv/player/platform/player_android.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 11-12
+windows/runner/mpv/display_mode_manager.cpp
+  s_141489c594600d::t_ed520f9f3cb3d6 14,160,1361
+lib/data/trackers/media_ref.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2
+lib/media_servers/services/jellyfin_client/parts/file_info.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-150
+lib/screens/party/dm_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 11,15,679-683,708
+lib/media_servers/services/plex_client/parts/metadata_edit.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-202
+lib/dpad/dpad_navigator.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-212
+lib/media_servers/utils/search_relevance.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-177
+lib/core/platform/async_singleton.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-62
+android/app/src/main/kotlin/com/vyse/player/mpv/SurfaceFrameRateVote.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-130
+lib/media_servers/media/media_server_exceptions.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-153
+lib/screens/party/party_live_player.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 9,11-13,16,33-34,37-73,96,108-120,130-131,166-170,197,200,216-221,227-241,272-281,283-286,311-313,318-322,324,330,332
+lib/screens/party/watch_start.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 3,7-8
+lib/data/sources/film_sources/common.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-344
+lib/dpad/focus_chrome.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-501
+android/libass/src/main/java/com/vyse/libass/media/widget/AssSubtitleAtlasPipeline.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1710
+lib/dpad/dpad_traversal.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-833
+lib/media_servers/services/plex_lyrics_parser.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-110
+lib/widgets/dialogs/debrid_consent.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-51
+android/app/src/main/kotlin/com/vyse/player/shared/ThemeHelper.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-12
+lib/data/party/party_live.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7-8
+test/dpad/look_phase9_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+lib/media_servers/models/plex/plex_match_result.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-31
+android/app/src/main/kotlin/com/vyse/player/DeferredSurfaceTextureListener.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-54
+lib/screens/party/party_widgets.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 10
+android/libass/src/main/cpp/AssPack.h
+  s_141489c594600d::t_ed520f9f3cb3d6 4-5,57
+lib/data/anime/anilist.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-816
+lib/media_servers/media/media_version.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-32
+android/app/src/main/kotlin/com/vyse/player/mpv/DecoderHold.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-103
+android/libass/src/main/java/com/vyse/libass/media/parser/AssSubtitleParserFactory.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-32
+lib/data/sources/film_sources/film_sources.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-288
+lib/media_servers/media/media_kind.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-103
+lib/dpad/dpad_root.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-708
+lib/media_servers/models/livetv_dvr.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-23
+android/libass/src/main/java/com/vyse/libass/media/parser/AssFullSubtitleParser.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-29
+lib/screens/details/anime_details_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-800
+lib/media_servers/media/library_change_event.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-79
+linux/runner/mpv/video_params.h
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2,107
+linux/runner/my_application.cc
+  s_141489c594600d::t_ed520f9f3cb3d6 14,108
+android/app/src/main/kotlin/com/vyse/player/exoplayer/CuelessSeekExtractorWrapper.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-226
+lib/screens/library/history_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-572
+lib/media_servers/models/connection.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-367
+lib/data/catalog/tmdb.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-826
+lib/media_servers/models/plex/plex_switch_response.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-13
+lib/media_servers/utils/track_label_builder.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-225
+lib/data/sources/torrent_file_pick.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-92
+lib/dpad/dpad_select_long_press_controller.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-63
+lib/screens/party/room_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 11-12,19-20,23-25,1364-1368,1407,1559-1560,1563-1573
+lib/widgets/common.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 10-13,16-21,23-38,43-51,53-79,89-105,109-112,114-132,134-140,321,441-442,444-459
+lib/widgets/voice_search.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-113
+test/dpad/t1_kit_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-672
+android/app/src/main/kotlin/com/vyse/player/shared/FrameRateManager.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-361
+test/dpad/t4_journeys_phase11_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-130
+lib/data/phone_edit/phone_code.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-76
+test/dpad/t7_stress_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-109
+lib/data/sources/debrid/providers/torbox_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-135
+lib/data/playback/watch_progress.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-258
+test/dpad/look_phase6_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-14
+lib/media_servers/media/media_part.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-67
+lib/media_servers/models/media_grab_operation.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-64
+lib/screens/music/music_shell.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 10-15,18-19,58-59,62-109,119-121,154-156,161,165-176,182-194,204,208,210,735-741,787-788,791-802,810
+lib/media_servers/media/search_hit.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-28
+lib/data/trackers/tracker_hub.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7,9-10
+android/app/src/main/kotlin/com/vyse/player/exoplayer/VideoDecoderRecoveryPolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-40
+lib/core/logs/music_log.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-54
+lib/media_servers/services/jellyfin_client/parts/metadata_edit.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-112
+lib/media_servers/services/plex_mappers.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1535
+android/app/src/main/kotlin/com/vyse/player/shared/PlayerDebugLog.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-35
+android/libass/src/test/java/com/vyse/libass/media/widget/SpecRenderEngineTest.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-404
+android/app/src/main/kotlin/com/vyse/player/exoplayer/LatmTrackOutput.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-156
+lib/screens/manga/manga_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-331
+lib/core/logs/sub_log.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-41
+android/app/build.gradle.kts
+  s_141489c594600d::t_ed520f9f3cb3d6 9-10,169,287,302,316,332,339,348,371,388,393
+lib/media_servers/services/prefs_recovery.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-617
+lib/screens/search/open_link.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-216
+lib/screens/party/party_music_view.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 11,759-766,781,1165-1171
+lib/media_servers/models/plex/plex_activity.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-33
+lib/media_servers/services/jellyfin_client/parts/browse.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2892
+linux/packaging/build-appimage.sh
+  s_141489c594600d::t_ed520f9f3cb3d6 4
+lib/media_servers/services/video_decode_capabilities.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-140
+lib/mpv/support/app_logger.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1
+test/dpad/t3_walk_phase7_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-41
+lib/media_servers/services/plex_client/parts/playlists.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-182
+test/dpad/t4_tv4_start_keys_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-49
+macos/Runner/MainFlutterWindow.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 12,22,35
+linux/CMakeLists.txt
+  s_141489c594600d::t_ed520f9f3cb3d6 54
+lib/data/sources/torrent_file_ask.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-141
+lib/screens/live_tv/match_widgets.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-154
+lib/media_servers/services/trackers/tracker_exceptions.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-76
+android/app/src/main/kotlin/com/vyse/player/exoplayer/AudioOutputPolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-609
+lib/data/playback/stream_proxy.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-522
+lib/media_servers/media/lyrics.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-23
+lib/media_servers/services/playback_initialization_types.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-266
+test/dpad/look_phase3_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+test/dpad/t4_journeys_shell_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-286
+lib/data/music/music_player.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-553
+lib/data/phone_edit/phone_settings.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-487
+lib/media_servers/media/ids.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-30
+test/dpad/look_phase4_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+lib/data/music/music_library.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 8
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ResumeStallPolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-59
+lib/media_servers/models/plex/plex_home.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-21
+lib/screens/details/details_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1194
+lib/screens/downloads/downloads_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-431
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ZlibMatroskaExtractor.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-315
+lib/media_servers/services/jellyfin_auth_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-460
+lib/media_servers/utils/resolution_label.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-46
+android/app/src/main/kotlin/com/vyse/player/mpv/DecoderOperatingRate.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-73
+ios/Runner/AppDelegate.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 11,14,25
+ios/Runner/MpvPlayer/MpvPlayerCoreBase.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 140,650,852,910
+lib/media_servers/models/livetv_dvr.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-38
+lib/mpv/extras/display_match.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1,3-4,6,21,89
+lib/mpv/extras/picture_effects.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1,3,15,29,33,44-55,68-76,85,88-93,96-100,109,111-121,159
+lib/screens/music/music_detail_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-481
+lib/data/live_tv/live_favorites.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-43
+lib/screens/audiobooks/audiobook_details_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-248
+lib/dpad/locked_hub_controller.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-45
+lib/media_servers/media/media_sort.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-22
+linux/runner/mpv/mpv_player.cc
+  s_141489c594600d::t_ed520f9f3cb3d6 111,150,202,351,371,732,778,786,800,803,813-814,827,868,879,1053,1063,1078,1114-1115,1118,1127,1140,1166,1182,1220,1260,1272,1310,1312-1313,1417,1441,1487,1516,1524,1705,1740,1742
+android/app/src/main/kotlin/com/vyse/player/mpv/MpvEndFileDiagnostics.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-53
+lib/data/party/dms.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7
+lib/screens/manga/manga_details_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-390
+lib/media_servers/utils/base_notifier.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-32
+lib/media_servers/services/plex_api_cache.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-50
+test/dpad/bed/fake_anilist.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-102
+test/dpad/t4_journeys_tv4_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-487
+test/dpad/t4_tv4_start_fresh_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-52
+lib/data/sources/debrid/providers/real_debrid_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-201
+lib/media_servers/utils/session_identifier.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-15
+lib/screens/live_tv/matches_view.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-341
+linux/packaging/vysetv.sh
+  s_141489c594600d::t_ed520f9f3cb3d6 2
+.github/workflows/build.yml
+  s_141489c594600d::t_ed520f9f3cb3d6 1,3,5,59,104,118,160,192-193,264,376,378
+lib/media_servers/utils/lrc_parser.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-63
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ExternalSubtitleIds.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-40
+lib/media_servers/media/media_server_user_profile.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-48
+lib/media_servers/utils/abortable_http_request.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-63
+lib/media_servers/services/playback_report_session.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-307
+test/dpad/look_phase5_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+test/dpad/t3_walk_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-32
+test/dpad/t4_journeys_update_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-315
+windows/runner/main.cpp
+  s_141489c594600d::t_ed520f9f3cb3d6 11,32-33
+android/libass/build.gradle.kts
+  s_141489c594600d::t_ed520f9f3cb3d6 11,17,43
+ios/Runner/MpvPlayer/MpvPipController.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 20
+macos/Runner/MpvPlayer/MpvPlayerPlugin.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 31,36,41
+lib/screens/details/episode_explorer.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-979
+test/dpad/look_phase8_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+android/app/src/main/kotlin/com/vyse/player/shared/AudioFocusManager.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-105
+windows/tool/install-patched-engine.ps1
+  s_141489c594600d::t_ed520f9f3cb3d6 4
+android/app/src/main/cpp/media3_ffmpeg_decoder/ffmpeg_jni.cc
+  s_141489c594600d::t_ed520f9f3cb3d6 447,449,480,482
+lib/data/catalog/discover.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-372
+lib/data/manga/manga_library.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-229
+macos/Runner/Info.plist
+  s_141489c594600d::t_ed520f9f3cb3d6 33,36
+lib/media_servers/services/library_events/library_event_socket.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-335
+test/dpad/t4_journeys_menus_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-104
+lib/media_servers/media/media_playlist.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-66
+lib/media_servers/media/media_part.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-29
+lib/mpv/extras/external_player.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 2-3,19
+lib/core/nav.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 3-9,37-38
+lib/media_servers/media/media_filter.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-38
+lib/data/party/friends.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 6
+lib/mpv/extras/pip.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1,4,17
+test/dpad/t3_walk_player_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-56
+android/libass/src/main/java/com/vyse/libass/AssTrack.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-77
+lib/media_servers/services/jellyfin_client/parts/watch_state.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-96
+lib/data/sources/addons.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-808
+lib/media_servers/services/storage_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-670
+lib/mpv/mpv.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 61
+lib/core/logs/app_logger.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-128
+lib/mpv/player/player.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 3,450
+lib/screens/anime/anime_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1358
+android/app/src/main/kotlin/com/vyse/player/mpv/EglHdrCaps.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-74
+lib/core/layout.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 3,30-32
+  s_141489c594600d::t_14dea3da3a30e7 33
+lib/core/platform/device_channel.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-5
+android/app/src/main/kotlin/com/vyse/player/shared/PlayerChannelBinding.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-76
+test/dpad/look_phase7_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-14
+lib/media_servers/services/jellyfin_playback_urls.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-63
+android/app/src/main/kotlin/com/vyse/player/shared/PlayerDelegate.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-10
+test/dpad/t7_hold_everywhere_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-103
+lib/data/account/account.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-277
+android/libass/src/main/java/com/vyse/libass/media/AssHandlerConfig.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-6
+android/app/src/main/kotlin/com/vyse/player/exoplayer/EndOfStreamPolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-77
+lib/dpad/owned_focus_node_binding.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-41
+lib/media_servers/services/live_session_tracker.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-51
+lib/screens/live_tv/live_tv_player_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-605
+lib/data/app_settings.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 3,91-93,118-119,138,166
+lib/media_servers/services/trackers/tracker_session.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-157
+lib/media_servers/services/jellyfin_client/parts/images_downloads.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-146
+lib/media_servers/media/media_browser_dialect.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-292
+README.md
+  s_141489c594600d::t_ed520f9f3cb3d6 42,99,151,191-201,359-361,369-370,378-380,383,385-391,394-397,399-401,403,413-414,423,457
+test/dpad/look_phase8_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+lib/media_servers/models/livetv_channel.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-175
+lib/data/sources/debrid/providers/debrid_link_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-155
+android/libass/src/test/java/com/vyse/libass/media/extractor/AssMatroskaExtractorTest.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-156
+lib/data/party/alerts.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 12
+lib/media_servers/utils/hierarchical_event_mixin.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-39
+lib/screens/player/player_menus.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1954
+lib/media_servers/utils/poll_with_backoff.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-39
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ObservingLoadControl.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-91
+lib/media_servers/media/media_role.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-21
+android/app/src/main/kotlin/com/vyse/player/mpv/OsdPlanePolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-41
+lib/screens/player/player_episodes.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-640
+lib/screens/profile/profile_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-3013
+macos/Runner/MpvPlayer/MpvPlayerCoreBase.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 140,650,852,910
+lib/dpad/dpad_picture.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-175
+lib/media_servers/utils/jellyfin_time.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-37
+lib/media_servers/media/media_part_timeline.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-69
+lib/media_servers/services/trackers/tracker_constants.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-36
+lib/media_servers/utils/future_extensions.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-43
+lib/media_servers/media/media_file_info.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-610
+lib/media_servers/media/media_item.freezed.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-651
+lib/screens/manga/manga_widgets.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-110
+lib/screens/music/music_player_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-665
+lib/screens/music/music_ui.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 10
+windows/runner/flutter_window.cpp
+  s_141489c594600d::t_ed520f9f3cb3d6 110
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ExoPlayerPlugin.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1554
+lib/media_servers/media/library_first_character.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-16
+test/dpad/bed/look_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-273
+lib/media_servers/services/jellyfin_endpoint_discovery.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-581
+lib/media_servers/media/server_capabilities.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-180
+lib/media_servers/media/media_server_client.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1141
+lib/media_servers/services/jellyfin_client/parts/playback.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1209
+android/app/src/main/kotlin/com/vyse/player/mpv/MpvPlayerPlugin.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-776
+android/libass/src/test/java/com/vyse/libass/media/parser/AssHeaderParserTest.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-60
+lib/media_servers/media/artist_discography.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-33
+lib/media_servers/models/plex/plex_match_result.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-40
+linux/runner/mpv/plane_geometry.h
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2,111
+linux/runner/mpv/wayland_video_surface.h
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2,506
+test/dpad/t3_walk_title_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-49
+test/dpad/bed/baseline_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-55
+lib/media_servers/utils/media_server_retry.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-86
+lib/data/subtitles/codepages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-24
+lib/dpad/input_mode_tracker.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-189
+lib/media_servers/models/plex/plex_home_user.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-40
+lib/media_servers/models/plex/plex_subtitle_search_result.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-55
+lib/media_servers/utils/plex_url_helper.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-23
+lib/widgets/service_logos.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 4
+linux/runner/mpv/plane_render_executor.h
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2,86
+lib/media_servers/models/plex/plex_activity.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-16
+lib/media_servers/media/playback_report_metadata.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-23
+lib/media_servers/models/profile.freezed.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-380
+lib/media_servers/models/transcode_quality_preset.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-87
+lib/data/updates/updater.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-585
+lib/screens/audiobooks/audiobooks_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-242
+android/app/src/main/kotlin/com/vyse/player/mpv/MpvPlayerCore.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-3511
+lib/dpad/focus_memory_tracker.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-84
+lib/screens/shell/shell.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1304
+linux/runner/mpv/mpv_plugin.h
+  s_141489c594600d::t_ed520f9f3cb3d6 36
+android/app/src/main/kotlin/com/vyse/player/exoplayer/AudioOutputCachePolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-36
+lib/data/sources/debrid/utils/debrid_media_matcher.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-284
+lib/screens/home/home_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-608
+android/app/src/main/kotlin/com/vyse/player/exoplayer/PgsCompositionParser.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-310
+lib/data/sources/debrid/debrid_keys.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-28
+android/app/src/main/kotlin/com/vyse/player/exoplayer/AssLatencyCalibrator.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-204
+lib/media_servers/models/plex/plex_metadata_preferences.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-39
+lib/media_servers/support/strings.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-913
+lib/dpad/dpad_extras.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-88
+lib/media_servers/models/livetv_capture_buffer.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-39
+lib/media_servers/utils/isolate_helper.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-17
+linux/runner/mpv/vyse_texture_fallback.h
+  s_141489c594600d::t_ed520f9f3cb3d6 4,6
+android/app/src/main/kotlin/com/vyse/player/exoplayer/DoviExtractorWrapper.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-74
+linux/runner/mpv/hdr_metadata.h
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2,419
+lib/data/playback/intro_db.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-60
+lib/dpad/dpad_seek.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-183
+lib/data/sources/debrid/debrid.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-143
+lib/dpad/dpad_reveal.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-193
+lib/media_servers/services/plex_client/parts/live_tv.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1149
+lib/media_servers/services/plex_mappers.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-222
+lib/data/anime/anime_sources.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-571
+lib/mpv/vyse_video.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1,3,5,9,50
+test/dpad/t4_journeys_phase10_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-120
+lib/media_servers/utils/web_socket_connect.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-121
+android/libass/src/main/java/com/vyse/libass/AssRender.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-202
+lib/media_servers/server_playback.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 12-22,26
+lib/media_servers/services/base_shared_preferences_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-669
+lib/media_servers/services/multi_server_manager.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1731
+lib/screens/live_tv/portal_browser_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1975
+lib/screens/shell/intro_screen.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-340
+android/app/src/main/kotlin/com/vyse/player/shared/AssistiveTechnologyMonitor.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-86
+android/libass/src/main/java/com/vyse/libass/media/AssHandler.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-433
+lib/media_servers/media/library_filter_selection.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-81
+lib/media_servers/services/image_cache_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-17
+lib/widgets/dialogs/torrent_file_dialog.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-137
+test/dpad/harness_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-45
+lib/media_servers/utils/endpoint_race.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-341
+lib/media_servers/models/plex/plex_subtitle_search_result.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-49
+lib/media_servers/services/connectivity_probe.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-105
+test/dpad/t3_walk_phase7_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-42
+test/dpad/bed/phase8_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-46
+test/dpad/t4_journeys_phase8_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-219
+windows/runner/mpv/mpv_plugin.cpp
+  s_141489c594600d::t_ed520f9f3cb3d6 19,27,41,265,282,310,313,316
+lib/media_servers/media/media_display_criteria.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-149
+lib/data/live_tv/match_finder.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-144
+android/app/src/main/kotlin/com/vyse/player/FlutterRendererPolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-46
+lib/data/account/account_sync.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-372
+lib/media_servers/media/media_person.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-83
+lib/media_servers/services/jellyfin_client/parts/live_tv_dvr.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-348
+lib/media_servers/models/media_subscription.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-58
+android/libass/src/main/java/com/vyse/libass/AssFrameTimestamps.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-71
+lib/data/phone_edit/phone_session.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-251
+lib/media_servers/utils/language_codes.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-74
+lib/screens/details/person_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1026
+android/app/src/main/kotlin/com/vyse/player/exoplayer/IecCarrierSink.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-466
+lib/data/party/party_music.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7-8
+android/app/src/main/kotlin/com/vyse/player/AndroidExitDiagnostics.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-401
+lib/media_servers/media/download_resolution.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-78
+lib/screens/live_tv/portal_browser_player.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-576
+android/libass/src/main/java/com/vyse/libass/Ass.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-71
+lib/screens/music/music_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-888
+test/dpad/look_phase6_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-14
+android/app/src/main/kotlin/com/vyse/player/exoplayer/TrueHdMatPacker.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-258
+android/app/src/main/kotlin/com/vyse/player/exoplayer/BufferingStallPolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-112
+lib/data/playback/audio_focus.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-25
+lib/media_servers/models/jellyfin/jellyfin_display_preferences.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-64
+windows/runner/mpv/mpv_player.cpp
+  s_141489c594600d::t_ed520f9f3cb3d6 98,570,609,709,724,728,737,828-829,832,841,875,902,924,927,952,1066
+android/libass/src/main/java/com/vyse/libass/media/widget/AssSubtitleSurfaceView.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-178
+test/dpad/t3_walk_phase6_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-29
+lib/screens/music/music_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 9
+android/libass/src/main/cpp/AssKt.c
+  s_141489c594600d::t_ed520f9f3cb3d6 38,45,60,66,75,102,107,113,121,137,189,204,210,216,222,228,234,241,316,458,510,520
+lib/data/sources/debrid/models/debrid_file.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-12
+lib/media_servers/models/plex/plex_home_user.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-71
+lib/mpv/support/track_metadata.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-3
+lib/screens/live_tv/live_tv_widgets.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-376
+android/app/src/main/kotlin/com/vyse/player/mpv/PresentedFrameRate.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-40
+lib/data/trackers/library_import.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 6,8-9
+lib/dpad/tv_text_input.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-37
+test/dpad/look_phase5_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+android/app/src/main/kotlin/com/vyse/player/exoplayer/DoviConvertingTrackOutput.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-663
+lib/data/party/party.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 8
+test/dpad/bed/walker.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-373
+lib/media_servers/support/app_locale_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-8
+test/dpad/fonts/OFL.txt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-94
+android/libass/src/main/java/com/vyse/libass/media/widget/SpecRenderEngine.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-287
+lib/core/platform/platform_detector.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-367
+lib/data/updates/update_signature.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-82
+test/dpad/t4_journeys_tv2_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-256
+android/app/src/main/cpp/media3_ffmpeg_decoder/ffmpeg_audio_buffer.h
+  s_141489c594600d::t_ed520f9f3cb3d6 16-17,22,46,48
+lib/media_servers/services/download_artwork_helpers.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-38
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ZlibInflatingTrackOutput.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-91
+lib/media_servers/services/jellyfin_client.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-648
+linux/runner/mpv/mpv_player.h
+  s_141489c594600d::t_ed520f9f3cb3d6 66,132-134,190,442,479,516,522-523,528
+android/app/src/main/kotlin/com/vyse/player/exoplayer/LoadControlPolicy.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-148
+lib/data/party/rooms.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 6
+lib/media_servers/services/media_browser_paths.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-97
+lib/data/party/watch_party.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7-8,10-11
+tool/dpad_inventory.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-80
+ios/Runner/MpvPlayer/MpvAudioPlayerPlugin.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 9,31,37
+lib/mpv/player/vyse_extras.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1,3,6-7
+lib/screens/party/party_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 8,15-16
+test/dpad/t1_traversal_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-766
+lib/media_servers/utils/watch_state_notifier.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-259
+lib/screens/discover/discover_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1272
+test/dpad/t3_walk_phase8_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-37
+test/dpad/look_phase3_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+test/dpad/bed/fake_relay.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-108
+test/dpad/t4_journeys_phase9_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-528
+lib/media_servers/services/plex_playback_mapper.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-195
+linux/runner/CMakeLists.txt
+  s_141489c594600d::t_ed520f9f3cb3d6 12,17,30
+android/libass/src/main/java/com/vyse/libass/media/parser/AssNoOpSubtitleParser.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-24
+lib/media_servers/media/media_item.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-700
+android/app/src/main/kotlin/com/vyse/player/exoplayer/BufferedTransformingTrackOutput.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-151
+test/dpad/bed/fake_tmdb.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-235
+android/app/src/main/kotlin/com/vyse/player/exoplayer/DownmixMatrices.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-84
+lib/data/sources/sources.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-334
+lib/dpad/focus_navigation_intent.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-107
+lib/data/subtitles/subtitles.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-742
+test/dpad/t3_walk_phase6_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-31
+lib/widgets/audiobook_widgets.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 5-8,10-12,32-33,35-43,49,188,195-226
+test/dpad/bed/phase9_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-112
+lib/media_servers/utils/formatters.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-214
+lib/media_servers/utils/happy_eyeballs.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-251
+lib/dpad/focusable_wrapper.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-563
+android/app/src/main/cpp/dovi_bridge.cpp
+  s_141489c594600d::t_ed520f9f3cb3d6 24,121,130
+lib/media_servers/media/live_tv_support.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-267
+lib/media_servers/services/jellyfin_client/parts/account_preferences.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-101
+android/libass/src/test/java/com/vyse/libass/media/AssFontStoreTest.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-48
+lib/media_servers/services/jellyfin_display_metadata.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-72
+lib/media_servers/services/scrub_preview_source.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-101
+lib/screens/library/my_list_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1237
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ExoPlayerCore.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-4444
+android/app/src/main/kotlin/com/vyse/player/shared/DisplayModeSelector.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-268
+lib/data/live_tv/live_tv.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-233
+lib/data/sources/debrid/providers/alldebrid_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-208
+lib/media_servers/services/library_query_translator.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-309
+lib/media_servers/services/trackers/oauth_proxy_client.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-153
+lib/screens/party/party_music_room.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 8-9,18,170-174,176,278
+lib/screens/party/party_strip.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7,11,115-122,402-403,408-410
+lib/media_servers/media/account_preferences.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-433
+pubspec.yaml
+  s_141489c594600d::t_ed520f9f3cb3d6 37,43,69-70,133,137
+lib/media_servers/media/media_backend.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-56
+lib/media_servers/utils/udp_broadcast_sockets.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-120
+test/dpad/t2_controls_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-417
+lib/media_servers/media/episode_collection.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-405
+test/dpad/t4_journeys_menus_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-198
+lib/screens/party/friends_view.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 4,8,52-53,74,137
+lib/dpad/focus_theme.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-118
+lib/media_servers/utils/certificate_trust.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-98
+android/app/src/main/kotlin/com/vyse/player/NativeModuleCache.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-10
+lib/media_servers/services/sensitive_prefs.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-77
+test/dpad/t4_journeys_player_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-505
+lib/screens/profile/phone_edit_dialog.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-197
+lib/media_servers/services/jellyfin_client/parts/music.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-112
+test/dpad/pointer_baseline_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-19
+test/dpad/t3_walk_title_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-45
+lib/data/subtitles/subtitle_style.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-243
+lib/media_servers/services/jellyfin_api_cache.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-43
+lib/media_servers/models/profile.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-255
+lib/screens/party/member_menu.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7-8,88-96,143-154,168-176
+lib/widgets/dialogs/p2p_consent.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-131
+test/dpad/bed/source_scan.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-256
+lib/media_servers/utils/media_server_timeouts.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-139
+test/dpad/t3_walk_phase8_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-37
+lib/media_servers/services/plex_auth_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1177
+android/app/src/main/kotlin/com/vyse/player/mpv/MpvOperationQueue.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-158
+test/dpad/t3_walk_phase9_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-44
+lib/data/live_tv/channel_catalog.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-223
+lib/media_servers/models/livetv_channel.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-31
+lib/media_servers/services/bif_thumbnail_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-134
+lib/media_servers/media/media_stream.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-63
+lib/media_servers/models/livetv_hub_result.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-19
+lib/media_servers/services/jellyfin_client/parts/collections.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-211
+lib/media_servers/media/library_query.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-197
+lib/screens/search/search_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1001
+android/libass/src/main/java/com/vyse/libass/AssAtlasFrame.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-88
+lib/mpv/player/player_native.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 37-38,47,50,52,122,238-244,327-337
+android/app/src/main/kotlin/com/vyse/player/shared/FlutterOverlayHelper.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-92
+lib/screens/manga/manga_reader_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-975
+lib/media_servers/services/jellyfin_media_info_mapper.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-286
+macos/Runner/MpvPlayer/DisplayModeManager.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 13
+android/libass/src/main/cpp/SurfaceTxProbe.c
+  s_141489c594600d::t_ed520f9f3cb3d6 302
+test/dpad/t4_journeys_title_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-306
+lib/media_servers/utils/failover_http_client.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-471
+lib/media_servers/utils/content_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-60
+lib/media_servers/services/plex_client/parts/play_queues.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-206
+android/app/src/main/kotlin/com/vyse/player/ExternalPlayerChannel.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-250
+lib/media_servers/models/media_grab_operation.g.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-25
+lib/media_servers/utils/log_redaction_manager.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-447
+lib/media_servers/services/library_events/plex_library_event_socket.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-79
+lib/screens/shell/floating.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-185
+test/dpad/t4_journeys_phase6_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-208
+android/app/src/main/cpp/CMakeLists.txt
+  s_141489c594600d::t_ed520f9f3cb3d6 2
+lib/main.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 4-9,20-22,24-25,35,37-41,50-62,69-71,150-158,186-189,191-192,194-203
+lib/media_servers/media_servers.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1,15-31,33-36
+shared/mpv/mpv_player_common.h
+  s_141489c594600d::t_ed520f9f3cb3d6 1-2,18,546,793,795
+lib/media_servers/utils/media_server_http_client.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-577
+lib/media_servers/utils/active_client_scope.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-87
+lib/media_servers/services/jellyfin_client/parts/live_tv.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-567
+lib/dpad/covered_route_focus_boundary.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-208
+android/libass/src/main/java/com/vyse/libass/media/text/AssTrackOutput.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-95
+lib/widgets/section_chrome.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 8-10,12,199-206,230-231,241-245,255,261-265,269
+android/app/src/main/kotlin/com/vyse/player/TvDetection.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-28
+linux/runner/mpv/mpv_plugin.cc
+  s_141489c594600d::t_ed520f9f3cb3d6 61,359,374,1048-1049,1145,1149,1156,1260,1275,1323,1339,1355,1380,1389,1407,1424-1425,1442,1445,1451-1453
+android/app/src/main/kotlin/com/vyse/player/exoplayer/SubtitleCueLayout.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-77
+lib/core/logs/perf.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-49
+lib/media_servers/utils/platform_http_client_stub.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-6
+lib/data/live_tv/sports_schedule.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-280
+test/dpad/look_phase7_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-14
+lib/data/party/party_library.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1,3
+lib/screens/audiobooks/audiobook_player_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-397
+lib/media_servers/media/library_filter_result.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-13
+android/app/src/main/kotlin/com/vyse/player/mpv/MpvPropertyFailure.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-69
+lib/screens/profile/avatar_picker.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-516
+lib/screens/servers/server_widgets.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 10-13,17,280
+lib/media_servers/services/trackers/simkl/simkl_constants.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-116
+lib/media_servers/media/media_version.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-172
+lib/screens/player/player_chrome.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-713
+test/dpad/bed/phase6_pages.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-71
+test/dpad/ring_look_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-99
+lib/media_servers/services/plex_constants.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-58
+lib/data/party/voice.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 10
+lib/media_servers/services/library_events/media_browser_library_event_socket.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-127
+lib/screens/servers/server_library_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 9-13
+macos/Runner/MpvPlayer/MpvPlayerCore.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 312,505-506
+test/dpad/look_phase2_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-47
+android/app/src/main/kotlin/com/vyse/player/shared/PlayerSurfaceHost.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-102
+lib/dpad/key_event_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-282
+lib/media_servers/services/plex_client.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-5143
+lib/screens/player/player_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-4854
+lib/screens/servers/server_sign_in.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 21
+test/dpad/pointer_baseline_android_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-19
+lib/media_servers/utils/plex_cache_parser.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-21
+windows/CMakeLists.txt
+  s_141489c594600d::t_ed520f9f3cb3d6 5,103,216,229,243
+lib/media_servers/media/library_genre.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-18
+android/libass/src/main/java/com/vyse/libass/media/text/AssSubtitleExtractorOutput.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-26
+ios/Runner/MpvPlayer/MpvPlayerPlugin.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 31,35,39
+android/app/src/main/kotlin/com/vyse/player/exoplayer/VyseRenderersFactory.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-886
+lib/media_servers/services/settings_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-62
+lib/media_servers/models/plex/plex_account_preferences.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-131
+lib/media_servers/utils/codec_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-180
+lib/widgets/hero_carousel.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-13,15-868
+test/dpad/look_phase4_windows_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-11
+lib/media_servers/models/plex/play_queue_response.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-32
+lib/media_servers/services/subtitle_preference.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-131
+android/app/src/main/kotlin/com/vyse/player/exoplayer/AudioNormalizationEffect.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-206
+lib/data/playback/outside_play.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-176
+lib/media_servers/services/jellyfin_auth_header.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-91
+lib/media_servers/watched_rule.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1,10
+android/app/src/main/kotlin/com/vyse/vyse_tv/MainActivity.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 3,5,12-14,16,18-25,27-34,40,46-47,51,57,64-200,270-323,325,403-408,479-480,484-492
+lib/screens/servers/servers_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 11-15,938
+lib/media_servers/utils/url_utils.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-109
+lib/media_servers/media/chapter_marker_classifier.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-333
+lib/media_servers/services/jellyfin_playback_bundle.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-59
+lib/media_servers/models/seerr/seerr_session.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-149
+lib/data/sources/debrid/providers/premiumize_service.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-204
+lib/media_servers/utils/managed_http_client.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-327
+lib/media_servers/media/media_role.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-21
+test/dpad/guard_test.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-215
+lib/media_servers/services/app_server.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-5
+lib/data/sources/film_sources/scrapers.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-3091
+lib/media_servers/media/media_sort.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-26
+lib/media_servers/services/file_info_parser.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-493
+android/app/src/main/kotlin/com/vyse/player/exoplayer/SubtitleViewLayout.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-110
+lib/dpad/key_repeat_helper.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-25
+lib/mpv/player/platform/player_apple_mpv.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 4,6
+lib/media_servers/media/watch_progress.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-8
+lib/media_servers/models/media_subscription.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-259
+lib/screens/party/profile_library.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7,12
+lib/screens/player/sources_page.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-1358
+lib/widgets/music_widgets.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 9,11,124-128,351-354
+lib/data/sources/badges.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-153
+lib/data/trackers/trakt_tracker.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 7
+lib/media_servers/models/plex/plex_video_playback_data.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-26
+ios/Runner/MpvPlayer/MpvPlayerCore.swift
+  s_141489c594600d::t_ed520f9f3cb3d6 939-940
+test/dpad/harness.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-673
+lib/media_servers/services/jellyfin_mappers.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-705
+lib/media_servers/models/audio_quality_preset.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-21
+android/app/src/main/kotlin/com/vyse/player/exoplayer/DoviBridge.kt
+  s_141489c594600d::t_ed520f9f3cb3d6 1-403
+lib/data/downloads/downloads.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-884
+lib/media_servers/media/media_source_info.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-515
+lib/data/sources/torrents.dart
+  s_141489c594600d::t_ed520f9f3cb3d6 1-485
+pubspec.lock
+  s_141489c594600d::t_1ef7e99b5eef3b 840-855
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d15e2d2fe6babfbc3d3fd57aa43fa8a9320d92fa",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
