@@ -1,0 +1,34 @@
+.gitignore
+  s_141489c594600d::t_448ff5c60ea2be 73-75
+lib/screens/player/player_page.dart
+  s_141489c594600d::t_efc1b38569a28f 546-547,754,1152-1171,1444,3242,3313,4045-4059
+lib/data/playback/watch_progress.dart
+  s_141489c594600d::t_448ff5c60ea2be 22,47-50,69,95,114,172,194,233
+lib/screens/live_tv/portal_browser_player.dart
+  s_141489c594600d::t_448ff5c60ea2be 315-316
+lib/mpv/player/player.dart
+  s_141489c594600d::t_0d350bcc7f8073 3
+  s_141489c594600d::t_448ff5c60ea2be 427-428
+lib/screens/details/details_page.dart
+  s_141489c594600d::t_448ff5c60ea2be 691-714
+lib/screens/details/episode_explorer.dart
+  s_141489c594600d::t_448ff5c60ea2be 226
+lib/mpv/player/platform/player_android.dart
+  s_141489c594600d::t_448ff5c60ea2be 41-44,358-372,503-516,536-547
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c0fb500e9c268fe53fc9a712c91309eb731ed8da",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
