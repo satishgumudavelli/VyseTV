@@ -1,0 +1,21 @@
+assets/plugins/helpers.js
+  s_141489c594600d::t_c14b1db2a0f807 107-121,136
+lib/data/sources/film_sources/scrapers.dart
+  s_141489c594600d::t_af134c2b21644a 718
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "581c39c4774a43ecebed42d1f4e96f994163a44a",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
