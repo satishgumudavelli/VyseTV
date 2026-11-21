@@ -1,0 +1,38 @@
+lib/screens/profile/profile_page.dart
+  s_141489c594600d::t_031eeb28b757b1 1386-1416
+lib/mpv/player/platform/player_android.dart
+  s_141489c594600d::t_031eeb28b757b1 171,608-616
+  s_141489c594600d::t_3feceaf2d84fe3 617-618
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ExoPlayerPlugin.kt
+  s_141489c594600d::t_031eeb28b757b1 50-53,271-274,1479-1482
+  s_141489c594600d::t_e7d70c6fd7d2d5 1483
+lib/mpv/player/player_base.dart
+  s_141489c594600d::t_031eeb28b757b1 1335-1337
+  s_141489c594600d::t_d04af1128b1cbc 1334
+lib/data/app_settings.dart
+  s_141489c594600d::t_031eeb28b757b1 152-154,187
+lib/mpv/player/player.dart
+  s_141489c594600d::t_031eeb28b757b1 353-355
+lib/screens/player/player_page.dart
+  s_141489c594600d::t_031eeb28b757b1 697-698
+lib/data/playback/player_engine.dart
+  s_141489c594600d::t_031eeb28b757b1 38-48
+test/player_engine_handover_test.dart
+  s_141489c594600d::t_f7108b872a0b72 1-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76c748f9d61e93989ad6a88e9e1c7feba1c88ac8",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
