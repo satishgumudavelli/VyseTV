@@ -1,0 +1,33 @@
+test/js_plugins_update_test.dart
+  s_141489c594600d::t_f1e6a44d5322ad 1-89
+lib/data/app_settings.dart
+  s_141489c594600d::t_6ae5eb24b79996 149-151,184
+lib/screens/profile/profile_page.dart
+  s_141489c594600d::t_6e3e893e3e3530 2879-2882,2884-2885,2887-2888
+  s_141489c594600d::t_b101ad6b520416 2883,2886
+  s_141489c594600d::t_f0f24179f21b8a 2889-2890
+lib/main.dart
+  s_141489c594600d::t_6ae5eb24b79996 19,81-82
+test/js_plugins_test.dart
+  s_141489c594600d::t_6e3e893e3e3530 6-7,73-85
+  s_141489c594600d::t_1d3c66f50a049c 86
+lib/data/sources/plugins/js_plugins.dart
+  s_141489c594600d::t_6ae5eb24b79996 176-207,218-221,224-229,234-238,241-250,253-254,259-295
+  s_141489c594600d::t_3380ac82fb1d02 296
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "77d7df310192a8f32908f1542a46fa29d426887d",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
