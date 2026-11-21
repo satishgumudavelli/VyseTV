@@ -1,0 +1,22 @@
+android/gradle.properties
+  s_141489c594600d::t_65854f8cff4e6c 7-9
+lib/data/sources/film_sources/film_sources.dart
+  s_141489c594600d::t_d4831e698d4329 253-259
+  s_141489c594600d::t_7c7ffd394e4bc0 164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "db14e5bc934ad3a00a43cf3824ef3142919482eb",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
