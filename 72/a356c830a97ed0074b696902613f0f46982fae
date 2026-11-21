@@ -1,0 +1,27 @@
+test/js_plugins_update_test.dart
+  s_141489c594600d::t_4db972a29c3962 89-97,99,101-106,108-112,114-118
+  s_141489c594600d::t_776a7b4781dab9 98,100,107,113
+lib/data/sources/plugins/js_plugins.dart
+  s_141489c594600d::t_c17f0db4d7d4c7 106-110,219,279,292-298,304
+  s_141489c594600d::t_4db972a29c3962 305-308
+lib/data/sources/film_sources/source_settings.dart
+  s_141489c594600d::t_c17f0db4d7d4c7 8-11,16-25,45-50
+test/source_order_test.dart
+  s_141489c594600d::t_4db972a29c3962 1-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "72a356c830a97ed0074b696902613f0f46982fae",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
