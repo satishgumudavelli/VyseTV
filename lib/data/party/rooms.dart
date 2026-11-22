@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 
 import '../account/account.dart';
+import 'chat_quote.dart';
 
 class RoomMember {
   const RoomMember({
@@ -86,13 +87,14 @@ class PartyRoom {
 }
 
 class RoomMessage {
-  const RoomMessage({required this.id, required this.user, required this.name, required this.body, required this.created, this.avatarUrl = ''});
+  const RoomMessage({required this.id, required this.user, required this.name, required this.body, required this.created, this.avatarUrl = '', this.reply});
   final String id;
   final String user;
   final String name;
   final String avatarUrl;
   final String body;
   final DateTime created;
+  final ChatQuote? reply; // the message this one answers
 
   bool get mine => user == Account.user.value?.id;
 
@@ -103,6 +105,7 @@ class RoomMessage {
     avatarUrl: j['avatarUrl'] as String? ?? '',
     body: j['body'] as String? ?? '',
     created: DateTime.tryParse(j['created'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+    reply: ChatQuote.fromJson(j['reply']),
   );
 
   factory RoomMessage.fromRecord(RecordModel r) => RoomMessage.fromJson({...r.data, 'id': r.id});
@@ -212,8 +215,9 @@ class Rooms {
   /// allow/disallow (watch party playback control), limit (how many people, 2 to 10).
   static Future<PartyRoom?> manage(Map<String, dynamic> body) => _room('manage', body);
 
-  static Future<RoomMessage> send(String body) async =>
-      RoomMessage.fromJson(await _pb.send('/api/vyse/rooms/message', method: 'POST', body: {'body': body}) as Map<String, dynamic>);
+  /// [replyTo]: the id of the message this answers (its writer is told).
+  static Future<RoomMessage> send(String body, {String? replyTo}) async =>
+      RoomMessage.fromJson(await _pb.send('/api/vyse/rooms/message', method: 'POST', body: {'body': body, 'replyTo': ?replyTo}) as Map<String, dynamic>);
 
   /// The room's chat, oldest first (the last 100).
   static Future<List<RoomMessage>> history(String roomId) async {

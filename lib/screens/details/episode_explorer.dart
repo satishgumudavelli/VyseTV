@@ -8,9 +8,11 @@ import '../../core/format.dart';
 import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/catalog/tmdb.dart';
-import '../../dpad/dpad_traversal.dart' show DpadRail;
+import '../../data/playback/watch_progress.dart';
+import '../../dpad/dpad_traversal.dart' show Dpad, DpadRail;
 import '../player/player_page.dart';
 import '../../widgets/common.dart';
+import '../../widgets/watched_marks.dart';
 
 const _still = 'https://image.tmdb.org/t/p/w780';
 const _thumb = 'https://image.tmdb.org/t/p/w300';
@@ -51,10 +53,11 @@ class ExplorerEpisode {
 /// window (12 stops on phones, up to 30 on wide screens) that slides along, and "Go to #" glides
 /// it to any episode.
 class EpisodeExplorer extends StatefulWidget {
-  const EpisodeExplorer({super.key, required Media this.show, required this.seasons}) : episodes = null, backdrop = null, onPlay = null;
+  const EpisodeExplorer({super.key, required Media this.show, required this.seasons}) : episodes = null, backdrop = null, onPlay = null, marks = null;
 
-  /// One run of episodes with no seasons (anime, numbered straight through), played by [onPlay].
-  const EpisodeExplorer.list({super.key, required Future<List<ExplorerEpisode>> this.episodes, this.backdrop, this.onPlay})
+  /// One run of episodes with no seasons (anime, numbered straight through), played by [onPlay]
+  /// and marked watched under [marks].
+  const EpisodeExplorer.list({super.key, required Future<List<ExplorerEpisode>> this.episodes, this.backdrop, this.onPlay, this.marks})
     : show = null,
       seasons = const [];
 
@@ -65,6 +68,9 @@ class EpisodeExplorer extends StatefulWidget {
 
   /// Shown for episodes without their own still (list mode).
   final String? backdrop;
+
+  /// List mode: the title the episodes are marked watched under (season 0), if they can be.
+  final Media? marks;
 
   @override
   State<EpisodeExplorer> createState() => _EpisodeExplorerState();
@@ -80,6 +86,27 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
   int _size = 1 << 30; // episodes per window, worked out from the width
   final _focus = FocusNode();
   final _goto = TextEditingController();
+
+  // The Play and mark buttons of each preview shown ("3/play": the third shown), so the
+  // explorer's own keys, which change the episode under the ring, can take the ring to the same
+  // button of the next one. A new set for each preview: the one going still fades out (and a
+  // held arrow can come back to an episode before it has).
+  final _buttons = <String, FocusNode>{};
+  int _shownNo = 0;
+  String? _shownKey;
+  FocusNode _button(String which) => _buttons.putIfAbsent('$_shownNo/$which', () => FocusNode(debugLabel: 'episode $which'));
+
+  /// Counts a new preview when the episode shown changes; forgets the buttons of old ones.
+  void _counted(String key) {
+    if (key == _shownKey) return;
+    _shownKey = key;
+    _shownNo++;
+    _buttons.removeWhere((k, n) {
+      final old = int.parse(k.split('/').first) < _shownNo - 30; // long gone from the screen
+      if (old) n.dispose();
+      return old;
+    });
+  }
 
   // the window glides between starts instead of jumping
   late final _slide = AnimationController(vsync: this, duration: const Duration(milliseconds: 520))..addListener(() => setState(() {}));
@@ -138,11 +165,16 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
     _slide.dispose();
     _focus.dispose();
     _goto.dispose();
+    for (final n in _buttons.values) {
+      n.dispose();
+    }
     super.dispose();
   }
 
-  KeyEventResult _onKey(FocusNode _, KeyEvent e, int count) {
+  KeyEventResult _onKey(FocusNode _, KeyEvent e, List<ExplorerEpisode> eps) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final count = eps.length;
+    final from = _picked.clamp(0, count - 1);
     if (e.logicalKey == LogicalKeyboardKey.arrowRight && _picked < count - 1) {
       _select(_picked + 1, count);
     } else if (e.logicalKey == LogicalKeyboardKey.arrowLeft && _picked > 0) {
@@ -150,7 +182,28 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
     } else {
       return KeyEventResult.ignored;
     }
+    if (_picked != from) _carry();
     return KeyEventResult.handled;
+  }
+
+  /// The ring was on the shown episode's Play (or its mark): once the next one is built, it goes
+  /// to the same button there. Left to the kit, it went to whichever was nearest where the old
+  /// one was, and a shorter title moves the buttons up: from Play it landed on the mark.
+  void _carry() {
+    final was = _shownNo;
+    final which = [for (final w in const ['play', 'mark']) if (_buttons['$was/$w']?.hasPrimaryFocus ?? false) w].firstOrNull;
+    if (which == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _shownNo == was) return;
+      // (an episode not out yet has no mark, and its Play takes no focus: the kit decides then)
+      for (final w in [which, 'play']) {
+        final n = _buttons['$_shownNo/$w'];
+        if (n != null && n.context != null && n.canRequestFocus && n.context!.mounted) {
+          Dpad.giveFocus(n);
+          return;
+        }
+      }
+    });
   }
 
   @override
@@ -221,9 +274,21 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
           );
         }
         final i = _picked.clamp(0, eps.length - 1);
-        return Focus(
+        _counted('${_season?.number}/${eps[i].number}');
+        final title = widget.show ?? widget.marks;
+        final sn = _season?.number ?? 0;
+        return ValueListenableBuilder<List<WatchEntry>>(
+          valueListenable: WatchProgress.entries,
+          builder: (context, _, _) {
+            final entry = title == null ? null : WatchProgress.find(title);
+            bool seen(ExplorerEpisode e) => entry?.seen(WatchProgress.itemKey(season: sn, episode: e.number)) ?? false;
+            EpisodeMark mark(ExplorerEpisode e) => (season: sn, number: e.number, name: e.name, runtime: e.runtime);
+            final out = [for (final e in eps) if (!e.upcoming) e];
+            final seenOut = out.where(seen).length;
+            final whole = seenOut == out.length;
+            final focusBlock = Focus(
           focusNode: _focus,
-          onKeyEvent: (n, e) => _onKey(n, e, eps.length),
+          onKeyEvent: (n, e) => _onKey(n, e, eps),
           child: DpadRail(
            axis: Axis.vertical,
            child: Column(
@@ -249,6 +314,10 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
                   backdrop: widget.backdrop,
                   onPlay: widget.onPlay,
                   compact: phone,
+                  seen: seen(eps[i]),
+                  onMark: title == null || eps[i].upcoming ? null : () => setEpisodesWatched(context, title, [mark(eps[i])], watched: !seen(eps[i])),
+                  playNode: _button('play'),
+                  markNode: _button('mark'),
                 ),
               ),
               const SizedBox(height: 26),
@@ -276,6 +345,7 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
                     shift: shift,
                     picked: i,
                     onPick: pick,
+                    seen: {for (final e in eps) if (seen(e)) e.number},
                   );
                   if (!long) return timeline;
                   return Column(
@@ -300,6 +370,30 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
             ],
           ),
           ),
+        );
+            if (title == null || out.isEmpty) return focusBlock;
+            // (outside the explorer's own keys: Left and Right here don't change the episode)
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                focusBlock,
+                const SizedBox(height: 16),
+                _SeasonMarks(
+                  seen: seenOut,
+                  out: out.length,
+                  whole: _season != null,
+                  done: whole,
+                  onTap: () => setEpisodesWatched(
+                    context,
+                    title,
+                    [for (final e in out) mark(e)],
+                    watched: !whole,
+                    what: _season == null ? 'All episodes' : (sn == 0 ? 'Specials' : 'Season $sn'),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -393,8 +487,28 @@ class _SeasonNumber extends StatelessWidget {
 
 /// The chosen episode: still on one side, its details on the other (stacked on phones).
 class _Preview extends StatelessWidget {
-  const _Preview({super.key, required this.show, required this.season, required this.episode, required this.compact, this.backdrop, this.onPlay});
+  const _Preview({
+    super.key,
+    required this.show,
+    required this.season,
+    required this.episode,
+    required this.compact,
+    this.backdrop,
+    this.onPlay,
+    this.seen = false,
+    this.onMark,
+    this.playNode,
+    this.markNode,
+  });
   final Media? show; // null: played by [onPlay] (anime)
+  final bool seen;
+
+  /// Its Play's and its mark's focus, kept by the explorer (see _carry).
+  final FocusNode? playNode;
+  final FocusNode? markNode;
+
+  /// Marks it watched or unwatched (null: it can't be: not out yet, or nothing to mark it under).
+  final VoidCallback? onMark;
   final Season? season; // null: numbered straight through
   final ExplorerEpisode episode;
   final String? backdrop;
@@ -497,6 +611,7 @@ class _Preview extends StatelessWidget {
         if (show != null && s != null) ...[
           const SizedBox(height: 18),
           _PlayEpisode(
+            focusNode: playNode,
             label: e.upcoming ? 'Not out yet' : 'Play E${e.number}',
             enabled: !e.upcoming,
             onTap: () => openPlayer(
@@ -507,7 +622,12 @@ class _Preview extends StatelessWidget {
           ),
         ] else if (onPlay != null) ...[
           const SizedBox(height: 18),
-          _PlayEpisode(label: e.upcoming ? 'Not out yet' : 'Play E${e.number}', enabled: !e.upcoming, onTap: () => onPlay!(e)),
+          _PlayEpisode(focusNode: playNode, label: e.upcoming ? 'Not out yet' : 'Play E${e.number}', enabled: !e.upcoming, onTap: () => onPlay!(e)),
+        ],
+        // under Play, not beside it: Left and Right from Play change the episode
+        if (onMark != null) ...[
+          const SizedBox(height: 10),
+          _MarkEpisode(seen: seen, onTap: onMark!, focusNode: markNode),
         ],
       ],
     );
@@ -526,15 +646,102 @@ class _Preview extends StatelessWidget {
   }
 }
 
+/// "Mark watched" / "Watched" for the episode on show.
+class _MarkEpisode extends StatelessWidget {
+  const _MarkEpisode({required this.seen, required this.onTap, this.focusNode});
+  final bool seen;
+  final VoidCallback onTap;
+  final FocusNode? focusNode;
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+    onTap: onTap,
+    focusNode: focusNode,
+    builder: (context, hovered, pressed) => AnimatedScale(
+      scale: pressed ? .95 : 1,
+      duration: const Duration(milliseconds: 120),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        height: 34,
+        padding: const EdgeInsets.fromLTRB(9, 0, 15, 0),
+        decoration: BoxDecoration(
+          color: seen ? watchedGreen.withValues(alpha: hovered ? .2 : .12) : Colors.white.withValues(alpha: hovered ? .14 : .06),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: seen ? watchedGreen.withValues(alpha: .4) : Colors.white.withValues(alpha: hovered ? .22 : .08)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            WatchedTick(seen: seen, hovered: hovered),
+            const SizedBox(width: 8),
+            Text(seen ? 'Watched' : 'Mark watched', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Under the timeline: how much of the season is watched, and the whole of it marked at once.
+class _SeasonMarks extends StatelessWidget {
+  const _SeasonMarks({required this.seen, required this.out, required this.whole, required this.done, required this.onTap});
+  final int seen;
+  final int out; // episodes out so far
+  final bool whole; // a season (false: an anime's run, numbered straight through)
+  final bool done; // every one out is watched
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Flexible(
+        child: Text(
+          '$seen of $out watched',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: seen > 0 ? watchedGreen : VyseColors.textFaint),
+        ),
+      ),
+      const SizedBox(width: 14),
+      Pressable(
+        onTap: onTap,
+        builder: (context, hovered, pressed) => AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: hovered ? .13 : .05),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.white.withValues(alpha: hovered ? .2 : .08)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(done ? Icons.remove_done_rounded : Icons.done_all_rounded, size: 15, color: VyseColors.textDim),
+              const SizedBox(width: 6),
+              Text(
+                'Mark ${whole ? 'season' : 'all'} ${done ? 'unwatched' : 'watched'}',
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
 class _PlayEpisode extends StatelessWidget {
-  const _PlayEpisode({required this.label, required this.enabled, required this.onTap});
+  const _PlayEpisode({required this.label, required this.enabled, required this.onTap, this.focusNode});
   final String label;
   final bool enabled;
   final VoidCallback onTap;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) => Pressable(
     onTap: enabled ? onTap : null,
+    focusNode: focusNode,
     // (where a D-pad comes into the episode from the seasons beside it)
     railEntry: true,
     builder: (context, hovered, pressed) => AnimatedScale(
@@ -572,8 +779,11 @@ class _PlayEpisode extends StatelessWidget {
 /// The season as a seek bar: one stop per episode. Drag (or hover-and-click) along it and the
 /// preview follows the stop under the pointer; a small floating card names the hovered episode.
 class _Timeline extends StatefulWidget {
-  const _Timeline({required this.episodes, required this.picked, required this.onPick, this.offset = 0, int? slots, this.shift = 0})
+  const _Timeline({required this.episodes, required this.picked, required this.onPick, this.offset = 0, int? slots, this.shift = 0, this.seen = const {}})
     : slots = slots ?? episodes.length;
+
+  /// The numbers of the episodes watched: their stops are green.
+  final Set<int> seen;
 
   /// The episodes in view; [offset] is the season index of the first one. [picked] and [onPick]
   /// use season indexes, so the chosen episode may sit outside the window.
@@ -679,6 +889,7 @@ class _TimelineState extends State<_Timeline> {
                             passed: i < rel,
                             hovered: i == hover,
                             upcoming: eps[i].upcoming,
+                            seen: widget.seen.contains(eps[i].number),
                             showNumber: !dense || i == rel || i == hover || i == 0 || i == n - 1,
                           ),
                         ),
@@ -878,6 +1089,7 @@ class _Stop extends StatelessWidget {
     required this.hovered,
     required this.upcoming,
     required this.showNumber,
+    this.seen = false,
   });
   final int number;
   final bool picked;
@@ -885,6 +1097,7 @@ class _Stop extends StatelessWidget {
   final bool hovered;
   final bool upcoming;
   final bool showNumber;
+  final bool seen;
 
   @override
   Widget build(BuildContext context) {
@@ -905,7 +1118,9 @@ class _Stop extends StatelessWidget {
                     ? VyseColors.accent
                     : upcoming
                         ? Colors.transparent
-                        : (passed ? VyseColors.accent.withValues(alpha: .55) : Colors.white.withValues(alpha: hovered ? .9 : .35)),
+                        : seen
+                            ? watchedGreen.withValues(alpha: hovered ? 1 : .8)
+                            : (passed ? VyseColors.accent.withValues(alpha: .55) : Colors.white.withValues(alpha: hovered ? .9 : .35)),
                 border: upcoming && !picked ? Border.all(color: Colors.white.withValues(alpha: .4), width: 1.5) : null,
                 boxShadow: picked ? [BoxShadow(color: VyseColors.accent.withValues(alpha: .7), blurRadius: 14)] : null,
               ),

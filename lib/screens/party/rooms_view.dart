@@ -36,9 +36,12 @@ void _error(BuildContext context, Object e) => showToast(
 /// The rooms, Discord-style: one line per room (its name, who's in it underneath), yours on top.
 /// A panel beside the page on wide screens ([panel]), a plain list in the page otherwise.
 class PartyRoomsPanel extends StatelessWidget {
-  const PartyRoomsPanel({super.key, this.panel = false, this.topPadding = 0});
+  const PartyRoomsPanel({super.key, this.panel = false, this.topPadding = 0, this.above});
   final bool panel;
   final double topPadding;
+
+  /// Beside the page ([panel]): what comes above the rooms in the same scroll (the lounges).
+  final Widget? above;
 
   static const _bg = Color(0xFF0A0B13);
 
@@ -105,7 +108,7 @@ class PartyRoomsPanel extends StatelessWidget {
         color: _bg,
         child: ListView(
           padding: EdgeInsets.fromLTRB(10, topPadding + 10, 10, 30),
-          children: [header, ...rows],
+          children: [if (above != null) ...[above!, const SizedBox(height: 14)], header, ...rows],
         ),
       );
     },
@@ -262,7 +265,7 @@ class _CreateRoomState extends State<_CreateRoom> {
   }
 
   @override
-  Widget build(BuildContext context) => _Sheet(
+  Widget build(BuildContext context) => PartySheet(
     title: 'Create a room',
     subtitle: Rooms.mine.value != null ? "You'll leave ${Rooms.mine.value!.name}." : 'You can change all of this later.',
     error: _error,
@@ -271,9 +274,9 @@ class _CreateRoomState extends State<_CreateRoom> {
     enabled: _name.text.trim().isNotEmpty,
     onAction: _create,
     children: [
-      _Input(controller: _name, label: 'Name', hint: 'Movie night', maxLength: 40, autofocus: true, onSubmit: _create),
+      PartyField(controller: _name, label: 'Name', hint: 'Movie night', maxLength: 40, autofocus: true, onSubmit: _create),
       const SizedBox(height: 12),
-      _Input(controller: _topic, label: 'Topic (optional)', hint: 'Dune, then Dune Part Two', maxLength: 120, onSubmit: _create),
+      PartyField(controller: _topic, label: 'Topic (optional)', hint: 'Dune, then Dune Part Two', maxLength: 120, onSubmit: _create),
       const SizedBox(height: 16),
       Row(
         children: [
@@ -418,7 +421,7 @@ class _JoinCodeState extends State<_JoinCode> {
   }
 
   @override
-  Widget build(BuildContext context) => _Sheet(
+  Widget build(BuildContext context) => PartySheet(
     title: 'Join with a code',
     subtitle: 'Private rooms share an 8-character invite code.',
     error: _error,
@@ -427,7 +430,7 @@ class _JoinCodeState extends State<_JoinCode> {
     enabled: _code.text.trim().length >= 8,
     onAction: _join,
     children: [
-      _Input(
+      PartyField(
         controller: _code,
         label: 'Invite code',
         hint: 'ABCD2345',
@@ -447,8 +450,10 @@ class _Upper extends TextInputFormatter {
 }
 
 /// A small dialog: title, fields, error, and one main button.
-class _Sheet extends StatelessWidget {
-  const _Sheet({
+/// A Party dialog: title, what it's about, its fields, Cancel and the action.
+class PartySheet extends StatelessWidget {
+  const PartySheet({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.children,
@@ -520,8 +525,10 @@ class _Sheet extends StatelessWidget {
   );
 }
 
-class _Input extends StatelessWidget {
-  const _Input({
+/// A labelled text box in a Party dialog.
+class PartyField extends StatelessWidget {
+  const PartyField({
+    super.key,
     required this.controller,
     required this.label,
     required this.hint,

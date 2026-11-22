@@ -98,6 +98,8 @@ class BookCard extends StatelessWidget {
     return OutlineCard(
       label: book.title,
       onTap: onTap,
+      // holding OK does what the × does
+      onLongPress: onRemove,
       builder: (hovered) => Stack(fit: StackFit.expand, children: [
         Hero(tag: 'book/${book.uuid}', child: NetImage(url: book.coverImage, fallback: Icons.headphones_rounded)),
         AnimatedOpacity(
@@ -138,14 +140,20 @@ class BookCard extends StatelessWidget {
           Positioned(top: 7, left: 7, child: SourceBadge(book.source)),
         if (onRemove != null && hovered)
           Positioned(
-            top: 4,
-            right: 4,
-            child: IconButton(
-              tooltip: 'Remove',
-              onPressed: onRemove,
-              iconSize: 16,
-              style: IconButton.styleFrom(backgroundColor: Colors.black.withValues(alpha: .6), minimumSize: const Size(30, 30)),
-              icon: const Icon(Icons.close_rounded),
+            top: 6,
+            right: 6,
+            child: Pressable(
+              tooltip: 'Remove from Continue listening',
+              onTap: onRemove!,
+              // a pointer's button; with a D-pad the card's hold-OK removes it
+              focusable: false,
+              builder: (context, h, _) => AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: h ? Colors.white : Colors.black.withValues(alpha: .6)),
+                child: Icon(Icons.close_rounded, size: 16, color: h ? Colors.black : Colors.white),
+              ),
             ),
           ),
         if (p != null)

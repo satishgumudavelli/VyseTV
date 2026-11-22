@@ -36,6 +36,7 @@ const _phases = <(String, int)>[
   ('lib/widgets/page_scrollbar.dart', 2),
   ('lib/widgets/service_logos.dart', 2),
   ('lib/widgets/voice_search.dart', 2),
+  ('lib/widgets/watched_marks.dart', 4),
   ('lib/screens/shell/shell.dart', 3),
   ('lib/screens/shell/floating.dart', 3),
   ('lib/screens/home/home_page.dart', 3),

@@ -309,7 +309,7 @@ void main() {
       expect(list.position.pixels, greaterThan(0));
     }, variant: screen);
 
-    testWidgets('Continue watching: the card is a stop, holding OK takes it off the row, the × is passed over', (t) async {
+    testWidgets('Continue watching: the card is a stop, holding OK opens its menu (mark watched, remove), the ✓ and × are passed over', (t) async {
       final before = WatchProgress.entries.value;
       addTearDown(() => WatchProgress.entries.value = before);
       await _show(t, const SizedBox(width: 1100, child: ContinueWatchingRow()));
@@ -317,8 +317,9 @@ void main() {
       final shown = cards.evaluate().length;
       expect(shown, greaterThan(1));
       final wrappers = find.descendant(of: cards.first, matching: find.byType(FocusableWrapper));
-      expect(wrappers, findsNWidgets(2), reason: 'the card and its ×');
-      expect(_node(t, wrappers.at(1)).canRequestFocus, isFalse, reason: 'the × is the mouse\'s; hold OK is the D-pad\'s');
+      expect(wrappers, findsNWidgets(3), reason: 'the card, its ✓ and its ×');
+      expect(_node(t, wrappers.at(1)).canRequestFocus, isFalse, reason: "the ✓ is the mouse's; hold OK is the D-pad's");
+      expect(_node(t, wrappers.at(2)).canRequestFocus, isFalse, reason: 'and so is the ×');
       await _checkLook(t, wrappers.first, shape: _r(12));
 
       _node(t, wrappers.first).requestFocus();
@@ -327,9 +328,14 @@ void main() {
       await t.pump(const Duration(milliseconds: 600));
       await t.sendKeyUpEvent(LogicalKeyboardKey.enter);
       await Bed.settle(t, rounds: 2);
+      expect(find.text('Mark as watched'), findsOneWidget, reason: 'held OK opens the menu a long press opens');
+      expect(WatchProgress.entries.value.where((e) => e.hidden), isEmpty, reason: 'nothing is removed by the hold itself');
+      await Bed.down(t);
+      await Bed.ok(t);
+      await Bed.settle(t, rounds: 2);
       // (the row is lazy: another card slides in, so the number on screen says nothing)
       final gone = WatchProgress.entries.value.where((e) => e.hidden).toList();
-      expect(gone, hasLength(1), reason: 'held OK removed it, as a long press does');
+      expect(gone, hasLength(1), reason: 'Remove from Continue watching, chosen with the D-pad');
       expect(gone.single.media.key, before.firstWhere((e) => e.inContinue).media.key, reason: 'the focused card, not another');
       expect(find.text(gone.single.media.title), findsNothing);
     }, variant: screen);

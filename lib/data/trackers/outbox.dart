@@ -11,8 +11,10 @@ import 'tracker.dart';
 /// a waiting add.
 ///
 /// Kinds: `anime` (furthest finished episode: `a` AniList id, `m` MAL id, `e` episode,
-/// `t` title), `watched` (an episode or film watched to the end: `ref`, `at`), `listAdd` /
-/// `listRemove` (My List: `ref`), `historyRemove` (removed from History: `ref`).
+/// `t` title), `watched` (an episode or film watched to the end, or marked watched: `ref`,
+/// `at`), `unwatched` (marked unwatched: `ref`, and `undo`, a `watched` it replaced before that
+/// went out), `listAdd` / `listRemove` (My List: `ref`), `historyRemove` (removed from History:
+/// `ref`).
 class OutboxItem {
   OutboxItem({
     required this.service,
@@ -93,6 +95,12 @@ class Outbox {
 
   /// Adds [item]. An anime update only moves the waiting one on to a later episode; a My List
   /// add and remove of the same title cancel each other out.
+  ///
+  /// Watched and unwatched marks of one episode (or film) leave only the last word: unwatched
+  /// replaces a waiting watched (and still goes: the service may have it from elsewhere), and
+  /// watched after a waiting unwatched cancels it, so a play the service already has isn't sent
+  /// a second time. If that unwatched had replaced a watched that never went, the watched is
+  /// back as it was.
   static void put(OutboxItem item) {
     final had = _items[item.id];
     if (item.kind == 'anime' && had != null && ((had.data['e'] as num?) ?? 0) >= ((item.data['e'] as num?) ?? 0)) return;
@@ -102,6 +110,24 @@ class Outbox {
         _items.remove(opposite.id);
         _save();
         return; // the two cancel out: nothing needs sending
+      }
+    }
+    if (item.kind == 'unwatched') {
+      final waiting = find(item.service, 'watched', item.key);
+      if (waiting != null) {
+        _items.remove(waiting.id);
+        item.data['undo'] = waiting.toJson();
+      }
+    }
+    if (item.kind == 'watched') {
+      final waiting = find(item.service, 'unwatched', item.key);
+      if (waiting != null) {
+        _items.remove(waiting.id);
+        final undo = waiting.data['undo'];
+        final back = undo is Map ? OutboxItem.fromJson(Map<String, dynamic>.from(undo)) : null;
+        if (back != null) _items[back.id] = back;
+        _save();
+        return;
       }
     }
     _items[item.id] = item;

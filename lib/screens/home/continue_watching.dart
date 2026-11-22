@@ -11,6 +11,7 @@ import '../../dpad/dpad_reveal.dart';
 import '../../dpad/dpad_traversal.dart';
 import '../../widgets/common.dart';
 import '../../widgets/media_rows.dart' show ShelfHeader;
+import '../../widgets/watched_marks.dart';
 
 /// "Continue watching": what's half watched, newest first. Hidden when there's nothing.
 class ContinueWatchingRow extends StatefulWidget {
@@ -96,7 +97,8 @@ String _left(Duration d) {
 }
 
 /// Backdrop and logo; a ring-shaped play button that shows how far in you are, and a glowing
-/// line along the bottom. Hover (or long-press on touch) offers to drop it from the row.
+/// line along the bottom. Hover offers to mark it watched or drop it from the row; a long press,
+/// a right click or holding OK offers the same in a menu.
 class _ResumeCard extends StatefulWidget {
   const _ResumeCard({required this.entry, required this.phone});
   final WatchEntry entry;
@@ -121,6 +123,51 @@ class _ResumeCardState extends State<_ResumeCard> {
   // off this row only; it stays in History
   void _remove() => WatchProgress.dismiss(widget.entry.media);
 
+  /// The episode (or film) it's on, watched: it leaves the row as if played to the end.
+  void _watched() {
+    final e = widget.entry;
+    if (e.season != null && e.episode != null) {
+      setEpisodesWatched(context, e.media, [(season: e.season!, number: e.episode!, name: e.episodeName, runtime: null)], watched: true);
+    } else {
+      setFilmWatched(context, e.media, watched: true);
+    }
+  }
+
+  Future<void> _menu([Offset? at]) async {
+    final box = context.findRenderObject() as RenderBox?;
+    final p = at ?? (box == null ? Offset.zero : box.localToGlobal(box.size.center(Offset.zero)));
+    PopupMenuItem<String> item(String value, IconData icon, String label) => PopupMenuItem(
+      value: value,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: VyseColors.textDim),
+          const SizedBox(width: 10),
+          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+    final choice = await showMenu<String>(
+      context: context,
+      // (on a phone, above the navbar)
+      useRootNavigator: true,
+      color: VyseColors.surfaceHi,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: VyseColors.stroke)),
+      position: RelativeRect.fromLTRB(p.dx, p.dy, p.dx, p.dy),
+      items: [
+        item('watched', Icons.check_circle_outline_rounded, 'Mark as watched'),
+        item('remove', Icons.close_rounded, 'Remove from Continue watching'),
+      ],
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case 'watched':
+        _watched();
+      case 'remove':
+        _remove();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final e = widget.entry;
@@ -129,11 +176,12 @@ class _ResumeCardState extends State<_ResumeCard> {
         ? '${episodeLabel(e.season, e.episode ?? 0)}${e.episodeName == null ? '' : '  ${e.episodeName}'}'
         : (e.media.year ?? e.media.kind);
     return GestureDetector(
-      onLongPress: _remove,
+      onLongPressStart: (d) => _menu(d.globalPosition),
+      onSecondaryTapUp: (d) => _menu(d.globalPosition),
       child: Pressable(
         onTap: _play,
-        // holding OK does what a long press does: off the row
-        onLongPress: _remove,
+        // holding OK does what a long press does: the menu
+        onLongPress: _menu,
         builder: (context, hovered, pressed) => AnimatedScale(
           scale: pressed ? .98 : (hovered ? 1.02 : 1),
           duration: const Duration(milliseconds: 160),
@@ -242,7 +290,7 @@ class _ResumeCardState extends State<_ResumeCard> {
                     ),
                   ),
                 ),
-              // remove (desktop hover)
+              // mark watched, remove (desktop hover)
               if (!phone)
                 Positioned(
                   top: 8,
@@ -252,22 +300,11 @@ class _ResumeCardState extends State<_ResumeCard> {
                     duration: const Duration(milliseconds: 160),
                     child: IgnorePointer(
                       ignoring: !hovered,
-                      child: Pressable(
-                        tooltip: 'Remove from Continue watching',
-                        onTap: _remove,
-                        // a mouse's button; with a D-pad the card's hold-OK removes it
-                        focusable: false,
-                        builder: (context, h, _) => Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.black.withValues(alpha: h ? .8 : .55),
-                            border: Border.all(color: Colors.white.withValues(alpha: h ? .5 : .2)),
-                          ),
-                          child: const Icon(Icons.close_rounded, size: 16),
-                        ),
-                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        _HoverButton(icon: Icons.check_rounded, tooltip: 'Mark as watched', onTap: _watched),
+                        const SizedBox(width: 6),
+                        _HoverButton(icon: Icons.close_rounded, tooltip: 'Remove from Continue watching', onTap: _remove),
+                      ]),
                     ),
                   ),
                 ),
@@ -296,6 +333,32 @@ class _ResumeCardState extends State<_ResumeCard> {
       ),
     );
   }
+}
+
+/// A round button on the card under the mouse.
+class _HoverButton extends StatelessWidget {
+  const _HoverButton({required this.icon, required this.tooltip, required this.onTap});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+    tooltip: tooltip,
+    onTap: onTap,
+    // a mouse's button; with a D-pad, holding OK on the card opens the same choices
+    focusable: false,
+    builder: (context, h, _) => Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.black.withValues(alpha: h ? .8 : .55),
+        border: Border.all(color: Colors.white.withValues(alpha: h ? .5 : .2)),
+      ),
+      child: Icon(icon, size: 16),
+    ),
+  );
 }
 
 class _Ring extends StatelessWidget {

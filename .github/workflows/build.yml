@@ -104,10 +104,21 @@ jobs:
       - name: Fetch libmpv (mpv-build)
         run: python3 scripts/fetch_linux_libmpv.py --dest libmpv-prefix
 
-      # The real server addresses are not in the repository. A build made here gets the
-      # example file: no account server, no update check.
-      - name: Use the example server settings
-        run: cp lib/data/server_config.example.dart lib/data/server_config.dart
+      # The real server settings (the account server, the update addresses) are not in the
+      # repository: they come from the SERVER_CONFIG secret (lib/data/server_config.dart in
+      # base64). A build without them would have no accounts and could never be updated, so it
+      # stops instead.
+      - name: Write the server settings
+        shell: bash
+        env:
+          SERVER_CONFIG: ${{ secrets.SERVER_CONFIG }}
+        run: |
+          if [ -z "$SERVER_CONFIG" ]; then
+            echo "::error::No SERVER_CONFIG secret: this build would have no accounts and no updater."
+            exit 1
+          fi
+          printf '%s' "$SERVER_CONFIG" | base64 -d > lib/data/server_config.dart
+          grep -q updateListAddresses lib/data/server_config.dart
       - run: flutter pub get
 
       - name: Build
@@ -189,7 +200,10 @@ jobs:
           path: VyseTV-${{ matrix.appimage }}.AppImage
           retention-days: 2 # a private repository has 500 MB for these
 
-  # macos-26: the player uses APIs from the Xcode 26 SDK
+  # macos-26-intel: GitHub's Apple-chip Macs (macos-26) were too short to start a job at all
+  # (2026-11-19, cancelled twice after 15 minutes); the Intel ones carry the same macOS 26 and
+  # Xcode 26, and an Intel Mac builds the universal app just the same.
+  # macOS 26: the player uses APIs from the Xcode 26 SDK
   # (CALayer.preferredDynamicRange), the same runner upstream builds on.
   # One app that runs on both Intel and Apple silicon Macs (a universal build),
   # in a disk image you drag to Applications. It is not signed with an Apple
@@ -198,7 +212,7 @@ jobs:
     name: macOS (Intel + Apple silicon)
     needs: plan
     if: ${{ needs.plan.outputs.macos == 'true' }}
-    runs-on: macos-26
+    runs-on: macos-26-intel
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -227,10 +241,21 @@ jobs:
           else
             echo "::warning::No macOS engine archives in $B: the pod's own download is the fallback."
           fi
-      # The real server addresses are not in the repository. A build made here gets the
-      # example file: no account server, no update check.
-      - name: Use the example server settings
-        run: cp lib/data/server_config.example.dart lib/data/server_config.dart
+      # The real server settings (the account server, the update addresses) are not in the
+      # repository: they come from the SERVER_CONFIG secret (lib/data/server_config.dart in
+      # base64). A build without them would have no accounts and could never be updated, so it
+      # stops instead.
+      - name: Write the server settings
+        shell: bash
+        env:
+          SERVER_CONFIG: ${{ secrets.SERVER_CONFIG }}
+        run: |
+          if [ -z "$SERVER_CONFIG" ]; then
+            echo "::error::No SERVER_CONFIG secret: this build would have no accounts and no updater."
+            exit 1
+          fi
+          printf '%s' "$SERVER_CONFIG" | base64 -d > lib/data/server_config.dart
+          grep -q updateListAddresses lib/data/server_config.dart
       - run: flutter pub get
       # flutter build passes -skipPackageUpdates, so MPVKit has to be fetched first.
       - name: Resolve Swift packages (MPVKit)
@@ -280,7 +305,7 @@ jobs:
     name: iOS (unsigned .ipa, for sideloading)
     needs: plan
     if: ${{ needs.plan.outputs.ios == 'true' }}
-    runs-on: macos-26
+    runs-on: macos-26-intel
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -303,10 +328,21 @@ jobs:
           else
             echo "::warning::No TorrServerKit.xcframework.zip in the package: this build has no torrent engine."
           fi
-      # The real server addresses are not in the repository. A build made here gets the
-      # example file: no account server, no update check.
-      - name: Use the example server settings
-        run: cp lib/data/server_config.example.dart lib/data/server_config.dart
+      # The real server settings (the account server, the update addresses) are not in the
+      # repository: they come from the SERVER_CONFIG secret (lib/data/server_config.dart in
+      # base64). A build without them would have no accounts and could never be updated, so it
+      # stops instead.
+      - name: Write the server settings
+        shell: bash
+        env:
+          SERVER_CONFIG: ${{ secrets.SERVER_CONFIG }}
+        run: |
+          if [ -z "$SERVER_CONFIG" ]; then
+            echo "::error::No SERVER_CONFIG secret: this build would have no accounts and no updater."
+            exit 1
+          fi
+          printf '%s' "$SERVER_CONFIG" | base64 -d > lib/data/server_config.dart
+          grep -q updateListAddresses lib/data/server_config.dart
       - run: flutter pub get
       - name: Resolve Swift packages (MPVKit)
         run: |
@@ -349,10 +385,21 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      # The real server addresses are not in the repository. A build made here gets the
-      # example file: no account server, no update check.
-      - name: Use the example server settings
-        run: cp lib/data/server_config.example.dart lib/data/server_config.dart
+      # The real server settings (the account server, the update addresses) are not in the
+      # repository: they come from the SERVER_CONFIG secret (lib/data/server_config.dart in
+      # base64). A build without them would have no accounts and could never be updated, so it
+      # stops instead.
+      - name: Write the server settings
+        shell: bash
+        env:
+          SERVER_CONFIG: ${{ secrets.SERVER_CONFIG }}
+        run: |
+          if [ -z "$SERVER_CONFIG" ]; then
+            echo "::error::No SERVER_CONFIG secret: this build would have no accounts and no updater."
+            exit 1
+          fi
+          printf '%s' "$SERVER_CONFIG" | base64 -d > lib/data/server_config.dart
+          grep -q updateListAddresses lib/data/server_config.dart
       - run: flutter pub get
       - run: flutter build apk --release --split-per-abi
       - uses: actions/upload-artifact@v4
@@ -380,10 +427,21 @@ jobs:
         run: |
           flutter precache --windows
           ./windows/tool/install-patched-engine.ps1
-      # The real server addresses are not in the repository. A build made here gets the
-      # example file: no account server, no update check.
-      - name: Use the example server settings
-        run: cp lib/data/server_config.example.dart lib/data/server_config.dart
+      # The real server settings (the account server, the update addresses) are not in the
+      # repository: they come from the SERVER_CONFIG secret (lib/data/server_config.dart in
+      # base64). A build without them would have no accounts and could never be updated, so it
+      # stops instead.
+      - name: Write the server settings
+        shell: bash
+        env:
+          SERVER_CONFIG: ${{ secrets.SERVER_CONFIG }}
+        run: |
+          if [ -z "$SERVER_CONFIG" ]; then
+            echo "::error::No SERVER_CONFIG secret: this build would have no accounts and no updater."
+            exit 1
+          fi
+          printf '%s' "$SERVER_CONFIG" | base64 -d > lib/data/server_config.dart
+          grep -q updateListAddresses lib/data/server_config.dart
       - run: flutter pub get
       - run: flutter build windows --release
       - uses: actions/upload-artifact@v4

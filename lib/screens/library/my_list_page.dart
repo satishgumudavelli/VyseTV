@@ -155,7 +155,7 @@ class _MyListPageState extends State<MyListPage> {
       builder: (context, _) {
         final all = MyList.items.value;
         // unfinished only: finished titles count as "not started" again here
-        final progress = {for (final e in WatchProgress.entries.value) if (!e.finished) e.media.key: e};
+        final progress = {for (final e in WatchProgress.entries.value) if (!e.finished && e.position > Duration.zero) e.media.key: e};
         final shown = _visible(all, progress);
         _selected.removeWhere((k) => !all.any((s) => s.media.key == k));
 

@@ -13,6 +13,7 @@ import 'data/party/friends.dart' show Friends;
 import 'data/party/party.dart' show PartyPresence;
 import 'data/party/party_live.dart' show PartyLive;
 import 'data/party/party_music.dart' show PartyMusic;
+import 'data/party/lounges.dart' show Lounges;
 import 'data/party/rooms.dart' show Rooms;
 import 'data/party/voice.dart' show Voice;
 import 'data/party/watch_party.dart' show WatchParty;
@@ -92,6 +93,7 @@ Future<void> main() async {
   Friends.start();
   Dms.start();
   Rooms.start();
+  Lounges.start();
   Voice.start();
   WatchParty.start();
   PartyMusic.start();
@@ -104,6 +106,7 @@ Future<void> main() async {
       apply: WatchProgress.syncApply,
       changes: WatchProgress.entries,
       timeOf: (d) => (d['u'] as num?)?.toInt(),
+      merge: WatchProgress.syncMerge,
     ),
     SyncSource(
       kind: 'mylist',

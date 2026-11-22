@@ -78,8 +78,12 @@ const rawTaps = [
 const passedOver = [
   Reviewed('lib/widgets/media_rows.dart', 'focusable: false,', 1, 'A row\'s paging arrows. A D-pad pages a row by moving along it.'),
   Reviewed('lib/widgets/hero_carousel.dart', 'focusable: false,', 1, 'The hero\'s slide dots (4 px each). Slides are browsed in the spotlight: Up from the hero, then Left and Right.'),
-  Reviewed('lib/screens/home/continue_watching.dart', 'focusable: false,', 1, 'The × on a Continue watching card, shown under the mouse. Holding OK on the card removes it.'),
+  Reviewed('lib/screens/home/continue_watching.dart', 'focusable: false,', 1,
+      'The ✓ and × on a Continue watching card, shown under the mouse. Holding OK on the card opens a menu with the same two (t2_controls_test).'),
+  Reviewed('lib/screens/player/player_episodes.dart', 'focusable: false,', 1,
+      'The tick at the end of an episode row (watched or not), for a pointer. Holding OK on the row marks it (t4_journeys_watched_test).'),
   Reviewed('lib/screens/manga/manga_widgets.dart', 'focusable: false,', 1, 'The × on a manga card. Holding OK on the card removes it.'),
+  Reviewed('lib/widgets/audiobook_widgets.dart', 'focusable: false,', 1, 'The × on a Continue listening book. Holding OK on the card removes it.'),
 ];
 
 /// `autofocus: true` in the files of finished phases.
@@ -134,7 +138,7 @@ const autofocus = <Reviewed>[
       'Two boxes that are about one text field and open with the caret in it: the link of a picture, and a line of text to change (a name, a bio).'),
   Reviewed('lib/screens/party/room_page.dart', 'autofocus: true,', 2,
       'The "edit room" box opens with the caret in the room\'s name. And the "press a key" box of push to talk: the sentence in it is what waits for the key (a remote\'s Back cancels, as Escape does).'),
-  Reviewed('lib/screens/party/rooms_view.dart', "_Input(controller: _name, label: 'Name', hint: 'Movie night', maxLength: 40, autofocus: true, onSubmit: _create),", 1,
+  Reviewed('lib/screens/party/rooms_view.dart', "PartyField(controller: _name, label: 'Name', hint: 'Movie night', maxLength: 40, autofocus: true, onSubmit: _create),", 1,
       'Creating a room opens with the caret in its name, as a form should. Arrows leave the box.'),
   Reviewed('lib/screens/party/rooms_view.dart', 'autofocus: true,', 1,
       'Joining by code opens with the caret in the code box: the box is the one thing to fill in.'),

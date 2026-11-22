@@ -11,12 +11,12 @@ import '../../core/theme.dart';
 import '../../data/account/account.dart';
 import '../../data/anime/anilist.dart';
 import '../../data/party/alerts.dart' show PartyAlerts;
+import '../../data/party/chat_quote.dart';
 import '../../data/party/friends.dart';
 import '../../data/party/party_live.dart';
 import '../../data/party/rooms.dart';
 import '../../data/party/voice.dart';
 import '../../data/party/watch_party.dart';
-import '../../dpad/dpad_extras.dart';
 import '../../dpad/dpad_navigator.dart';
 import '../../widgets/common.dart';
 import '../../widgets/section_chrome.dart';
@@ -29,9 +29,8 @@ import 'party_music_room.dart';
 import 'member_menu.dart';
 import 'rooms_view.dart' show showRoomSizeDialog;
 import 'party_strip.dart' show HoldToTalk;
+import 'chat_view.dart';
 import 'party_widgets.dart';
-
-String _clock(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 void _toast(BuildContext context, String text, {IconData icon = Icons.error_outline_rounded}) => showToast(
   context,
@@ -129,17 +128,12 @@ class _RoomMiniPlayerState extends State<RoomMiniPlayer> {
   Widget build(BuildContext context) => RoomPage.miniPlayer() ?? const SizedBox.shrink();
 }
 
-/// A chat line, or "X joined" / "X left".
-class _Line {
-  const _Line.message(RoomMessage this.message) : note = null, at = null;
-  _Line.note(String this.note) : message = null, at = DateTime.now();
-  final RoomMessage? message;
-  final String? note;
-  final DateTime? at;
-}
+/// A room message as a line of the chat.
+ChatLine _line(RoomMessage m) => ChatLine.message(id: m.id, user: m.user, name: m.name, avatarUrl: m.avatarUrl, body: m.body, created: m.created, quote: m.reply);
 
 class _RoomPageState extends State<RoomPage> {
-  final _lines = <_Line>[]; // oldest first
+  final _lines = <ChatLine>[]; // oldest first, with "X joined" / "X left"
+  ChatQuote? _replying; // the message the box answers
   final _scroll = ScrollController();
   final _input = TextEditingController();
   final _focus = FocusNode();
@@ -181,8 +175,8 @@ class _RoomPageState extends State<RoomPage> {
     _watch = WatchParty.state.value;
     hideBottomBar.value++; // phones: the room gets the whole screen
     _sub = Rooms.messages.listen((m) {
-      if (_lines.any((l) => l.message?.id == m.id) || Friends.lists.value.blockedIds.contains(m.user)) return;
-      setState(() => _lines.add(_Line.message(m)));
+      if (_lines.any((l) => l.id == m.id) || Friends.lists.value.blockedIds.contains(m.user)) return;
+      setState(() => _lines.add(_line(m)));
       _toBottom();
     });
     _roomChanged();
@@ -282,16 +276,16 @@ class _RoomPageState extends State<RoomPage> {
       Rooms.history(room.id).then((list) {
         if (!mounted || _roomId != room.id) return;
         final blocked = Friends.lists.value.blockedIds;
-        setState(() => _lines.insertAll(0, list.where((m) => !blocked.contains(m.user)).map(_Line.message)));
+        setState(() => _lines.insertAll(0, list.where((m) => !blocked.contains(m.user)).map(_line)));
         _toBottom();
       }, onError: (Object _) {});
     } else {
       final now = {for (final m in room.members) m.id: m.name};
       for (final e in now.entries) {
-        if (!_people.containsKey(e.key)) _lines.add(_Line.note('${e.value} joined'));
+        if (!_people.containsKey(e.key)) _lines.add(ChatLine.note('${e.value} joined'));
       }
       for (final e in _people.entries) {
-        if (!now.containsKey(e.key)) _lines.add(_Line.note('${e.value} left'));
+        if (!now.containsKey(e.key)) _lines.add(ChatLine.note('${e.value} left'));
       }
       _people = now;
     }
@@ -307,10 +301,11 @@ class _RoomPageState extends State<RoomPage> {
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
-      final m = await Rooms.send(text);
+      final m = await Rooms.send(text, replyTo: _replying?.id);
       _input.clear();
-      if (mounted && !_lines.any((l) => l.message?.id == m.id)) {
-        setState(() => _lines.add(_Line.message(m)));
+      if (mounted) setState(() => _replying = null);
+      if (mounted && !_lines.any((l) => l.id == m.id)) {
+        setState(() => _lines.add(_line(m)));
         _toBottom();
       }
     } catch (e) {
@@ -497,7 +492,21 @@ class _RoomPageState extends State<RoomPage> {
       onLeave: _leave,
     );
     // with an on-screen keyboard the box waits for a tap: opening a room shouldn't cover half of it
-    final chat = _Chat(lines: _lines, scroll: _scroll, input: _input, focus: _focus, sending: _sending, onSend: _send, autofocus: !phone && !hasSoftKeyboard);
+    final chat = _Chat(
+      lines: _lines,
+      scroll: _scroll,
+      input: _input,
+      focus: _focus,
+      sending: _sending,
+      onSend: _send,
+      autofocus: !phone && !hasSoftKeyboard,
+      replying: _replying,
+      onReply: (q) {
+        setState(() => _replying = q);
+        focusAfterMenu(_focus);
+      },
+      onCancelReply: () => setState(() => _replying = null),
+    );
     return Material(
       color: VyseColors.bg,
       // The page is laid out for the room it really has: the window's, less the keyboard.
@@ -1290,31 +1299,30 @@ class _Chat extends StatelessWidget {
     required this.sending,
     required this.onSend,
     required this.autofocus,
+    required this.replying,
+    required this.onReply,
+    required this.onCancelReply,
   });
-  final List<_Line> lines; // oldest first
+  final List<ChatLine> lines; // oldest first
   final ScrollController scroll;
   final TextEditingController input;
   final FocusNode focus;
   final bool sending;
   final VoidCallback onSend;
   final bool autofocus;
+  final ChatQuote? replying;
+  final ValueChanged<ChatQuote> onReply;
+  final VoidCallback onCancelReply;
 
-  static Future<void> _messageMenu(BuildContext context, RoomMessage m, Offset at) async {
-    final v = await showMenu<String>(
-      context: context,
-      color: VyseColors.surfaceHi,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
-      items: [
-        const PopupMenuItem(value: 'copy', child: Text('Copy text')),
-        if (!m.mine)
-          const PopupMenuItem(
-            value: 'report',
-            child: Text('Report', style: TextStyle(color: Color(0xFFFF8A8C))),
-          ),
-      ],
-    );
-    if (v == 'copy') {
+  Future<void> _messageMenu(BuildContext context, ChatLine m, Offset at) async {
+    final v = await showChatMenu(context, at, [
+      ('reply', 'Reply', false),
+      ('copy', 'Copy text', false),
+      if (!m.mine) ('report', 'Report', true),
+    ]);
+    if (v == 'reply') {
+      onReply(m.asQuote);
+    } else if (v == 'copy') {
       await Clipboard.setData(ClipboardData(text: m.body));
     } else if (v == 'report' && context.mounted) {
       await showReportDialog(context, userId: m.user, name: m.name, kind: 'room_message', ref: m.id);
@@ -1325,141 +1333,17 @@ class _Chat extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       Expanded(
-        child: ListView.builder(
-          controller: scroll,
-          reverse: true,
-          // dragging the messages puts the keyboard away, as chats do
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-          itemCount: lines.length + 1,
-          itemBuilder: (context, i) {
-            if (i == lines.length) {
-              return const Padding(
-                padding: EdgeInsets.only(bottom: 14),
-                child: Text('Room chat. It disappears when the room closes.', style: TextStyle(fontSize: 12.5, color: VyseColors.textFaint)),
-              );
-            }
-            final idx = lines.length - 1 - i;
-            final line = lines[idx];
-            if (line.note != null) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    const Icon(Icons.arrow_right_alt_rounded, size: 16, color: VyseColors.textFaint),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        line.note!,
-                        style: const TextStyle(fontSize: 12.5, color: VyseColors.textFaint, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-            final m = line.message!;
-            final prev = idx > 0 ? lines[idx - 1].message : null;
-            final first = prev == null || prev.user != m.user || m.created.difference(prev.created) > const Duration(minutes: 5);
-            // right-click or long-press: copy, or report someone else's message. With a D-pad a
-            // message is a stop and OK opens the same menu.
-            return DpadMenuStop(
-             onMenu: (at) => _messageMenu(context, m, at),
-             child: GestureDetector(
-              onSecondaryTapDown: (d) => _messageMenu(context, m, d.globalPosition),
-              onLongPressStart: (d) => _messageMenu(context, m, d.globalPosition),
-              child: Padding(
-                padding: EdgeInsets.only(top: first ? 12 : 2),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 38,
-                      child: first ? PartyAvatar(url: m.avatarUrl, name: m.name, size: 34) : null,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (first)
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    m.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: m.mine ? VyseColors.accent : VyseColors.text),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(_clock(m.created), style: const TextStyle(fontSize: 11, color: VyseColors.textFaint)),
-                              ],
-                            ),
-                          Text(m.body, style: const TextStyle(fontSize: 14, height: 1.4)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-             ),
-            );
-          },
-        ),
+        child: PartyChatList(lines: lines, scroll: scroll, intro: 'Room chat. It disappears when the room closes.', onMenu: _messageMenu),
       ),
-      Padding(
-        padding: EdgeInsets.fromLTRB(12, 6, 12, 12 + MediaQuery.paddingOf(context).bottom),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 2, 4, 2),
-          decoration: BoxDecoration(
-            color: partyCard,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: VyseColors.stroke),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: CallbackShortcuts(
-                  bindings: {const SingleActivator(LogicalKeyboardKey.enter): onSend},
-                  child: TextField(
-                    controller: input,
-                    focusNode: focus,
-                    autofocus: autofocus,
-                    minLines: 1,
-                    maxLines: 4,
-                    maxLength: 1000,
-                    // a phone's keyboard has its own Send key; sending keeps it up for the next message
-                    textInputAction: hasSoftKeyboard ? TextInputAction.send : TextInputAction.newline,
-                    onEditingComplete: hasSoftKeyboard ? () {} : null,
-                    onSubmitted: hasSoftKeyboard ? (_) => onSend() : null,
-                    onTapOutside: dismissKeyboard,
-                    style: const TextStyle(fontSize: 14, height: 1.35),
-                    cursorColor: VyseColors.accent,
-                    decoration: const InputDecoration(
-                      counterText: '',
-                      border: InputBorder.none,
-                      hintText: 'Message the room',
-                      hintStyle: TextStyle(color: VyseColors.textFaint),
-                    ),
-                  ),
-                ),
-              ),
-              // part of the text box as far as taps go: pressing Send leaves the keyboard up
-              TextFieldTapRegion(
-                child: IconButton(
-                  tooltip: 'Send',
-                  onPressed: sending ? null : onSend,
-                  icon: sending
-                      ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2, color: VyseColors.textDim))
-                      : const Icon(Icons.send_rounded, color: VyseColors.accent, size: 20),
-                ),
-              ),
-            ],
-          ),
-        ),
+      PartyChatInput(
+        input: input,
+        focus: focus,
+        sending: sending,
+        onSend: onSend,
+        autofocus: autofocus,
+        hint: 'Message the room',
+        replying: replying,
+        onCancelReply: onCancelReply,
       ),
     ],
   );

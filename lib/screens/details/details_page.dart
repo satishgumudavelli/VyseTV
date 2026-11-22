@@ -26,6 +26,7 @@ import 'episode_explorer.dart';
 import '../../widgets/hero_carousel.dart' show backdropSize, screenDecodeWidth;
 import '../../widgets/media_rows.dart';
 import '../../widgets/page_scrollbar.dart';
+import '../../widgets/watched_marks.dart';
 import '../../data/trackers/tracker_hub.dart';
 
 part 'anime_details_page.dart';
@@ -700,7 +701,8 @@ class _Actions extends StatelessWidget {
           },
         ),
         _SaveButton(media: media),
-        _RoundAction(icon: Icons.thumb_up_alt_outlined, tooltip: 'Rate', onTap: () => comingSoon(context, 'Ratings')),
+        // a show's episodes are marked in its episode list
+        if (!media.isTv) WatchedButton(media: media, runtime: details?.runtime),
         _RoundAction(
           icon: Icons.groups_outlined,
           tooltip: 'Watch party',

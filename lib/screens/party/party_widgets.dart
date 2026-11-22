@@ -55,8 +55,12 @@ class _Watching extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = activity;
     final poster = a['poster'] as String?;
-    final since = DateTime.fromMillisecondsSinceEpoch((a['since'] as num?)?.toInt() ?? 0);
-    final mins = DateTime.now().difference(since).inMinutes;
+    // When they started. A missing time (0) used to count from 1970: "for 498714h". A time sent
+    // in seconds is read as seconds. With no sensible time there is no "for" line.
+    final raw = (a['since'] as num?)?.toInt() ?? 0;
+    final ms = raw > 0 && raw < 100000000000 ? raw * 1000 : raw;
+    final mins = ms > 0 ? DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms)).inMinutes : -1;
+    final known = mins >= 0 && mins < 7 * 24 * 60;
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -92,7 +96,7 @@ class _Watching extends StatelessWidget {
                 Text(
                   [
                     if (a['kind'] == 'tv' && a['episode'] != null) 'Season ${a['season'] ?? 1} · Episode ${a['episode']}',
-                    mins < 1 ? 'just started' : 'for ${mins < 60 ? '${mins}m' : '${mins ~/ 60}h ${mins % 60}m'}',
+                    if (known) mins < 1 ? 'just started' : 'for ${mins < 60 ? '${mins}m' : '${mins ~/ 60}h ${mins % 60}m'}',
                   ].join('  ·  '),
                   style: const TextStyle(fontSize: 12, color: VyseColors.textDim),
                 ),

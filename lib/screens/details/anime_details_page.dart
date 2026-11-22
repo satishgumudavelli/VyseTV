@@ -90,7 +90,8 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
     final saved = WatchProgress.find(a.media);
     final n = saved?.episode;
     if (a.isMovie || saved == null || n == null) return (1, 'Play');
-    if (!saved.finished) return (n, 'Resume E$n');
+    // (marked unwatched: back at the start of it)
+    if (!saved.finished) return (n, saved.position > Duration.zero ? 'Resume E$n' : 'Play E$n');
     final out = _out ?? a.aired ?? a.episodes;
     final next = out != null && n >= out ? 1 : n + 1;
     return (next, next == 1 ? 'Play' : 'Play E$next');
@@ -207,6 +208,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
                 episodes: _episodesOf(a),
                 backdrop: x.data?.fanart ?? a.banner,
                 onPlay: (e) => _play(a, e.number),
+                marks: a.media,
               ),
             ),
           ),
@@ -607,6 +609,8 @@ class _AnimeBody extends StatelessWidget {
               _Pill(icon: Icons.play_arrow_rounded, label: playLabel, primary: true, onTap: onPlay),
               if (!a.isAdult) const _AudioToggle(),
               _SaveButton(media: a.media),
+              // a series' episodes are marked in its episode list
+              if (a.isMovie) WatchedButton(media: a.media, runtime: a.duration),
               _RoundAction(icon: Icons.open_in_new_rounded, tooltip: 'Open on AniList', onTap: () => _open(context, link)),
               _RoundAction(icon: Icons.groups_outlined, tooltip: 'Watch party', onTap: () => startWatchParty(context, a.media)),
             ],

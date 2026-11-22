@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import '../../dpad/dpad_seek.dart';
+import '../../dpad/dpad_traversal.dart' show DpadRail;
 import '../../dpad/focusable_wrapper.dart';
 import '../../dpad/input_mode_tracker.dart';
 import '../../data/sources/addons.dart' show Addon;
@@ -560,8 +561,12 @@ class TvDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     height: 60,
-    child: Row(
-      children: [
+    // One row to a remote: Down from the seek bar comes back to the key that went up to it.
+    // (The keys sit at the left of a bar the width of the screen: by position alone, Down from
+    // the bar's middle landed on the last key.)
+    child: DpadRail(
+      child: Row(
+        children: [
         // (the names are the desktop's, keys and all: they are what a screen reader says)
         _TvKey(icon: paused ? Icons.play_arrow_rounded : Icons.pause_rounded, tooltip: 'Play / pause (Space)', onTap: onPause, first: true),
         if (onNext != null) _TvKey(icon: Icons.skip_next_rounded, tooltip: 'Next episode (N)', onTap: onNext!),
@@ -576,7 +581,8 @@ class TvDock extends StatelessWidget {
         _TvKey(icon: Icons.stream_rounded, tooltip: 'Sources', onTap: onSources),
         _TvKey(icon: Icons.tune_rounded, tooltip: 'Settings (S)', onTap: onSettings),
         if (onInfo != null) _TvKey(icon: Icons.info_outline_rounded, tooltip: 'Stream info', onTap: onInfo!),
-      ],
+        ],
+      ),
     ),
   );
 }

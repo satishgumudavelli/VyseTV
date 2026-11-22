@@ -175,6 +175,11 @@ class PlayerAndroid extends PlayerBase {
       // These settings can be queued before any operation initializes the
       // native core. Apply the latest requested values now so ExoPlayer and
       // the already-queued mpv fallback properties start in the same state.
+      // VyseTV: the mpv this player hands a video to (when Media3 can't play it) decodes in
+      // hardware, as the mpv engine does (PlayerNative asks for it once its core is up). The
+      // plugin queues mpv properties and replays them on that core; with nothing queued it
+      // decoded in software, and a 4K film there was a few frames a second on a TV.
+      await invoke('setMpvProperty', {'name': 'hwdec', 'value': 'mediacodec,mediacodec-copy'});
       await invoke('setAudioNormalization', {'enabled': _audioNormalizationEnabled});
       await invoke('setAudioDownmix', {
         'enabled': _downmixEnabled,

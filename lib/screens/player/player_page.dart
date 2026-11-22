@@ -44,6 +44,7 @@ import '../../data/playback/watch_progress.dart';
 import '../../data/trackers/media_ref.dart';
 import '../../data/trackers/tracker_hub.dart';
 import '../../data/subtitles/subtitle_style.dart';
+import '../../data/subtitles/subtitle_match.dart';
 import '../../data/subtitles/subtitles.dart' as sub;
 import '../../data/catalog/tmdb.dart' hide Video;
 import '../../widgets/common.dart';
@@ -391,7 +392,13 @@ class _PlayerPageState extends State<_PlayerView> {
   bool _episodes = false;
   EpisodeInfo? _upNext;
   EpisodeInfo? _nextInfo; // looked up when an episode starts
-  bool _upNextDismissed = false;
+  bool _upNextDismissed = false; // put away over the credits
+  bool _endDismissed = false; // put away once the episode ended
+  bool _atEnd = false; // the episode has played to its end (the engine said so)
+  bool _upNextAtEnd = false; // the card on show is the one for the end, not the credits'
+
+  /// Whether the next episode plays by itself once this one ends.
+  bool get _autoNext => AppSettings.autoNext.value && _sleepMinutes != -1;
 
   // ── player (lib/mpv); the video is a native surface behind Flutter ──
   // On an Android TV the engine is Media3 unless Settings says mpv (PlayerEngine). A watch
@@ -585,7 +592,11 @@ class _PlayerPageState extends State<_PlayerView> {
   Timer? _partyTimer;
   int _partyTicks = 0;
   Timer? _partyDebounce;
-  String? _partySubLoading; // the host's subtitle file being fetched
+  int? _partySubBusy; // the load whose host's subtitle is being put on here
+  String? _partySubFor; // the host's subtitle (its link) this player has answered: on, or tried
+  bool _partySubExact = false; // what's on is the host's own file (this device's link to it)
+  String? _partySubSaid; // the host's subtitle we said wouldn't load here (said once)
+  final _subFailed = <String>{}; // subtitle links that wouldn't load for this video
   DateTime? _partyJumpAt; // when a follower last jumped to catch up
   DateTime _partySteadyAt = DateTime.now(); // when playback last came back from buffering
   Timer? _stallTimer;
@@ -664,6 +675,9 @@ class _PlayerPageState extends State<_PlayerView> {
       ..add(_player.videoSize.listen(_onVideoSize))
       ..add(_player.streams.completed.listen((done) {
         if (done && _sleepMinutes == -1) _sleepNow();
+        // (the position stops moving at the end: the card for the end is looked for here)
+        _atEnd = done;
+        if (done) _checkUpNext(_position.value);
       }))
       ..add(_player.streams.buffer.listen((b) => _buffered.value = b + _offsetDur))
       ..add(_player.streams.tracks.listen((t) {
@@ -1589,6 +1603,10 @@ class _PlayerPageState extends State<_PlayerView> {
     });
     _animeStreams.clear();
     _addonSubs = const [];
+    _subFailed.clear();
+    _partySubFor = null;
+    _partySubExact = false;
+    _partySubSaid = null;
     if (widget.server != null) return _loadServer(id);
     // a party guest plays the host's exact link when they share one
     _sharedUrl = null;
@@ -1690,6 +1708,9 @@ class _PlayerPageState extends State<_PlayerView> {
     }
     _sharedUrl = url;
     final ep = _ep;
+    // this device's own subtitle list, asked for now rather than once the video is open (the
+    // host's subtitle is looked up in it: their links to some files only work for them)
+    final subs = widget.anime == null ? _filmSubtitles(ep) : null;
     if (widget.anime == null && (!widget.media.isTv || ep != null)) {
       fetchSegments(tmdbId: widget.media.id, season: ep?.season, episode: ep?.number).then((s) {
         if (mounted && id == _loadId) setState(() => _segments = s);
@@ -1705,24 +1726,32 @@ class _PlayerPageState extends State<_PlayerView> {
     await _playSource(src, at: room != null && room.now > 5 ? Duration(milliseconds: (room.now * 1000).round()) : _resumeAt);
     if (!mounted || id != _loadId) return true;
     _watchShared(url, id);
-    if (widget.anime != null) {
+    if (subs == null) {
       _fetchAddonSubs(id);
       _useAnimeExtras(src, id);
     } else {
-      _loadSubtitles(id, await _filmSubtitles(ep));
+      _loadSubtitles(id, await subs);
     }
     return true;
   }
 
-  /// The host's link hasn't started here in 20 s (tied to their connection, say): find our own.
+  /// The host's link won't play here (tied to their connection, say): find our own. As soon as
+  /// the player gives up on it, or when no picture has come in 20 s (a link whose list opens but
+  /// whose video is refused never ends in an error, it just waits). The whole room waits while a
+  /// guest loads, so this mustn't hang on.
   void _watchShared(String url, int id) {
-    Timer(const Duration(seconds: 20), () {
-      if (!mounted || id != _loadId || _sharedUrl != url || _player.state.duration > Duration.zero) return;
+    StreamSubscription<void>? failed;
+    void give() {
+      failed?.cancel();
+      if (!mounted || id != _loadId || _sharedUrl != url || _started) return;
       _sharedSkip = url;
       _sharedUrl = null;
       _switch("The host's stream won't play here. Finding another", () {});
       _loadAndPlay();
-    });
+    }
+
+    failed = _player.streams.fileLoadFailed.listen((_) => give());
+    Timer(const Duration(seconds: 20), give);
   }
 
   /// The stream playing here, for the room's guests to play too (see [_playShared]). `own`: it
@@ -2586,7 +2615,9 @@ class _PlayerPageState extends State<_PlayerView> {
 
   static String _secs(Duration d) => '${(d.inMilliseconds / 1000).toStringAsFixed(2)}s';
 
-  Future<void> _setSubtitleTrack(sub.SubtitleTrack? track) async {
+  /// Puts [track] on (null: off). True once it's on; false when it couldn't be loaded (said so
+  /// unless [quiet]) or another was picked meanwhile.
+  Future<bool> _setSubtitleTrack(sub.SubtitleTrack? track, {bool quiet = false}) async {
     final seq = ++_subSeq;
     SubLog.line(track == null
         ? 'PICK off'
@@ -2611,7 +2642,7 @@ class _PlayerPageState extends State<_PlayerView> {
       if (mounted) setState(() { _activeSubTrack = track; _subtitle = track.language; _cues = const []; });
       _partyReport();
       unawaited(_checkSubs('after pick'));
-      return;
+      return true;
     }
     if (track == null) {
       _subPath = null;
@@ -2620,7 +2651,7 @@ class _PlayerPageState extends State<_PlayerView> {
       if (mounted) setState(() { _activeSubTrack = null; _subtitle = 'Off'; _cues = const []; });
       _syncTimer?.cancel();
       _partyReport();
-      return;
+      return true;
     }
     try {
       if (track.translated && !_subCache.containsKey(track.url) && mounted) {
@@ -2631,7 +2662,7 @@ class _PlayerPageState extends State<_PlayerView> {
       final content = _subCache[track.url] ??= await sub.fetchSubtitleContent(track);
       if (seq != _subSeq || !mounted) {
         SubLog.line('  dropped: another subtitle was picked while this one loaded');
-        return;
+        return false;
       }
       final cues = parseCues(content);
       SubLog.line('  ${cached ? 'cached' : 'downloaded in ${sw.elapsedMilliseconds} ms'}: ${content.length} chars, ${cues.length} lines'
@@ -2656,15 +2687,18 @@ class _PlayerPageState extends State<_PlayerView> {
       _partyReport();
       unawaited(_checkSubs('after pick'));
       if (SubLog.enabled) _syncTimer ??= Timer.periodic(const Duration(seconds: 8), (_) => _syncProbe());
+      return true;
     } catch (e) {
       SubLog.line('  FAILED: $e');
-      if (mounted && seq == _subSeq) {
+      _subFailed.add(track.url);
+      if (mounted && seq == _subSeq && !quiet) {
         showToast(
           context,
           Text("Couldn't load ${track.language} subtitles from ${track.provider}. Try another.", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           icon: Icons.error_outline_rounded,
         );
       }
+      return false;
     }
   }
 
@@ -3108,6 +3142,8 @@ class _PlayerPageState extends State<_PlayerView> {
   void _scheduleUpNext() {
     _nextInfo = null;
     _upNextDismissed = false;
+    _endDismissed = false;
+    _atEnd = false;
     final store = _store, ep = _ep;
     if (store == null || ep == null) return;
     store.after(ep).then((next) {
@@ -3147,19 +3183,33 @@ class _PlayerPageState extends State<_PlayerView> {
     _seek(end);
   }
 
+  /// The next episode is offered in two places. Over the credits, as their skip button, unless
+  /// that button is off (Settings > Playback > Skip buttons): then the credits play with nothing
+  /// over them. And once the episode has ended: with Auto next episode on, the card counts down
+  /// there and plays it. It never counts down before the end: the credits, and any scene after
+  /// them, are the episode's too.
   void _checkUpNext(Duration p) {
     if (_follower) return; // the host moves everyone on
     final next = _nextInfo, d = _duration.value;
     if (next == null || d <= Duration.zero || _seekTarget != null) return;
+    final ended = _atEnd || p >= d - const Duration(seconds: 1);
     // TheIntroDB's credits start when it has one; otherwise the last 4% (30-90s)
     final credits = _segments.where((s) => s.kind == SegmentKind.credits && s.start > d * .5).lastOrNull;
     final lead = Duration(milliseconds: (d.inMilliseconds * .04).round().clamp(30000, 90000));
-    final near = credits != null ? p >= credits.start : p >= d - lead;
-    if (near) {
-      if (_upNext == null && !_upNextDismissed) setState(() => _upNext = next);
-    } else {
+    final inCredits = skipOffered(SegmentKind.credits) && (credits != null ? p >= credits.start : p >= d - lead);
+    final show = ended && _autoNext ? !_endDismissed : inCredits && !_upNextDismissed;
+    if (!ended && !inCredits) {
+      // back before the credits: offered again when they come round
       _upNextDismissed = false;
-      if (_upNext != null) setState(() => _upNext = null);
+      _endDismissed = false;
+    }
+    final card = show ? next : null;
+    final atEnd = show && ended && _autoNext;
+    if (!identical(card, _upNext) || atEnd != _upNextAtEnd) {
+      setState(() {
+        _upNext = card;
+        _upNextAtEnd = atEnd;
+      });
     }
   }
 
@@ -3257,7 +3307,7 @@ class _PlayerPageState extends State<_PlayerView> {
             : _MiniNext(
                 key: ValueKey('${next.season}/${next.number}'),
                 label: episodeLabel(next.season, next.number),
-                auto: AppSettings.autoNext.value && _sleepMinutes != -1,
+                auto: _upNextAtEnd,
                 onPlay: () => _goTo(next, next: true),
               ),
       ),
@@ -3505,6 +3555,51 @@ class _PlayerPageState extends State<_PlayerView> {
     _partyFollow();
   }
 
+  /// Puts the host's subtitle ([h], null: off) on here: this device's own copy of the same file,
+  /// from the list it fetched itself (a link the host got may not answer this device); failing
+  /// that the host's link; then another file in the same language, saying so. Each subtitle the
+  /// host picks is answered once: one that won't load isn't tried, and reported, every second.
+  Future<void> _followSubtitle(Map<String, dynamic>? h, String? want) async {
+    final id = _loadId;
+    _partySubBusy = id;
+    var answered = false;
+    bool stale() => !mounted || id != _loadId || _ownSubs || '${WatchParty.state.value?.subtitle?['url']}' != '${h?['url']}';
+    try {
+      if (h == null) {
+        answered = await _setSubtitleTrack(null);
+        _partySubExact = true;
+        return;
+      }
+      final host = hostSubtitle(h);
+      final copy = subtitleCopy(host, [..._builtIn, ..._subtitleTracks], failed: _subFailed);
+      final tries = [
+        ?copy,
+        // the host's link (a track inside the video only when this is the host's very file)
+        if (copy?.url != host.url && !_subFailed.contains(host.url) && (!_isBuiltIn(host.url) || _sharedUrl != null)) host,
+      ];
+      for (final t in tries) {
+        if (await _setSubtitleTrack(t, quiet: true)) {
+          _partySubExact = true;
+          answered = true;
+          return;
+        }
+        if (stale()) return;
+      }
+      _partySubExact = false;
+      answered = true;
+      final near = subtitleNear(host, [..._builtIn, ..._subtitleTracks], failed: _subFailed);
+      final shown = near != null && await _setSubtitleTrack(near, quiet: true);
+      if (stale() || _partySubSaid == want) return;
+      _partySubSaid = want;
+      _say(shown
+          ? "The host's subtitles didn't load here. Showing other ${host.language} ones."
+          : "The host's ${host.language} subtitles didn't load here. Pick others in Subtitles.");
+    } finally {
+      if (_partySubBusy == id) _partySubBusy = null;
+      if (answered && id == _loadId) _partySubFor = want;
+    }
+  }
+
   /// Followers match the host: speed, subtitle file and timing, play/pause, then position.
   /// Syncplay's thresholds: over 5 s behind or 4 s ahead jumps (the room waits while that
   /// loads), smaller gaps close by playing a touch faster or slower. Never while buffering or just
@@ -3513,24 +3608,19 @@ class _PlayerPageState extends State<_PlayerView> {
     final s = WatchParty.state.value;
     if (s == null || !_follower || s.mine || !mounted) return;
 
-    final sub0 = s.subtitle;
-    final want = sub0 == null ? null : '${sub0['provider']}:${sub0['id']}';
-    final have = _activeSubTrack == null ? null : '${_activeSubTrack!.provider}:${_activeSubTrack!.id}';
-    if (!_ownSubs && want != have && want != _partySubLoading && !_subsLoading) {
-      _partySubLoading = want;
-      final track = sub0 == null
-          ? null
-          : sub.SubtitleTrack(
-              id: '${sub0['id']}',
-              provider: '${sub0['provider']}',
-              lang: '${sub0['lang'] ?? ''}',
-              language: '${sub0['language'] ?? sub0['lang'] ?? ''}',
-              release: '${sub0['release'] ?? ''}',
-              url: '${sub0['url']}',
-              format: '${sub0['format'] ?? 'srt'}',
-              translated: sub0['translated'] == true,
-            );
-      _setSubtitleTrack(track).whenComplete(() => _partySubLoading = null);
+    // the host's subtitle, once this device's own list is in and the video is playing (a player
+    // with nothing open can't take a subtitle file: the host's link failing here used to report
+    // the subtitle failing, every second)
+    final h = s.subtitle;
+    final want = h == null ? null : '${h['url']}';
+    if (!_ownSubs && !_subsLoading && _started && _partySubBusy != _loadId) {
+      if (want != _partySubFor) {
+        unawaited(_followSubtitle(h, want));
+      } else if (h != null && !_partySubExact) {
+        // another file (or none) is on in its place: its own may have turned up since
+        final copy = subtitleCopy(hostSubtitle(h), [..._builtIn, ..._subtitleTracks], failed: _subFailed);
+        if (copy != null && copy.url != _activeSubTrack?.url) unawaited(_followSubtitle(h, want));
+      }
     }
     if (!_ownSubs && (_subOffset - s.subDelay).abs() > .01) {
       setState(() => _subOffset = s.subDelay);
@@ -4145,15 +4235,20 @@ class _PlayerPageState extends State<_PlayerView> {
                         : UpNextCard(
                             key: ValueKey('${_upNext!.season}/${_upNext!.number}'),
                             episode: _upNext!,
-                            auto: AppSettings.autoNext.value && _sleepMinutes != -1,
+                            auto: _upNextAtEnd,
                             compact: phone,
                             onPlay: () {
                               final next = _upNext;
                               if (next != null) _goTo(next, next: true);
                             },
                             onDismiss: () => setState(() {
+                              if (_upNextAtEnd) {
+                                _endDismissed = true;
+                              } else {
+                                _upNextDismissed = true;
+                              }
                               _upNext = null;
-                              _upNextDismissed = true;
+                              _upNextAtEnd = false;
                             }),
                           ),
                   ),
@@ -5216,6 +5311,14 @@ class _MiniNextState extends State<_MiniNext> with SingleTickerProviderStateMixi
       if (s == AnimationStatus.completed) widget.onPlay();
     });
     if (widget.auto) _timer.forward();
+  }
+
+  @override
+  void didUpdateWidget(_MiniNext old) {
+    super.didUpdateWidget(old);
+    // (the episode ended while it was showing: the countdown starts now)
+    if (widget.auto && !old.auto) _timer.forward(from: 0);
+    if (!widget.auto && old.auto) _timer.reset();
   }
 
   @override

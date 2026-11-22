@@ -81,11 +81,44 @@ Future<List<SubtitleTrack>> fetchSubtitles(Media media, {int? season, int? episo
 Future<String> fetchSubtitleContent(SubtitleTrack track) async {
   final mark = track.url.indexOf('#tl=');
   final url = mark < 0 ? track.url : track.url.substring(0, mark);
-  final r = await netClient.get(Uri.parse(url), headers: {'User-Agent': _ua}).timeout(const Duration(seconds: 10));
-  if (r.statusCode != 200) throw http.ClientException('HTTP ${r.statusCode}', Uri.parse(url));
-  final text = _decode(r.bodyBytes, track.lang);
+  final text = _decode(await _download(url), track.lang);
   if (mark < 0) return text;
   return _translateSrt(text, Uri.decodeComponent(track.url.substring(mark + 4)));
+}
+
+/// A subtitle file's bytes. Cinejoy's relay asks for names with a "+" in them unescaped, which
+/// the file's host reads as a space (One Piece's are like that): when the relay can't get a
+/// file, it's fetched from its host directly.
+Future<List<int>> _download(String url) async {
+  try {
+    return await _get(url);
+  } catch (_) {
+    final origin = cinejoyOrigin(url);
+    if (origin == null) rethrow;
+    return _get(origin);
+  }
+}
+
+Future<List<int>> _get(String url) async {
+  final r = await netClient.get(Uri.parse(url), headers: {'User-Agent': _ua}).timeout(const Duration(seconds: 10));
+  if (r.statusCode != 200) throw http.ClientException('HTTP ${r.statusCode}', Uri.parse(url));
+  return r.bodyBytes;
+}
+
+/// Where a Cinejoy relay link's file really is (the relay's link carries it in base64), its name
+/// escaped the way that host expects; null for any other link.
+String? cinejoyOrigin(String url) {
+  const relay = 'https://subs.wing.st/sub/';
+  if (!url.startsWith(relay)) return null;
+  try {
+    final code = url.substring(relay.length).split(RegExp('[?#]')).first;
+    final src = Uri.parse(utf8.decode(base64Url.decode(base64Url.normalize(code))));
+    if (!src.isScheme('https') && !src.isScheme('http')) return null;
+    final path = src.pathSegments.map(Uri.encodeComponent).join('/');
+    return '${src.scheme}://${src.authority}/$path${src.hasQuery ? '?${src.query}' : ''}';
+  } catch (_) {
+    return null;
+  }
 }
 
 /// UTF-8 when it is; otherwise the Windows code page old SRTs in that language were saved in.

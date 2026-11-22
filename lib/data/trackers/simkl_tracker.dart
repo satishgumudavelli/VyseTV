@@ -132,21 +132,37 @@ class SimklTracker {
   }
 
   /// Marks an episode or film watched at [at] (when the live stop didn't get through).
-  static Future<void> addHistory(MediaRef ref, DateTime at) async {
+  static Future<void> addHistory(List<MediaRef> refs, DateTime at) async {
     final when = '${at.toUtc().toIso8601String().split('.').first}Z';
-    final Map<String, dynamic> body = switch (ref.kind) {
+    final r = await _send('POST', '/sync/history', body: _historyBody(refs, when));
+    if (_notFound(_json(r))) throw const TrackerSkipException('Not on Simkl', unmatched: true);
+  }
+
+  /// Marked unwatched in VyseTV: those episodes leave your Simkl history (a film leaves your
+  /// Simkl list altogether, which is how Simkl unwatches a film).
+  static Future<void> removeHistory(List<MediaRef> refs) async {
+    await _send('POST', '/sync/history/remove', body: _historyBody(refs, null));
+  }
+
+  /// Episodes of one title (or a film) for /sync/history (with [when], their watched_at) and
+  /// its removal, in one request.
+  static Map<String, dynamic> _historyBody(List<MediaRef> refs, String? when) {
+    final at = {'watched_at': ?when};
+    final ref = refs.first;
+    final seasons = <int?, List<Map<String, dynamic>>>{};
+    for (final r in refs) {
+      (seasons[r.season] ??= []).add({'number': r.episode, ...at});
+    }
+    return switch (ref.kind) {
       MediaKind.movie => {
-        'movies': [{..._item(ref), 'watched_at': when}],
+        'movies': [{..._item(ref), ...at}],
       },
       MediaKind.show => {
         'shows': [
           {
             ..._item(ref),
             'seasons': [
-              {
-                'number': ref.season,
-                'episodes': [{'number': ref.episode, 'watched_at': when}],
-              },
+              for (final MapEntry(key: n, value: eps) in seasons.entries) {'number': n, 'episodes': eps},
             ],
           },
         ],
@@ -155,13 +171,11 @@ class SimklTracker {
         'anime': [
           {
             ..._item(ref),
-            'episodes': [{'number': ref.episode ?? 1, 'watched_at': when}],
+            'episodes': [for (final r in refs) {'number': r.episode ?? 1, ...at}],
           },
         ],
       },
     };
-    final r = await _send('POST', '/sync/history', body: body);
-    if (_notFound(_json(r))) throw const TrackerSkipException('Not on Simkl', unmatched: true);
   }
 
   /// My List add: "plan to watch", but only when the title isn't in the Simkl library at all
@@ -307,6 +321,62 @@ class SimklTracker {
       }
     }
     return (cursor: now, planned: planned, moved: moved);
+  }
+
+  /// Films and episodes watched on Simkl, for every title changed since [cursor] (Simkl's
+  /// activity time from the last look; null: the last 30 days), with the new cursor. One call
+  /// when nothing changed, two when something did.
+  static Future<({String? cursor, List<RemoteTitle> watched})> watchedSince(String? cursor) async {
+    final now = await _activity();
+    final watched = <RemoteTitle>[];
+    if (now == null || now == cursor) return (cursor: now ?? cursor, watched: watched);
+    final from = cursor ?? DateTime.now().toUtc().subtract(const Duration(days: 30)).toIso8601String();
+    final j = _json(await _send('GET', '/sync/all-items', query: {'date_from': from, 'extended': 'full', 'episode_watched_at': 'yes'}));
+    for (final type in const ['movies', 'shows', 'anime']) {
+      for (final i in _items(j, type)) {
+        if (i['status'] == 'plantowatch') continue;
+        final m = i['movie'] ?? i['show'] ?? i['anime'];
+        if (m is! Map) continue;
+        final ids = m['ids'] is Map ? m['ids'] as Map : const {};
+        final last = asTime(i['last_watched_at']);
+        RemoteTitle title(MediaKind kind, DateTime at, [int? season, int? episode]) => RemoteTitle(
+          kind: kind,
+          at: at,
+          tmdb: asInt(ids['tmdb']),
+          imdb: ids['imdb']?.toString(),
+          tvdb: asInt(ids['tvdb']),
+          anilist: asInt(ids['anilist']),
+          mal: asInt(ids['mal']),
+          title: '${m['title'] ?? ''}',
+          year: asInt(m['year']),
+          season: season,
+          episode: episode,
+        );
+        final film = type == 'movies' || '${i['anime_type'] ?? ''}' == 'movie';
+        if (film) {
+          if (last != null && i['status'] == 'completed') watched.add(title(type == 'movies' ? MediaKind.movie : MediaKind.anime, last));
+          continue;
+        }
+        // episodes, by season (anime are counted straight through: season 0 here)
+        final seasons = [
+          for (final s in (i['seasons'] is List ? i['seasons'] as List : const []).whereType<Map>()) (asInt(s['number']), s['episodes']),
+          if (i['episodes'] is List) (null, i['episodes']),
+        ];
+        for (final (number, episodes) in seasons) {
+          for (final e in (episodes is List ? episodes : const []).whereType<Map>()) {
+            final n = asInt(e['number']);
+            final at = asTime(e['watched_at']) ?? last;
+            if (n == null || at == null) continue;
+            if (type == 'anime') {
+              watched.add(title(MediaKind.anime, at, 0, n));
+            } else if (number != null) {
+              watched.add(title(MediaKind.show, at, number, n));
+            }
+          }
+        }
+      }
+    }
+    return (cursor: now, watched: watched);
   }
 
   static Future<String?> _activity() async {

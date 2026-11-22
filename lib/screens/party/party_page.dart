@@ -15,6 +15,7 @@ import '../../widgets/section_chrome.dart';
 import '../profile/account_sheet.dart';
 import '../profile/profile_page.dart';
 import 'friends_view.dart';
+import 'lounges_view.dart';
 import 'member_list.dart';
 import 'rooms_view.dart';
 import 'party_widgets.dart';
@@ -428,6 +429,17 @@ class _HomeState extends State<_Home> {
           ),
           const SizedBox(height: 26),
           if (!panel) ...[
+            // public chat rooms, then the rooms for watching together
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: partyCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: VyseColors.stroke),
+              ),
+              child: const PartyLoungesPanel(),
+            ),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
@@ -479,7 +491,7 @@ class _HomeState extends State<_Home> {
           decoration: const BoxDecoration(
             border: Border(right: BorderSide(color: VyseColors.stroke)),
           ),
-          child: PartyRoomsPanel(panel: true, topPadding: Layout.windowChrome(context)),
+          child: PartyRoomsPanel(panel: true, topPadding: Layout.windowChrome(context), above: const PartyLoungesPanel()),
         ),
         Expanded(child: main),
         if (members)

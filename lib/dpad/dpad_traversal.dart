@@ -19,6 +19,7 @@
 // and into a column on the item it marks (the season showing).
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/widgets.dart';
 
@@ -536,6 +537,30 @@ abstract final class Dpad {
     return was;
   }
 
+  // a control about to be given focus by another way than [giveFocus] ([choose]), and since when
+  static FocusNode? _coming;
+  static DateTime _comingAt = DateTime(2000);
+
+  /// A control marked with [choose] is on its way to focus (for two seconds at most).
+  static bool get choosing {
+    final c = _coming;
+    if (c == null) return false;
+    if (c.hasPrimaryFocus || !c.canRequestFocus || !(c.context?.mounted ?? false) || clock.now().difference(_comingAt) > const Duration(seconds: 2)) {
+      _coming = null;
+      return false;
+    }
+    return true;
+  }
+
+  /// [node] is about to be given focus on purpose by another way than [giveFocus] (a request
+  /// held until a covered page is uncovered): heal leaves it alone meanwhile ([choosing]), and
+  /// when it lands it counts as given on purpose.
+  static void choose(FocusNode node) {
+    _chosen = node;
+    _coming = node;
+    _comingAt = clock.now();
+  }
+
   /// Gives [node] focus as the kit does: a text box gets it with the on-screen keyboard down.
   static void giveFocus(FocusNode node) {
     _chosen = node;
@@ -655,8 +680,17 @@ abstract final class Dpad {
     // From a control inside another, prefer the same kind on the next line (the delete button
     // of the next row), and only then the lines themselves.
     // (Up or Down goes into a list that runs up and down only from its own column: such a
-    // list beside us is entered sideways, as a whole, not by being nearest overall)
-    bool listBeside(_Stop s) => !horizontal && s.rail != null && !identical(s.rail, rail) && _isAlong(s.rail!.widget.axis, direction) && !_beamsOverlap(here.rect, s.rect, direction);
+    // list beside us is entered sideways, as a whole, not by being nearest overall. Its column
+    // is the list's own box, not just its rows: an anime's episode, a picture with its Play
+    // and mark buttons at the right, lies straight under the tabs, and Down from the tabs
+    // passed it by because its buttons did not.)
+    bool listBeside(_Stop s) =>
+        !horizontal &&
+        s.rail != null &&
+        !identical(s.rail, rail) &&
+        _isAlong(s.rail!.widget.axis, direction) &&
+        !_beamsOverlap(here.rect, s.rect, direction) &&
+        !_beamsOverlap(here.rect, _railBox(s.rail!) ?? s.rect, direction);
     final top = [for (final s in candidates) if (_container(s.node, scope) == null && !listBeside(s)) s];
     final nested = [for (final s in candidates) if (_container(s.node, scope) != null) s];
     _Stop? best;
@@ -701,8 +735,7 @@ abstract final class Dpad {
       final r = s.rail;
       if (r == null || identical(r, own) || _isAlong(r.widget.axis, direction) || spans.containsKey(r)) continue;
       // the list's own box (a short list still fills its panel), not just the rows it has
-      final box = r.context.findRenderObject();
-      spans[r] = box is RenderBox && box.hasSize ? MatrixUtils.transformRect(box.getTransformTo(null), Offset.zero & box.size) : s.rect;
+      spans[r] = _railBox(r) ?? s.rect;
     }
     DpadRailState? list;
     // a list level with us first; failing that, one further up or down the page on that side
@@ -726,6 +759,12 @@ abstract final class Dpad {
       }
     }
     return best;
+  }
+
+  /// Where [rail]'s own box is on screen. Null while it has no size.
+  static Rect? _railBox(DpadRailState rail) {
+    final box = rail.context.findRenderObject();
+    return box is RenderBox && box.hasSize && box.attached ? MatrixUtils.transformRect(box.getTransformTo(null), Offset.zero & box.size) : null;
   }
 
   /// Whether [a] and [b] sit on one line of a rail that runs along [axis].
@@ -782,7 +821,14 @@ abstract final class Dpad {
     TraversalDirection.down => to.bottom - from.bottom,
   });
 
-  static double _minor(Rect from, Rect to, TraversalDirection d) => _horizontal(d) ? (from.center.dy - to.center.dy).abs() : (from.center.dx - to.center.dx).abs();
+  /// How far off the line of travel [to] is. Nothing, when the line through the middle of
+  /// [from] runs through [to] at all: a wide control straight ahead (a TV player's seek bar
+  /// over its Play key, the bar running the width of the screen) is not counted as far off
+  /// because its own middle is. Measured middle to middle, Up from Play passed over the seek
+  /// bar to the small source line above it.
+  static double _minor(Rect from, Rect to, TraversalDirection d) => _horizontal(d)
+      ? (from.center.dy >= to.top && from.center.dy <= to.bottom ? 0 : (from.center.dy - to.center.dy).abs())
+      : (from.center.dx >= to.left && from.center.dx <= to.right ? 0 : (from.center.dx - to.center.dx).abs());
 
   static bool _beamBeats(Rect from, Rect a, Rect b, TraversalDirection d) {
     final aIn = _beamsOverlap(from, a, d), bIn = _beamsOverlap(from, b, d);

@@ -84,4 +84,48 @@ void main() {
     expect(sent.map((s) => s.$1), [13, 14, 15]);
     sent[2].$3.complete();
   });
+
+  // Watch progress combines (each episode's watched mark from whichever device made it last):
+  // a copy from the account that is older than this device's may still hold a mark this device
+  // lacks. It used to be ignored, and the mark was lost on both.
+  group('a kind that combines', () {
+    Map<String, dynamic> both(Map<String, dynamic> a, Map<String, dynamic> b) => {
+      'eps': ({...(a['eps'] as List), ...(b['eps'] as List)}.toList()..sort()),
+      't': [a['t'] as int, b['t'] as int].reduce((x, y) => x > y ? x : y),
+    };
+    late ValueNotifier<Map<String, dynamic>> show;
+    late List<Map<String, dynamic>> pushed;
+
+    setUp(() {
+      show = ValueNotifier<Map<String, dynamic>>({'eps': [1], 't': 10});
+      pushed = [];
+      AccountSync.debugSources([
+        SyncSource(
+          kind: 'test_progress',
+          snapshot: () async => {'show': show.value},
+          apply: (key, data) async => show.value = both(show.value, data!),
+          changes: show,
+          timeOf: (d) => (d['t'] as num?)?.toInt(),
+          merge: both,
+        ),
+      ]);
+      AccountSync.debugSignIn('someone', send: (kind, key, body) async {
+        if (kind == 'test_progress') pushed.add(Map<String, dynamic>.from(body['data'] as Map));
+      });
+    });
+
+    test('an older copy from the account is combined, and the result goes up', () async {
+      show.value = {'eps': [1], 't': 10};
+      await wait();
+      expect(pushed, hasLength(1));
+      AccountSync.debugRemote('test_progress', 'show', {'eps': [2], 't': 5}, 5);
+      await wait();
+      expect(show.value, {'eps': [1, 2], 't': 10}, reason: 'its episode 2 is kept here');
+      expect(pushed.last, {'eps': [1, 2], 't': 10}, reason: 'and the account gets both');
+      final n = pushed.length;
+      AccountSync.debugRemote('test_progress', 'show', {'eps': [1, 2], 't': 10}, 10);
+      await wait();
+      expect(pushed, hasLength(n), reason: 'its own news coming back sends nothing more');
+    });
+  });
 }

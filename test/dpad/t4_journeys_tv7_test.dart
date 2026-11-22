@@ -115,4 +115,17 @@ void main() {
     // a codec with no plain name is not shown as its technical one
     expect(note('audio', 'Audio track present but no decoder available (audio/x-unknown)'), "Media3 can't play this sound · using mpv");
   });
+  // A tester (2026-11-19): a 4K film lagged "massively" on "media3". The report card said it was
+  // mpv, after a hand-over, decoding in software: the plugin replays the mpv properties the app
+  // queued on the mpv it hands a video to, and hardware decoding was never among them.
+  testWidgets('the mpv that Media3 hands a video to is asked to decode in hardware, from the start', (t) async {
+    Bed.exoCalls.clear();
+    await Bed.openPlayer(t);
+    final hwdec = Bed.exoCalls.where((c) => c.startsWith('setMpvProperty') && c.contains('name: hwdec'));
+    expect(hwdec, isNotEmpty, reason: 'queued with the plugin as the player starts');
+    expect(hwdec.last, contains('value: mediacodec,mediacodec-copy'), reason: 'the same as the mpv engine asks for');
+    final init = Bed.exoCalls.indexWhere((c) => c.startsWith('initialize'));
+    expect(Bed.exoCalls.indexOf(hwdec.first), greaterThan(init), reason: 'after the plugin is up, so nothing drops it');
+    await Bed.closePlayer(t);
+  }, variant: tv);
 }

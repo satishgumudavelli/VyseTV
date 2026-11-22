@@ -9,12 +9,14 @@ import '../../core/theme.dart';
 import '../../data/app_settings.dart';
 import '../../data/party/alerts.dart' show PartyMutes;
 import '../../data/account/account.dart';
+import '../../data/party/chat_quote.dart';
 import '../../data/party/dms.dart';
 import '../../data/party/friends.dart';
 import '../../data/party/party.dart';
 import '../../dpad/dpad_extras.dart';
 import '../../widgets/common.dart';
 import '../../widgets/section_chrome.dart';
+import 'chat_view.dart';
 import 'party_widgets.dart';
 
 /// Opens the conversation with [partner] in the current tab.
@@ -178,6 +180,7 @@ class _DmPageState extends State<DmPage> {
   bool _loading = true;
   bool _older = true; // more history to load
   bool _sending = false;
+  ChatQuote? _replying; // the message the box answers
 
   String get _partner => widget.partner.id;
 
@@ -274,10 +277,11 @@ class _DmPageState extends State<DmPage> {
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
-      final m = await Dms.send(_partner, text);
+      final m = await Dms.send(_partner, text, replyTo: _replying?.id);
       if (!mounted) return;
       _input.clear();
       setState(() {
+        _replying = null;
         if (!_messages.any((x) => x.id == m.id)) _messages.insert(0, m);
       });
       if (_scroll.hasClients) _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
@@ -296,26 +300,16 @@ class _DmPageState extends State<DmPage> {
   }
 
   Future<void> _menu(DmMessage m, Offset at) async {
-    final v = await showMenu<String>(
-      context: context,
-      color: VyseColors.surfaceHi,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
-      items: [
-        const PopupMenuItem(value: 'copy', child: Text('Copy text')),
-        if (m.mine)
-          const PopupMenuItem(
-            value: 'unsend',
-            child: Text('Unsend', style: TextStyle(color: Color(0xFFFF8A8C))),
-          ),
-        if (!m.mine)
-          const PopupMenuItem(
-            value: 'report',
-            child: Text('Report', style: TextStyle(color: Color(0xFFFF8A8C))),
-          ),
-      ],
-    );
-    if (v == 'copy') {
+    final v = await showChatMenu(context, at, [
+      ('reply', 'Reply', false),
+      ('copy', 'Copy text', false),
+      if (m.mine) ('unsend', 'Unsend', true),
+      if (!m.mine) ('report', 'Report', true),
+    ]);
+    if (v == 'reply') {
+      setState(() => _replying = ChatQuote(id: m.id, user: m.sender, body: m.body.length > 140 ? m.body.substring(0, 140) : m.body));
+      focusAfterMenu(_focus);
+    } else if (v == 'copy') {
       await Clipboard.setData(ClipboardData(text: m.body));
     } else if (v == 'report') {
       if (mounted) await showReportDialog(context, userId: m.sender, name: widget.partner.name, kind: 'dm', ref: m.id);
@@ -515,15 +509,22 @@ class _DmPageState extends State<DmPage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (gap) _TimeDivider(time: m.created),
-                          _Bubble(message: m, top: firstOfRun, bottom: lastOfRun, status: status, onMenu: (at) => _menu(m, at)),
+                          _Bubble(message: m, partner: p.name, top: firstOfRun, bottom: lastOfRun, status: status, onMenu: (at) => _menu(m, at)),
                         ],
                       );
                     },
                   ),
           ),
-          // composer
+          // composer, with what you're replying to above it
+          if (_replying != null)
+            Padding(
+              padding: floating ? const EdgeInsets.fromLTRB(8, 4, 8, 0) : EdgeInsets.fromLTRB(side, 6, right, 0),
+              child: ReplyBar(quote: _replying!, name: p.name, onCancel: () => setState(() => _replying = null)),
+            ),
           Padding(
-            padding: floating ? const EdgeInsets.fromLTRB(8, 4, 8, 8) : EdgeInsets.fromLTRB(side, 6, right, (phone ? 10 : 18) + MediaQuery.paddingOf(context).bottom),
+            padding: floating
+                ? EdgeInsets.fromLTRB(8, _replying != null ? 0 : 4, 8, 8)
+                : EdgeInsets.fromLTRB(side, _replying != null ? 0 : 6, right, (phone ? 10 : 18) + MediaQuery.paddingOf(context).bottom),
             child: Container(
               padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
               decoration: BoxDecoration(
@@ -536,8 +537,11 @@ class _DmPageState extends State<DmPage> {
                 children: [
                   Expanded(
                     child: CallbackShortcuts(
-                      // Enter sends, Shift+Enter is a new line
-                      bindings: {const SingleActivator(LogicalKeyboardKey.enter): _send},
+                      // Enter sends, Shift+Enter is a new line; Escape stops replying
+                      bindings: {
+                        const SingleActivator(LogicalKeyboardKey.enter): _send,
+                        if (_replying != null) const SingleActivator(LogicalKeyboardKey.escape): () => setState(() => _replying = null),
+                      },
                       child: TextField(
                         controller: _input,
                         focusNode: _focus,
@@ -651,8 +655,9 @@ class _TimeDivider extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, required this.top, required this.bottom, required this.onMenu, this.status});
+  const _Bubble({required this.message, required this.partner, required this.top, required this.bottom, required this.onMenu, this.status});
   final DmMessage message;
+  final String partner; // their name, for what a reply quotes
   final bool top; // first of a run from the same person
   final bool bottom; // last of the run
   final String? status;
@@ -662,6 +667,7 @@ class _Bubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = message;
     final mine = m.mine;
+    final toMe = !mine && (m.reply?.toMe ?? false);
     const r = Radius.circular(18);
     const tight = Radius.circular(6);
     final radius = BorderRadius.only(
@@ -692,16 +698,25 @@ class _Bubble extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: radius,
                   gradient: mine ? const LinearGradient(colors: [VyseColors.accent, VyseColors.accentHot]) : null,
-                  color: mine ? null : VyseColors.surfaceHi,
+                  color: mine ? null : (toMe ? const Color(0xFF2A2318) : VyseColors.surfaceHi),
+                  // their reply to you: lit up
+                  border: toMe ? Border.all(color: VyseColors.accent, width: 1.5) : null,
                 ),
-                child: Text(
-                  m.body,
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    height: 1.35,
-                    color: mine ? Colors.black : VyseColors.text,
-                    fontWeight: mine ? FontWeight.w600 : FontWeight.w500,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (m.reply != null) ChatQuoteView(quote: m.reply!, name: m.reply!.toMe ? null : partner, dark: mine),
+                    Text(
+                      m.body,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        height: 1.35,
+                        color: mine ? Colors.black : VyseColors.text,
+                        fontWeight: mine ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

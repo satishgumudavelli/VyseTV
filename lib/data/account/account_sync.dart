@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
@@ -16,6 +17,7 @@ class SyncSource {
     required this.changes,
     this.timeOf,
     this.remoteWinsFirst = false,
+    this.merge,
   });
 
   /// "progress", "mylist", "settings", …
@@ -35,6 +37,12 @@ class SyncSource {
 
   /// On the very first sync with an account, the account's copy beats the device's (settings).
   final bool remoteWinsFirst;
+
+  /// For an item both sides changed, the two as one (watch progress: each episode's watched
+  /// mark from whichever side made it last), rather than the newer one only. A kind with this
+  /// combines in [apply] too, and an account copy older than the device's is combined rather
+  /// than ignored; whatever the device ends up with that the account lacks goes up.
+  final Map<String, dynamic> Function(Map<String, dynamic> mine, Map<String, dynamic> theirs)? merge;
 }
 
 class _Known {
@@ -191,6 +199,19 @@ class AccountSync {
             await _applyRemote(src, key, r);
             continue;
           }
+          final merge = src.merge;
+          if (merge != null && l != null && !r.deleted && _hash(l) != _hash(r.data)) {
+            // both have it, and they differ: the two as one, here and on the account
+            final both = merge(l, r.data);
+            final t = math.max(tL!, r.time);
+            if (_hash(both) != _hash(l)) {
+              await _applyRemote(src, key, _Remote(r.id, both, t, false));
+            } else {
+              known[key] = _Known(_hash(l), t, false);
+            }
+            if (_hash(both) != _hash(r.data)) ups.add((src.kind, key, both, t));
+            continue;
+          }
           if (tL! > r.time) {
             ups.add((src.kind, key, goneHere ? null : l, tL));
           } else if (r.time > tL || (l != null && _hash(l) != _hash(r.data))) {
@@ -247,8 +268,14 @@ class AccountSync {
     final k = _known[kind]?[key];
     final same = k != null && k.deleted == remote.deleted && (remote.deleted || k.hash == _hash(remote.data));
     if (same) return; // our own change coming back
-    if (k != null && remote.time < k.time) return; // older than what we have
-    _applyRemote(src, key, remote);
+    if (src.merge == null) {
+      if (k != null && remote.time < k.time) return; // older than what we have
+      _applyRemote(src, key, remote);
+      return;
+    }
+    // a kind that combines: even an older copy may hold something this device lacks (and this
+    // device something it lacks, which then goes up)
+    _applyRemote(src, key, remote).then((_) => _onLocal(kind));
   }
 
   /// Tests: an item's news from the account, as the live connection would bring it.

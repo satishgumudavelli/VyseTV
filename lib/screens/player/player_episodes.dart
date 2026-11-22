@@ -7,7 +7,9 @@ import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/anime/anilist.dart';
 import '../../data/catalog/tmdb.dart';
+import '../../data/playback/watch_progress.dart';
 import '../../widgets/common.dart';
+import '../../widgets/watched_marks.dart';
 import 'player_menus.dart';
 import 'player_page.dart' show PlayerEpisode;
 import 'tv_menus.dart';
@@ -35,6 +37,7 @@ class EpisodeInfo {
   bool get upcoming => aired != null && aired!.isAfter(DateTime.now());
   String? stillUrl([String size = 'w300']) => still == null ? null : (still!.startsWith('http') ? still : 'https://image.tmdb.org/t/p/$size$still');
   PlayerEpisode toPlayer() => PlayerEpisode(season: season, number: number, name: name, runtime: runtime);
+  EpisodeMark toMark() => (season: season, number: number, name: name, runtime: runtime);
 }
 
 /// Seasons and episodes of one show, fetched once per player.
@@ -134,6 +137,11 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
     if (ctx != null && ctx.mounted) Scrollable.ensureVisible(ctx, alignment: .25, duration: const Duration(milliseconds: 380), curve: MenuInk.ease);
   });
 
+  bool _seen(EpisodeInfo e) => WatchProgress.isSeen(widget.store.show, season: e.season, episode: e.number);
+
+  /// Marks [e] watched, or unwatched when it is.
+  void _mark(EpisodeInfo e) => setEpisodesWatched(context, widget.store.show, [e.toMark()], watched: !_seen(e));
+
   Widget _close(double size) => Pressable(
     tooltip: 'Close',
     onTap: widget.onClose,
@@ -200,7 +208,7 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
         child: TvMenuScope(
           child: TvMenuFrame(
             title: 'Episodes',
-            detail: widget.store.show.title,
+            detail: '${widget.store.show.title}  ·  Hold OK to mark watched',
             child: FutureBuilder<List<Season>>(
               future: widget.store.seasons,
               builder: (context, snap) {
@@ -260,26 +268,31 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
       final into = start ?? eps.where((e) => !e.upcoming).firstOrNull;
       // (only the rows on screen are built: a season can run to hundreds of episodes. It opens
       // with the one playing at the top and the next, where the ring starts, under it.)
-      return TvRail.lazy(
-        title: title,
-        width: width,
-        count: eps.length,
-        itemCount: eps.length,
-        itemExtent: _tvRow,
-        startAt: at,
-        itemBuilder: (context, i) {
-          final e = eps[i];
-          final playing = e.season == widget.current.season && e.number == widget.current.number;
-          return _EpisodeRow(
-            key: playing ? _currentKey : null,
-            episode: e,
-            compact: false,
-            playing: playing,
-            start: identical(e, start),
-            entry: identical(e, into),
-            onTap: e.upcoming ? null : () => widget.onPick(e),
-          );
-        },
+      return ValueListenableBuilder<List<WatchEntry>>(
+        valueListenable: WatchProgress.entries,
+        builder: (context, _, _) => TvRail.lazy(
+          title: title,
+          width: width,
+          count: eps.length,
+          itemCount: eps.length,
+          itemExtent: _tvRow,
+          startAt: at,
+          itemBuilder: (context, i) {
+            final e = eps[i];
+            final playing = e.season == widget.current.season && e.number == widget.current.number;
+            return _EpisodeRow(
+              key: playing ? _currentKey : null,
+              episode: e,
+              compact: false,
+              playing: playing,
+              start: identical(e, start),
+              entry: identical(e, into),
+              onTap: e.upcoming ? null : () => widget.onPick(e),
+              seen: _seen(e),
+              onMark: e.upcoming ? null : () => _mark(e),
+            );
+          },
+        ),
       );
     },
   );
@@ -384,20 +397,25 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
                           colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
                           stops: [0, 10 / r.height, 1 - 26 / r.height, 1],
                         ).createShader(r),
-                        child: ListView(
-                          padding: EdgeInsets.only(top: short ? 4 : 6, bottom: (short ? 14 : 30) + safe.bottom),
-                          children: [
-                            for (final e in eps)
-                              _EpisodeRow(
-                                key: e.season == widget.current.season && e.number == widget.current.number ? _currentKey : null,
-                                episode: e,
-                                compact: compact,
-                                short: short,
-                                playing: e.season == widget.current.season && e.number == widget.current.number,
-                                start: identical(e, start),
-                                onTap: e.upcoming ? null : () => widget.onPick(e),
-                              ),
-                          ],
+                        child: ValueListenableBuilder<List<WatchEntry>>(
+                          valueListenable: WatchProgress.entries,
+                          builder: (context, _, _) => ListView(
+                            padding: EdgeInsets.only(top: short ? 4 : 6, bottom: (short ? 14 : 30) + safe.bottom),
+                            children: [
+                              for (final e in eps)
+                                _EpisodeRow(
+                                  key: e.season == widget.current.season && e.number == widget.current.number ? _currentKey : null,
+                                  episode: e,
+                                  compact: compact,
+                                  short: short,
+                                  playing: e.season == widget.current.season && e.number == widget.current.number,
+                                  start: identical(e, start),
+                                  onTap: e.upcoming ? null : () => widget.onPick(e),
+                                  seen: _seen(e),
+                                  onMark: e.upcoming ? null : () => _mark(e),
+                                ),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -453,9 +471,25 @@ class _SeasonPill extends StatelessWidget {
 }
 
 class _EpisodeRow extends StatelessWidget {
-  const _EpisodeRow({super.key, required this.episode, required this.playing, required this.compact, required this.onTap, this.short = false, this.start = false, this.entry = false});
+  const _EpisodeRow({
+    super.key,
+    required this.episode,
+    required this.playing,
+    required this.compact,
+    required this.onTap,
+    this.short = false,
+    this.start = false,
+    this.entry = false,
+    this.seen = false,
+    this.onMark,
+  });
   final EpisodeInfo episode;
   final bool playing;
+
+  /// Watched: a green tick at its end. [onMark] marks it watched or unwatched: the tick under a
+  /// pointer, holding OK with a D-pad.
+  final bool seen;
+  final VoidCallback? onMark;
 
   /// A TV's column of episodes: where a D-pad lands coming into it from the seasons.
   final bool entry;
@@ -478,6 +512,8 @@ class _EpisodeRow extends StatelessWidget {
       opacity: onTap == null && !playing ? .45 : 1,
       child: Pressable(
         onTap: playing ? null : onTap,
+        // (only on a row that is a stop already: the playing row and ones not out yet stay passed over)
+        onLongPress: playing || onTap == null ? null : onMark,
         autofocus: start,
         railEntry: entry,
         builder: (context, hovered, pressed) => AnimatedScale(
@@ -549,7 +585,7 @@ class _EpisodeRow extends StatelessWidget {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        playing ? 'Now playing' : meta,
+                        playing ? 'Now playing' : (seen ? '$meta  ·  Watched' : meta),
                         style: TextStyle(fontSize: compact ? 11 : 11.5, fontWeight: FontWeight.w600, color: playing ? VyseColors.accent : MenuInk.dim),
                       ),
                       if (!compact) ...[
@@ -564,6 +600,17 @@ class _EpisodeRow extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onMark != null)
+                  Pressable(
+                    tooltip: seen ? 'Mark as unwatched' : 'Mark as watched',
+                    onTap: onMark,
+                    // a pointer's button; with a D-pad, holding OK on the row does it
+                    focusable: false,
+                    builder: (context, h, _) => Padding(
+                      padding: EdgeInsets.fromLTRB(8, compact ? 2 : 4, 4, 4),
+                      child: WatchedTick(seen: seen, size: compact ? 20 : 22, hovered: h || hovered),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -609,6 +656,14 @@ class _UpNextCardState extends State<UpNextCard> with SingleTickerProviderStateM
       if (s == AnimationStatus.completed) widget.onPlay();
     });
     if (widget.auto) _timer.forward();
+  }
+
+  @override
+  void didUpdateWidget(UpNextCard old) {
+    super.didUpdateWidget(old);
+    // (the episode ended while it was showing: the countdown starts now)
+    if (widget.auto && !old.auto) _timer.forward(from: 0);
+    if (!widget.auto && old.auto) _timer.reset();
   }
 
   @override

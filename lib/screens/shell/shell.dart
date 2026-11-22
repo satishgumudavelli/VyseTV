@@ -17,6 +17,7 @@ import '../../data/app_settings.dart';
 import '../../data/sources/debrid/debrid.dart' show Debrid;
 import '../../data/party/alerts.dart';
 import '../../data/party/dms.dart';
+import '../../data/party/lounges.dart';
 import '../../data/party/friends.dart';
 import '../../data/party/party_music.dart';
 import '../../data/party/watch_party.dart';
@@ -47,6 +48,7 @@ import '../party/party_widgets.dart' show PartyAvatar;
 import '../../data/party/rooms.dart';
 import '../../data/party/voice.dart';
 import '../party/rooms_view.dart' show openRoom;
+import '../party/lounges_view.dart' show openLounge;
 import '../manga/manga_page.dart';
 import '../audiobooks/audiobooks_page.dart';
 import '../music/music_shell.dart';
@@ -112,6 +114,7 @@ class _AppShellState extends State<AppShell> {
   int _settingsOpen = 0;
   bool _railOpen = false;
   StreamSubscription<(String, DmMessage)>? _dms;
+  StreamSubscription<ReplyNotice>? _replies;
   StreamSubscription<String>? _p2pAsks;
   WatchState? _lastWatch;
   Set<String>? _requests; // who had asked to be friends, as of the last update
@@ -274,12 +277,37 @@ class _AppShellState extends State<AppShell> {
         if (nav == null) return;
         if (target == 'room') {
           openRoom(nav);
+        } else if (target.startsWith('lounge:')) {
+          final id = target.substring(7);
+          final l = [...Lounges.mine.value, ...Lounges.official.value].where((l) => l.id == id).firstOrNull;
+          openLounge(nav, l ?? Lounge(id: id, name: 'Lounge'));
         } else if (target.startsWith('dm:')) {
           final p = Dms.threads.value.where((t) => t.partner.id == target.substring(3)).firstOrNull?.partner;
           if (p != null && Dms.openWith != p.id) openDm(nav, p);
         }
       });
     };
+    // someone replied to you, in a lounge that isn't on screen or in your room while its chat isn't
+    _replies = Lounges.notices.listen((n) {
+      final m = n.message;
+      if (!mounted || Account.user.value?.statusMode == 'dnd' || PartyMutes.has(m.user)) return;
+      if (n.kind == 'lounge' && Lounges.openId == n.placeId) return;
+      if (n.kind == 'room' && PartyAlerts.roomChatsOpen > 0) return;
+      showToast(
+        context,
+        Text.rich(
+          TextSpan(children: [
+            TextSpan(text: '${m.name} replied in ${n.placeName}  ', style: const TextStyle(fontWeight: FontWeight.w800)),
+            TextSpan(text: m.body.replaceAll('\n', ' '), style: const TextStyle(color: VyseColors.textDim)),
+          ]),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 13, color: VyseColors.text),
+        ),
+        icon: Icons.reply_rounded,
+        onTap: () => PartyAlerts.onOpen?.call(n.kind == 'lounge' ? 'lounge:${n.placeId}' : 'room'),
+      );
+    });
     // a DM arriving while its chat isn't open (and not on Do not disturb)
     _dms = Dms.events.listen((ev) {
       final (action, m) = ev;
@@ -316,6 +344,7 @@ class _AppShellState extends State<AppShell> {
     hideBottomBar.removeListener(_barAsked);
     Updater.instance.removeListener(_updateChanged);
     _dms?.cancel();
+    _replies?.cancel();
     _p2pAsks?.cancel();
     _navRegion.dispose();
     _pageRegion.dispose();

@@ -231,6 +231,12 @@ class LibraryImport {
 
   // ── matching titles ──
 
+  /// [_resolveIds], for what comes in from the services after the import (WatchedSync).
+  static Future<bool> resolveIds(List<RemoteTitle> titles) => _resolveIds(titles);
+
+  /// [_media], for the same.
+  static Future<Map<String, ({Media media, int? runtime})>> mediaFor(List<RemoteTitle> titles) => _media(titles);
+
   /// Fills in the ids VyseTV goes by: AniList ids for anime Simkl only knows by their
   /// MyAnimeList id, TMDB ids for titles that came with only an IMDb or TheTVDB one. False when
   /// a lookup failed.

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../anime/anilist.dart' show Anime;
@@ -18,6 +18,7 @@ import 'token_store.dart';
 import 'trakt_tracker.dart';
 import 'tracker.dart';
 import 'tracker_keys.dart';
+import 'watched_sync.dart';
 
 /// One player's live session with the scrobbling services.
 class _Session {
@@ -79,9 +80,19 @@ class TrackerHub {
     }
     states.value = next;
     unawaited(_pump());
-    // imported watchlists: what changed there since (once the app has settled)
-    unawaited(Future<void>.delayed(const Duration(seconds: 20), LibraryImport.follow));
+    // imported watchlists, and what was watched there: what changed since (once the app has
+    // settled), and again whenever the app comes back (each service only when it's due)
+    unawaited(Future<void>.delayed(const Duration(seconds: 20), () async {
+      await LibraryImport.follow();
+      await WatchedSync.pull(on: _watchedOn);
+    }));
+    _lifecycle ??= AppLifecycleListener(onResume: () => unawaited(WatchedSync.pull(on: _watchedOn)));
   }
+
+  static AppLifecycleListener? _lifecycle;
+
+  /// Whether watched and unwatched go both ways with [id]: signed in, "Scrobble what I watch" on.
+  static bool _watchedOn(TrackerId id) => _scrobblers.contains(id) && _live(id) && _enabled(id);
 
   static void _set(TrackerId id, TrackerState Function(TrackerState s) change) {
     final all = {...states.value};
@@ -266,6 +277,60 @@ class TrackerHub {
 
   // ── what you change here ──
 
+  /// A film marked watched or unwatched here ([WatchProgress.markFilm]). Simkl and Trakt hear
+  /// (with "Scrobble what I watch" on). False when it already was.
+  static bool markFilm(Media m, {required bool watched, int? runtime}) {
+    if (!WatchProgress.markFilm(m, watched: watched, runtime: runtime)) return false;
+    _marked(m, const [null], watched: watched);
+    return true;
+  }
+
+  /// Episodes of a show or an anime marked watched or unwatched here
+  /// ([WatchProgress.markEpisodes]). Only the ones that changed go out: Simkl and Trakt hear
+  /// (with "Scrobble what I watch" on), and AniList hears of an anime episode marked watched
+  /// (its progress only ever moves on). Returns the ones that changed.
+  static List<EpisodeMark> markEpisodes(Media m, List<EpisodeMark> episodes, {required bool watched}) {
+    final changed = WatchProgress.markEpisodes(m, episodes, watched: watched);
+    if (changed.isNotEmpty) _marked(m, changed, watched: watched);
+    return changed;
+  }
+
+  /// Marks are sent as what they are, once: a film or an episode added to the service's history
+  /// at the minute it was marked (so a repeat is the same play), or taken out of it. A mark that
+  /// changes nothing here (already watched) sends nothing, and what came in from a service or
+  /// from another device through Vyse Sync never goes out from here.
+  static void _marked(Media m, List<EpisodeMark?> episodes, {required bool watched}) {
+    final at = _minute(DateTime.now()).toIso8601String();
+    final kind = watched ? 'watched' : 'unwatched';
+    final refs = [for (final e in episodes) ?MediaRef.playing(m, season: e?.season, episode: e?.number)];
+    var queued = false;
+    for (final id in _scrobbling) {
+      if (refs.length == 1) {
+        _queue(id, kind, refs.single.itemKey, {'ref': refs.single.toJson(), if (watched) 'at': at});
+        queued = true;
+        continue;
+      }
+      // a season or more at once: one request per 50 episodes, not one each (Simkl's daily
+      // allowance is 500 calls, Trakt takes one write a second)
+      for (var i = 0; i < refs.length; i += 50) {
+        final chunk = refs.skip(i).take(50).toList();
+        _queue(id, kind, '${chunk.first.itemKey}..${chunk.last.itemKey}', {
+          'refs': [for (final r in chunk) r.toJson()],
+          if (watched) 'at': at,
+        });
+        queued = true;
+      }
+    }
+    if (watched && m.anime && _live(TrackerId.anilist) && _enabled(TrackerId.anilist)) {
+      final last = episodes.fold<int>(0, (n, e) => max(n, e?.number ?? 1));
+      _queue(TrackerId.anilist, 'anime', '${m.id}', {'a': m.id, 'e': last, 't': m.title});
+      queued = true;
+    }
+    if (!queued) return;
+    _counts();
+    unawaited(_pump());
+  }
+
   /// My List's + / ✓ buttons: toggles it, and tells Simkl / Trakt.
   static void myListToggle(Media m) {
     MyList.toggle(m);
@@ -339,21 +404,28 @@ class TrackerHub {
     final id = item.service;
     try {
       final ref = MediaRef.fromJson(item.data['ref']);
+      // episodes marked at once travel together
+      final refs = [for (final r in (item.data['refs'] is List ? item.data['refs'] as List : [item.data['ref']])) ?MediaRef.fromJson(r)];
+      final at = DateTime.tryParse('${item.data['at']}') ?? item.created;
       switch ((id, item.kind)) {
         case (TrackerId.anilist, 'anime'):
           final t = await TokenStore.read(id);
           if (t == null || (t.refresh == null && t.expiresWithin(Duration.zero))) throw const TrackerAuthException();
           await AniListTracker.applyEpisode(t, mediaId: _int(item.data['a']), episode: _int(item.data['e']), countRewatches: AppSettings.trackRewatches.value);
-        case (TrackerId.simkl, 'watched') when ref != null:
-          await SimklTracker.addHistory(ref, DateTime.tryParse('${item.data['at']}') ?? item.created);
+        case (TrackerId.simkl, 'watched') when refs.isNotEmpty:
+          await SimklTracker.addHistory(refs, at);
+        case (TrackerId.simkl, 'unwatched') when refs.isNotEmpty:
+          await SimklTracker.removeHistory(refs);
+        case (TrackerId.trakt, 'unwatched') when refs.isNotEmpty:
+          await TraktTracker.removeHistory(refs);
         case (TrackerId.simkl, 'listAdd') when ref != null:
           await SimklTracker.listAdd(ref);
         case (TrackerId.simkl, 'listRemove') when ref != null:
           await SimklTracker.listRemove(ref);
         case (TrackerId.simkl, 'historyRemove') when ref != null:
           await SimklTracker.historyRemove(ref);
-        case (TrackerId.trakt, 'watched') when ref != null:
-          await TraktTracker.addHistory(ref, DateTime.tryParse('${item.data['at']}') ?? item.created);
+        case (TrackerId.trakt, 'watched') when refs.isNotEmpty:
+          await TraktTracker.addHistory(refs, at);
         case (TrackerId.trakt, 'listAdd') when ref != null:
           await TraktTracker.watchlist(ref, add: true);
         case (TrackerId.trakt, 'listRemove') when ref != null:
@@ -450,6 +522,8 @@ class TrackerHub {
       ),
     );
     unawaited(_pump());
+    // what was watched there lately comes in now, not at the next start
+    unawaited(WatchedSync.pull(on: _watchedOn, only: id, force: true));
     return t.userName;
   }
 
@@ -465,6 +539,7 @@ class TrackerHub {
     if (id == TrackerId.trakt && t != null) unawaited(TraktTracker.revoke(t));
     await TokenStore.delete(id);
     await LibraryImport.forget(id);
+    await WatchedSync.forget(id);
     Outbox.removeService(id);
     if (_scrobblers.contains(id) && _scrobbling.where((x) => x != id).isEmpty) {
       for (final s in _sessions.values) {

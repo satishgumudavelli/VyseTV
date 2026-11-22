@@ -12,6 +12,7 @@ import 'package:window_manager/window_manager.dart';
 import '../account/account.dart';
 import '../app_settings.dart';
 import 'dms.dart';
+import 'lounges.dart';
 import 'rooms.dart';
 
 /// Party's sounds: one family of soft mallet tones (assets/sounds). Rising means arriving,
@@ -68,6 +69,7 @@ class PartyAlerts {
     Rooms.mine.addListener(_roomChanged);
     Dms.events.listen(_dm);
     Rooms.messages.listen(_roomMessage);
+    Lounges.notices.listen(_reply);
     Dms.threads.addListener(_unreadChanged);
     Dms.badge.addListener(_unreadChanged);
     AppSettings.partyMuted.addListener(_unreadChanged);
@@ -156,6 +158,22 @@ class PartyAlerts {
   }
 
   // ── system notifications ──
+
+  /// Someone replied to you. A room's own message alert covers its replies; in a lounge it's
+  /// a sound when the app is in front (the shell shows it), a notification when it isn't.
+  static Future<void> _reply(ReplyNotice n) async {
+    final m = n.message;
+    if (n.kind != 'lounge' || _quiet || PartyMutes.has(m.user)) return;
+    final focused = await _focused();
+    if (focused && Lounges.openId == n.placeId) return; // you're reading it
+    if (focused) {
+      play(PartySound.message);
+      return;
+    }
+    if (!_android || !_notesReady) play(PartySound.message);
+    await _notify('lounge:${n.placeId}'.hashCode & 0x7fffffff, '${m.name} replied in ${n.placeName}', m.body, 'lounge:${n.placeId}');
+    _flash();
+  }
 
   static Future<void> _initNotifications() async {
     try {

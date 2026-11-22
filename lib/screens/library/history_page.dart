@@ -116,7 +116,9 @@ class _HistoryPageState extends State<HistoryPage> {
 
     return ValueListenableBuilder<List<WatchEntry>>(
       valueListenable: WatchProgress.entries,
-      builder: (context, all, _) {
+      builder: (context, entries, _) {
+        // (everything in it marked unwatched: kept for the marks, not shown)
+        final all = [for (final e in entries) if (!e.blank) e];
         final q = _search.text.trim().toLowerCase();
         final shown = all.where((e) => _filter.test(e) && (q.isEmpty || e.media.title.toLowerCase().contains(q))).toList();
         final finished = all.where((e) => e.finished).length;

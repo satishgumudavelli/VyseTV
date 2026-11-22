@@ -34,6 +34,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import 'covered_route_focus_boundary.dart';
 import 'dpad_navigator.dart';
 import 'dpad_reveal.dart';
 import 'dpad_traversal.dart';
@@ -91,6 +92,25 @@ Map<ShortcutActivator, VoidCallback> backBindings(VoidCallback action) => {
 class DpadReturnObserver extends NavigatorObserver {
   final _from = Expando<FocusNode>('opened from');
 
+  /// Routes that have closed and are still on their way out (their closing animation).
+  static int _closing = 0;
+  static FocusNode? _instead;
+
+  /// A choice that moves focus on, as Reply in a chat message's menu puts the caret in the chat's
+  /// box: once the route that just closed (the menu) has gone, [node] gets focus instead of what
+  /// opened it. While the page is still covered the request is held and comes after the page's
+  /// own restore (CoveredRouteFocusBoundary); heal leaves it alone (Dpad.choosing).
+  static void focusOnceClosed(FocusNode node) {
+    final context = node.context;
+    if (context == null || !context.mounted) return;
+    Dpad.choose(node);
+    if (_closing > 0) {
+      _instead = node;
+      return;
+    }
+    CoveredRouteFocusBoundary.requestInitialFocus(context, node);
+  }
+
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     final focus = FocusManager.instance.primaryFocus;
@@ -115,7 +135,16 @@ class DpadReturnObserver extends NavigatorObserver {
     scheduleMicrotask(restore);
     final presses = Dpad.presses;
     if (route is TransitionRoute) {
+      _closing++;
       route.completed.then((_) {
+        _closing--;
+        // a choice asked for focus to go on ([focusOnceClosed])
+        final to = _instead;
+        _instead = null;
+        if (to != null && (to.context?.mounted ?? false)) {
+          Dpad.giveFocus(to);
+          return;
+        }
         if (Dpad.presses == presses) restore();
       });
     }
@@ -453,6 +482,23 @@ class _DpadRootState extends State<DpadRoot> with TickerProviderStateMixin {
     });
   }
 
+  /// When [scope] is inside a page that another page of the same navigator covers: the scope
+  /// of the page on top. Null otherwise (also under a nested navigator covered from the root
+  /// one, whose pages all still count as current: CoveredRouteFocusBoundary).
+  static FocusScopeNode? _pageOnTop(FocusScopeNode scope) {
+    final at = scope.context;
+    if (at == null || !at.mounted) return null;
+    final route = ModalRoute.of(at);
+    final navigator = route?.navigator;
+    if (route == null || route.isCurrent || navigator == null || !navigator.mounted) return null;
+    for (final child in navigator.focusNode.children) {
+      final c = child.context;
+      if (child is! FocusScopeNode || c == null || !c.mounted || !child.canRequestFocus) continue;
+      if (ModalRoute.of(c)?.isCurrent ?? false) return child;
+    }
+    return null;
+  }
+
   void _healSoon() {
     WidgetsBinding.instance.addPostFrameCallback((_) => _heal());
     WidgetsBinding.instance.scheduleFrame();
@@ -463,10 +509,23 @@ class _DpadRootState extends State<DpadRoot> with TickerProviderStateMixin {
     if (!mounted || !_keyboardMode) return;
     final node = FocusManager.instance.primaryFocus;
     if (node != null && Dpad.isRest(node)) return;
+    // a control was just given focus on purpose and it is on its way (a menu's Reply moving the
+    // caret to the chat's box as the menu goes): healing would take it straight back
+    if (Dpad.choosing) return;
     // the innermost area that last had focus: the page on top, not the whole app
     var scope = node is FocusScopeNode ? node : (node?.nearestScope ?? FocusManager.instance.rootScope);
     while (scope.focusedChild is FocusScopeNode) {
       scope = scope.focusedChild! as FocusScopeNode;
+    }
+    // Left on a page another page covers, where nothing can take it: the page on top instead.
+    // A dialog that closes gives focus back to the page it was opened from, and a choice in it
+    // can have opened a page over that one meanwhile (Library or Message on a Party profile).
+    final top = _pageOnTop(scope);
+    if (top != null) {
+      scope = top;
+      while (scope.focusedChild is FocusScopeNode && scope.focusedChild!.canRequestFocus) {
+        scope = scope.focusedChild! as FocusScopeNode;
+      }
     }
     final view = View.maybeOf(context);
     final window = view == null ? null : Offset.zero & (view.physicalSize / view.devicePixelRatio);

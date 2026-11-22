@@ -89,6 +89,10 @@ class AudiobookPlayer extends ChangeNotifier {
   bool _parked = false;
   Duration _parkedAt = Duration.zero;
 
+  /// The open book, taken off Continue listening: it stays off until it is played again.
+  /// Pausing it, closing it, or a song taking the sound each saved it straight back.
+  String? _dropped;
+
   AudiobookChapter? get currentChapter => chapter >= 0 && chapter < chapters.length ? chapters[chapter] : null;
   bool get hasNext => chapter < chapters.length - 1;
   bool get hasPrev => chapter > 0;
@@ -105,6 +109,7 @@ class AudiobookPlayer extends ChangeNotifier {
   Future<void> play(Audiobook b, List<AudiobookChapter> chaps, {int? chapterIndex, Duration? at}) async {
     if (chaps.isEmpty) return;
     final saved = progressFor(b);
+    _dropped = null;
     book = b;
     chapters = chaps;
     chapter = (chapterIndex ?? saved?.chapter ?? 0).clamp(0, chaps.length - 1);
@@ -114,6 +119,7 @@ class AudiobookPlayer extends ChangeNotifier {
 
   Future<void> jumpToChapter(int i) async {
     if (i < 0 || i >= chapters.length) return;
+    _dropped = null;
     chapter = i;
     await _openChapter();
   }
@@ -130,6 +136,7 @@ class AudiobookPlayer extends ChangeNotifier {
 
   Future<void> toggle() async {
     if (book == null) return;
+    if (_parked || !playing) _dropped = null;
     if (_parked) return _openChapter(start: _parkedAt, keepDuration: true);
     if (!playing) AudioFocus.claim(this, _park);
     await _player.playOrPause();
@@ -206,6 +213,7 @@ class AudiobookPlayer extends ChangeNotifier {
   }
 
   Future<void> forget(Audiobook b) async {
+    if (book?.uuid == b.uuid) _dropped = b.uuid;
     recents.value = recents.value.where((r) => r.book.uuid != b.uuid).toList();
     await _persist();
   }
@@ -274,7 +282,7 @@ class AudiobookPlayer extends ChangeNotifier {
 
   void _saveProgress() {
     final b = book;
-    if (b == null || loading) return;
+    if (b == null || loading || b.uuid == _dropped) return;
     _lastSaved = position.value;
     final entry = BookProgress(b, chapter, position.value, currentChapter?.title);
     recents.value = [entry, ...recents.value.where((r) => r.book.uuid != b.uuid)].take(30).toList();

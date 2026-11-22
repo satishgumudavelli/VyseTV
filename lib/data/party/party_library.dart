@@ -25,8 +25,11 @@ class ProfileLibrary {
   bool get isEmpty => titles.isEmpty && likes.isEmpty && playlists.isEmpty && albums.isEmpty && artists.isEmpty && savedPlaylists.isEmpty;
   int get musicCount => likes.length + playlists.length + albums.length + artists.length + savedPlaylists.length;
 
+  /// How it asks the account server (a test answers instead).
+  static Future<dynamic> Function(String path) send = (path) => Account.pb.send(path);
+
   static Future<ProfileLibrary> load(String userId, {String? owner}) async {
-    final j = await Account.pb.send('/api/vyse/social/library/${Uri.encodeComponent(userId)}') as Map<String, dynamic>;
+    final j = await send('/api/vyse/social/library/${Uri.encodeComponent(userId)}') as Map<String, dynamic>;
     List<Map<String, dynamic>> rows(String k) => [for (final x in (j[k] as List?) ?? const []) if (x is Map) Map<String, dynamic>.from(x)];
 
     final titles = [for (final r in rows('titles')) ?_title(r)]..sort((a, b) => b.added.compareTo(a.added));

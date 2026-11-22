@@ -184,4 +184,25 @@ void main() {
     expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<SubtitleSyncPanel>(), isNull);
     await Bed.closePlayer(t);
   }, variant: tv);
+  // A tester (2026-11-19): "the button to go from play/pause skips the progress tracking bar".
+  // Up from Play went to the source line above the bar: the bar's middle is far to the right
+  // of Play, and the kit measured how far off the line a control is middle to middle.
+  testWidgets('a TV: Up from Play reaches the seek bar, and Down from the bar comes back to Play', (t) async {
+    await Bed.openPlayer(t);
+    await Bed.down(t); // the controls come up, the ring on Play
+    expect(key(), 'Play / pause (Space)');
+    await Bed.up(t);
+    expect(Bed.focused(), contains('PlayerRail'), reason: 'the seek bar is right above the keys');
+    await Bed.down(t);
+    expect(key(), 'Play / pause (Space)', reason: 'back to the key it went up from, not the one under the middle of the bar');
+    await Bed.right(t, times: 3);
+    final from = key();
+    await Bed.up(t);
+    expect(Bed.focused(), contains('PlayerRail'));
+    await Bed.down(t);
+    expect(key(), from, reason: 'from any key');
+    await Bed.up(t, times: 2);
+    expect(key(), 'Change source', reason: 'and on up past the bar');
+    await Bed.closePlayer(t);
+  }, variant: tv);
 }

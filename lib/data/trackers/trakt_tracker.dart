@@ -137,39 +137,55 @@ class TraktTracker {
     return null;
   }
 
-  /// Marks an episode or film watched at [at] (when the live stop didn't get through). The time
-  /// is to the minute, which is how Trakt spots the same play sent twice.
-  static Future<void> addHistory(MediaRef ref, DateTime at) async {
+  /// Marks episodes (of one title) or a film watched at [at]: when the live stop didn't get
+  /// through, or marked watched by hand. The time is to the minute, which is how Trakt spots the
+  /// same play sent twice.
+  static Future<void> addHistory(List<MediaRef> refs, DateTime at) async {
     final when = '${at.toUtc().toIso8601String().substring(0, 16)}:00.000Z';
-    final target = await _target(ref, history: true);
-    if (target == null) throw const TrackerSkipException('Not matched on Trakt', unmatched: true);
-    final Map<String, dynamic> body;
-    if (target['movie'] case final Map movie) {
-      body = {
-        'movies': [{...movie, 'watched_at': when}],
-      };
-    } else if (target['show'] case final Map show) {
-      final ep = target['episode'] as Map;
-      body = {
+    final r = await _send('POST', '/sync/history', body: await _historyBody(refs, when));
+    if (_onlyNotFound(_json(r), 'added')) throw const TrackerSkipException('Not on Trakt', unmatched: true);
+  }
+
+  /// Marked unwatched in VyseTV: every play of those episodes (or that film) leaves your Trakt
+  /// history, as Trakt's own "unwatch" does.
+  static Future<void> removeHistory(List<MediaRef> refs) async {
+    await _send('POST', '/sync/history/remove', body: await _historyBody(refs, null));
+  }
+
+  /// Episodes or a film for /sync/history (with [when], their watched_at) and its removal, in
+  /// one request: a film, a show's episodes by season, or anime episodes by their own ids.
+  static Future<Map<String, dynamic>> _historyBody(List<MediaRef> refs, String? when) async {
+    final at = {'watched_at': ?when};
+    final movies = <Map<String, dynamic>>[], episodes = <Map<String, dynamic>>[];
+    Map<dynamic, dynamic>? show;
+    final seasons = <Object?, List<Map<String, dynamic>>>{};
+    for (final ref in refs) {
+      final target = await _target(ref, history: true);
+      if (target == null) continue;
+      if (target['movie'] case final Map movie) {
+        movies.add({...movie, ...at});
+      } else if (target['show'] case final Map s) {
+        show ??= s;
+        final ep = target['episode'] as Map;
+        (seasons[ep['season']] ??= []).add({'number': ep['number'], ...at});
+      } else {
+        episodes.add({...(target['episode'] as Map), ...at});
+      }
+    }
+    if (movies.isEmpty && show == null && episodes.isEmpty) throw const TrackerSkipException('Not matched on Trakt', unmatched: true);
+    return {
+      if (movies.isNotEmpty) 'movies': movies,
+      if (show != null)
         'shows': [
           {
             ...show,
             'seasons': [
-              {
-                'number': ep['season'],
-                'episodes': [{'number': ep['number'], 'watched_at': when}],
-              },
+              for (final MapEntry(key: n, value: eps) in seasons.entries) {'number': n, 'episodes': eps},
             ],
           },
         ],
-      };
-    } else {
-      body = {
-        'episodes': [{...(target['episode'] as Map), 'watched_at': when}],
-      };
-    }
-    final r = await _send('POST', '/sync/history', body: body);
-    if (_onlyNotFound(_json(r), 'added')) throw const TrackerSkipException('Not on Trakt', unmatched: true);
+      if (episodes.isNotEmpty) 'episodes': episodes,
+    };
   }
 
   /// My List ↔ the Trakt watchlist.
@@ -397,6 +413,34 @@ class TraktTracker {
       }
     }
     return RemoteLibrary(watchlist: watchlist, history: watched.values.toList(), resume: resume);
+  }
+
+  /// What was watched since [since], one row per play (films; episodes with their show), when
+  /// Trakt's last watched times differ from [movies] and [episodes] (the times from the last
+  /// look). One call when nothing was watched since; at most 1,000 plays.
+  static Future<({String movies, String episodes, List<RemoteTitle> plays})> watchedSince(DateTime since, {String? movies, String? episodes}) async {
+    final a = _json(await _send('GET', '/sync/last_activities'));
+    String last(String type) => a is Map && a[type] is Map ? '${(a[type] as Map)['watched_at'] ?? ''}' : '';
+    final m = last('movies'), e = last('episodes');
+    final plays = <RemoteTitle>[];
+    if (m == movies && e == episodes) return (movies: m, episodes: e, plays: plays);
+    final start = Uri.encodeQueryComponent(since.toUtc().toIso8601String());
+    for (var page = 1; page <= 4; page++) {
+      final r = await _send('GET', '/sync/history?start_at=$start&page=$page&limit=250');
+      for (final i in _rows(r)) {
+        final at = asTime(i['watched_at']);
+        if (at == null) continue;
+        if (i['type'] == 'movie' && i['movie'] is Map) {
+          plays.add(_title(MediaKind.movie, i['movie'] as Map, at: at));
+        } else if (i['type'] == 'episode' && i['show'] is Map && i['episode'] is Map) {
+          final ep = i['episode'] as Map;
+          final s = asInt(ep['season']), n = asInt(ep['number']);
+          if (s != null && n != null) plays.add(_title(MediaKind.show, i['show'] as Map, at: at, season: s, episode: n));
+        }
+      }
+      if (page >= (asInt(r.headers['x-pagination-page-count']) ?? 1)) break;
+    }
+    return (movies: m, episodes: e, plays: plays);
   }
 
   static Object? _traktId(Map m) => m['ids'] is Map ? (m['ids'] as Map)['trakt'] ?? m['title'] : m['title'];

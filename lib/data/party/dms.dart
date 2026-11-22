@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 
 import '../account/account.dart';
+import 'chat_quote.dart';
 import 'friends.dart';
+import 'lounges.dart';
 import 'party.dart';
 
 /// Messages last a day.
@@ -14,13 +16,14 @@ const dmLifetime = Duration(hours: 24);
 String dmPair(String a, String b) => a.compareTo(b) < 0 ? '${a}_$b' : '${b}_$a';
 
 class DmMessage {
-  const DmMessage({required this.id, required this.sender, required this.receiver, required this.body, required this.created, this.readAt});
+  const DmMessage({required this.id, required this.sender, required this.receiver, required this.body, required this.created, this.readAt, this.reply});
   final String id;
   final String sender;
   final String receiver;
   final String body;
   final DateTime created;
   final DateTime? readAt;
+  final ChatQuote? reply; // the message this one answers
 
   bool get mine => sender == Account.user.value?.id;
   String get partner => mine ? receiver : sender;
@@ -33,6 +36,7 @@ class DmMessage {
     body: j['body'] as String? ?? '',
     created: DateTime.tryParse(j['created'] as String? ?? '')?.toLocal() ?? DateTime.now(),
     readAt: DateTime.tryParse(j['readAt'] as String? ?? '')?.toLocal(),
+    reply: ChatQuote.fromJson(j['reply']),
   );
 
   factory DmMessage.fromRecord(RecordModel r) => DmMessage.fromJson({...r.data, 'id': r.id});
@@ -57,7 +61,7 @@ class Dms {
   /// Partner id → when their "typing…" stops showing.
   static final typing = ValueNotifier<Map<String, DateTime>>(const {});
 
-  /// Unread DMs plus incoming friend requests: the dot on the Party tab.
+  /// Unread DMs, incoming friend requests and replies to you in lounges: the dot on the Party tab.
   static final badge = ValueNotifier<int>(0);
 
   /// Every new, changed (seen) or removed message, as (action, message).
@@ -75,6 +79,7 @@ class Dms {
   static void start() {
     Account.user.addListener(_userChanged);
     Friends.lists.addListener(_updateBadge);
+    Lounges.replies.addListener(_updateBadge);
     _userChanged();
   }
 
@@ -125,7 +130,8 @@ class Dms {
     });
   }
 
-  static void _updateBadge() => badge.value = threads.value.fold<int>(0, (n, t) => n + t.unread) + Friends.lists.value.incoming.length;
+  static void _updateBadge() =>
+      badge.value = threads.value.fold<int>(0, (n, t) => n + t.unread) + Friends.lists.value.incoming.length + Lounges.replies.value;
 
   static void _apply(String action, DmMessage m) {
     _events.add((action, m));
@@ -188,8 +194,9 @@ class Dms {
     return res.items.map(DmMessage.fromRecord).toList();
   }
 
-  static Future<DmMessage> send(String to, String body) async {
-    final j = await Account.pb.send('/api/vyse/dm/send', method: 'POST', body: {'to': to, 'body': body}) as Map<String, dynamic>;
+  /// [replyTo]: the id of the message this answers.
+  static Future<DmMessage> send(String to, String body, {String? replyTo}) async {
+    final j = await Account.pb.send('/api/vyse/dm/send', method: 'POST', body: {'to': to, 'body': body, 'replyTo': ?replyTo}) as Map<String, dynamic>;
     return DmMessage.fromJson(j);
   }
 

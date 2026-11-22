@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/layout.dart';
@@ -156,7 +157,9 @@ class _AudiobooksPageState extends State<AudiobooksPage> {
             : Shelf<BookProgress>(
                 key: ValueKey('recents/${recents.length}/${recents.first.book.uuid}'),
                 title: 'Continue listening',
-                load: () async => recents,
+                // there in the first frame: a book removed with the remote hands the ring to the
+                // one beside it, not to whatever was there while the row was being built again
+                load: () => SynchronousFuture(recents),
                 itemWidth: w,
                 itemHeight: w,
                 itemBuilder: (context, r, _) => BookCard(
