@@ -1,0 +1,83 @@
+test/player_engine_handover_test.dart
+  s_141489c594600d::t_65dc6662b022fa 1-26
+lib/data/playback/watch_progress.dart
+  s_141489c594600d::t_65dc6662b022fa 22,47-50,69,95,114,172,194,233
+lib/data/sources/plugins/js_plugins.dart
+  s_141489c594600d::t_65dc6662b022fa 1-673
+lib/data/playback/player_engine.dart
+  s_141489c594600d::t_65dc6662b022fa 38-48
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ExoPlayerPlugin.kt
+  s_141489c594600d::t_65dc6662b022fa 50-53,271-274,1479-1482
+  s_141489c594600d::t_b75f232c80818a 1483
+lib/screens/details/episode_explorer.dart
+  s_141489c594600d::t_65dc6662b022fa 226
+linux/flutter/generated_plugins.cmake
+  s_141489c594600d::t_65dc6662b022fa 7
+lib/data/sources/film_sources/source_settings.dart
+  s_141489c594600d::t_65dc6662b022fa 8-11,16-25,45-50
+lib/data/app_settings.dart
+  s_141489c594600d::t_65dc6662b022fa 147-154,187
+android/app/src/main/kotlin/com/vyse/player/mpv/MpvPlayerCore.kt
+  s_141489c594600d::t_65dc6662b022fa 454-457,2096-2097,2882-2886
+  s_141489c594600d::t_ed08880c11ce02 2887-2889
+lib/screens/player/player_menus.dart
+  s_141489c594600d::t_65dc6662b022fa 878,885-887,1113
+android/gradle.properties
+  s_141489c594600d::t_65dc6662b022fa 7-9
+lib/data/sources/film_sources/film_sources.dart
+  s_141489c594600d::t_65dc6662b022fa 11,41,100,122-125,168-172,261-265
+  s_141489c594600d::t_afd74c886ab944 266-267
+lib/screens/details/details_page.dart
+  s_141489c594600d::t_65dc6662b022fa 687-710
+lib/mpv/player/player_base.dart
+  s_141489c594600d::t_65dc6662b022fa 1335-1337
+  s_141489c594600d::t_0a40a3132ee709 1334
+test/js_plugins_test.dart
+  s_141489c594600d::t_65dc6662b022fa 1-102
+lib/main.dart
+  s_141489c594600d::t_65dc6662b022fa 19,81-82
+pubspec.yaml
+  s_141489c594600d::t_65dc6662b022fa 83-84,135
+macos/Flutter/GeneratedPluginRegistrant.swift
+  s_141489c594600d::t_65dc6662b022fa 11,30
+test/source_order_test.dart
+  s_141489c594600d::t_65dc6662b022fa 1-42
+lib/screens/profile/profile_page.dart
+  s_141489c594600d::t_65dc6662b022fa 7,1386-1416,2729,2740,2787,2792-2964,2966
+  s_141489c594600d::t_d3ceec9eaeb32c 2965,2967
+windows/flutter/generated_plugin_registrant.cc
+  s_141489c594600d::t_65dc6662b022fa 11,25-26
+windows/flutter/generated_plugins.cmake
+  s_141489c594600d::t_65dc6662b022fa 8
+linux/flutter/generated_plugin_registrant.cc
+  s_141489c594600d::t_65dc6662b022fa 10,23-25
+lib/mpv/player/platform/player_android.dart
+  s_141489c594600d::t_65dc6662b022fa 69-72,171,396-410,541-554,574-585,608-617
+  s_141489c594600d::t_e8e351715d1b2a 618
+lib/screens/player/player_page.dart
+  s_141489c594600d::t_65dc6662b022fa 697-698,1620,1629,2487-2488,3605,4261
+test/js_plugins_update_test.dart
+  s_141489c594600d::t_65dc6662b022fa 1-119
+lib/mpv/player/player.dart
+  s_141489c594600d::t_65dc6662b022fa 353-355
+assets/plugins/helpers.js
+  s_141489c594600d::t_65dc6662b022fa 1-414
+pubspec.lock
+  s_141489c594600d::t_a86a39d2eae6a0 285,337-344,1124-1131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb601257a90937f9e83be48f935a5db3a9bd0604",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
