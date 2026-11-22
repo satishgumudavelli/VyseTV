@@ -1,0 +1,48 @@
+lib/data/playback/watch_progress.dart
+  s_141489c594600d::t_640096934f218f 22,47-50,69,95,114,172,194,233
+lib/mpv/player/platform/player_android.dart
+  s_141489c594600d::t_640096934f218f 69-72,171,396-410,541-554,574-585,608-617
+  s_141489c594600d::t_bcc62a49338427 618
+lib/screens/details/episode_explorer.dart
+  s_141489c594600d::t_640096934f218f 226
+test/player_engine_handover_test.dart
+  s_141489c594600d::t_640096934f218f 1-26
+lib/screens/profile/profile_page.dart
+  s_141489c594600d::t_640096934f218f 1385-1415
+lib/screens/details/details_page.dart
+  s_141489c594600d::t_640096934f218f 687-710
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ExoPlayerPlugin.kt
+  s_141489c594600d::t_640096934f218f 50-53,271-274,1479-1482
+  s_141489c594600d::t_c889b00349a454 1483
+lib/mpv/player/player_base.dart
+  s_141489c594600d::t_640096934f218f 1335-1337
+  s_141489c594600d::t_012be6a9b2fcac 1334
+lib/screens/player/player_page.dart
+  s_141489c594600d::t_ef2d6623daaaa0 3603
+  s_141489c594600d::t_640096934f218f 697-698,1628
+android/app/src/main/kotlin/com/vyse/player/mpv/MpvPlayerCore.kt
+  s_141489c594600d::t_640096934f218f 454-457,2096-2097,2882-2886
+  s_141489c594600d::t_347a9d13f85f8d 2887-2889
+lib/data/app_settings.dart
+  s_141489c594600d::t_640096934f218f 147-149,182
+lib/data/playback/player_engine.dart
+  s_141489c594600d::t_640096934f218f 38-48
+lib/mpv/player/player.dart
+  s_141489c594600d::t_640096934f218f 353-355
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d73c6ece3e538657f34a2899663911365be7cc1d",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
