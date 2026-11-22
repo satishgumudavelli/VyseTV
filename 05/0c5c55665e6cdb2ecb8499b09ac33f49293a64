@@ -1,0 +1,49 @@
+test/vega_plugins_test.dart
+  s_141489c594600d::t_043221ace97fc0 98
+  s_141489c594600d::t_2dbef9884cdeb5 1-3,5-58,66-78,82,94-97,99-103
+  s_141489c594600d::t_8f5bda9e5ea61c 4
+  s_141489c594600d::t_bf6466f714ab7e 59-65,79-81,83-93
+assets/plugins/vega_runtime.js
+  s_141489c594600d::t_ea9198e7437c77 338-343,409
+  s_141489c594600d::t_395dca3a4b0f20 1-337,344-408,410-442
+tool/vega_runtime/package.json
+  s_141489c594600d::t_395dca3a4b0f20 1-7
+tool/vega_runtime/README.md
+  s_141489c594600d::t_62b02f5e6310a0 1-28
+tool/vega_runtime/build.mjs
+  s_141489c594600d::t_395dca3a4b0f20 1-16
+tool/vega_runtime/adapter.js
+  s_141489c594600d::t_ea9198e7437c77 144-149,215
+  s_141489c594600d::t_f153384c276cac 1-143,150-214,216-248
+tool/vega_runtime/polyfills.js
+  s_141489c594600d::t_c5f39d2f9c751e 1-168
+tool/vega_runtime/try.mjs
+  s_141489c594600d::t_63c60f7810fbf4 1-37
+lib/data/sources/plugins/js_plugins.dart
+  s_141489c594600d::t_043221ace97fc0 138-140
+  s_141489c594600d::t_2dbef9884cdeb5 587-593
+  s_141489c594600d::t_b73ae6b157e9ad 134-137,141-182,185,195,198,206-214,343-345,528-531
+  s_141489c594600d::t_cb40bcd8c8fd82 123-133,532,565
+lib/screens/profile/profile_page.dart
+  s_141489c594600d::t_65d2b2db32336a 2844
+lib/data/sources/film_sources/scrapers.dart
+  s_141489c594600d::t_554355459c83ba 718
+.gitignore
+  s_141489c594600d::t_63c60f7810fbf4 76-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "050c5c55665e6cdb2ecb8499b09ac33f49293a64",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
