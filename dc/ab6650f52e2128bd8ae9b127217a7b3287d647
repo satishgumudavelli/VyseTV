@@ -1,0 +1,70 @@
+windows/flutter/generated_plugin_registrant.cc
+  s_141489c594600d::t_6c5bb460099725 11,25-26
+lib/data/sources/plugins/js_plugins.dart
+  s_141489c594600d::t_6c5bb460099725 1-673
+lib/main.dart
+  s_141489c594600d::t_6c5bb460099725 19,81-82
+lib/screens/player/player_page.dart
+  s_141489c594600d::t_6c5bb460099725 1618,2485-2486,4258
+linux/flutter/generated_plugin_registrant.cc
+  s_141489c594600d::t_6c5bb460099725 10,23-25
+assets/plugins/helpers.js
+  s_141489c594600d::t_6c5bb460099725 1-414
+lib/data/app_settings.dart
+  s_141489c594600d::t_4914d7234c97c8 184
+  s_141489c594600d::t_6c5bb460099725 145-149
+lib/screens/profile/profile_page.dart
+  s_141489c594600d::t_6c5bb460099725 7,2711,2722,2769,2774-2946,2948
+  s_141489c594600d::t_7aaac3c70b768c 2947,2949
+pubspec.yaml
+  s_141489c594600d::t_6c5bb460099725 83-84,135
+test/js_plugins_test.dart
+  s_141489c594600d::t_6c5bb460099725 1-102
+linux/flutter/generated_plugins.cmake
+  s_141489c594600d::t_6c5bb460099725 7
+test/source_order_test.dart
+  s_141489c594600d::t_6c5bb460099725 1-42
+lib/data/sources/plugins/example/run.mjs
+  s_141489c594600d::t_ccf608e0d0d0f5 1-9
+lib/data/sources/plugins/example/demo.js
+  s_141489c594600d::t_ccf608e0d0d0f5 1-7
+lib/data/sources/film_sources/source_settings.dart
+  s_141489c594600d::t_6c5bb460099725 8-11,16-25,45-50
+android/gradle.properties
+  s_141489c594600d::t_6c5bb460099725 7-9
+lib/data/sources/plugins/README.md
+  s_141489c594600d::t_ccf608e0d0d0f5 1-124
+windows/flutter/generated_plugins.cmake
+  s_141489c594600d::t_6c5bb460099725 8
+macos/Flutter/GeneratedPluginRegistrant.swift
+  s_141489c594600d::t_6c5bb460099725 11,30
+test/js_plugins_update_test.dart
+  s_141489c594600d::t_6c5bb460099725 1-119
+lib/screens/player/player_menus.dart
+  s_141489c594600d::t_6c5bb460099725 878,885-887,1113
+lib/data/sources/plugins/example/repo.json
+  s_141489c594600d::t_ccf608e0d0d0f5 1-7
+lib/data/sources/film_sources/film_sources.dart
+  s_141489c594600d::t_6c5bb460099725 11,41,100,122-125,168-172,261-265
+  s_141489c594600d::t_92638fac61bab7 266-267
+README.md
+  s_141489c594600d::t_22cf4c261c2a0e 202-206
+pubspec.lock
+  s_141489c594600d::t_f876a8e96f5afa 285,337-344,1124-1131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dcab6650f52e2128bd8ae9b127217a7b3287d647",
+  "prompts": {},
+  "sessions": {
+    "s_141489c594600d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3f0528-2853-4475-bde1-04e01ff395d1",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
