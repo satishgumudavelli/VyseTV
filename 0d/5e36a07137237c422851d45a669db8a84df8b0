@@ -1,0 +1,45 @@
+lib/data/network/desktop_network_platform.dart
+  s_6b5edf213815c6::t_eeb9c1eee2cc2c 18-19
+  s_6b5edf213815c6::t_c268e94150204c 1-17,20-44,47-69,91,93-94,99-104,106-134,137-184,186-223,225-240,248-308,310,312-317,319,321-324,332-339,345-347
+  s_6b5edf213815c6::t_f837ea295d3a17 70-90,92
+  s_6b5edf213815c6::t_f61b014bab682a 105,185,309,311,318,320,325-331
+  s_6b5edf213815c6::t_ddc76ad9b59b7d 45-46,95-98,135-136,224,241-247,340-344
+lib/data/network/network_channel.dart
+  s_6b5edf213815c6::t_ddc76ad9b59b7d 6-7,118-123
+scripts/build_usque.sh
+  s_6b5edf213815c6::t_f1d3d1b12e3aa1 72-77
+specs/001-warp-doh-anti-dpi/spec.md
+  s_6b5edf213815c6::t_c265efd96bd3e5 170
+.gitignore
+  s_6b5edf213815c6::t_f1d3d1b12e3aa1 84
+README.md
+  s_6b5edf213815c6::t_c265efd96bd3e5 204
+test/desktop_network_platform_test.dart
+  s_6b5edf213815c6::t_e063ddb431c260 1-181
+scripts/install_linux_local.sh
+  s_6b5edf213815c6::t_c265efd96bd3e5 46-47
+linux/CMakeLists.txt
+  s_6b5edf213815c6::t_f1d3d1b12e3aa1 111-118
+scripts/build_byedpi.sh
+  s_6b5edf213815c6::t_f1d3d1b12e3aa1 53-59
+specs/001-warp-doh-anti-dpi/tasks.md
+  s_6b5edf213815c6::t_c265efd96bd3e5 198-209
+specs/001-warp-doh-anti-dpi/plan.md
+  s_6b5edf213815c6::t_c265efd96bd3e5 40-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d5e36a07137237c422851d45a669db8a84df8b0",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
