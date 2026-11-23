@@ -75,3 +75,9 @@ FRONTEND_PROMPT.md
 
 # the Vega runtime build's packages
 /tool/vega_runtime/node_modules/
+
+# built native programs for network modes (scripts/build_usque.sh, scripts/build_byedpi.sh): rebuilt, not committed (like the TorrServer binary)
+/android/app/src/main/jniLibs/
+/build/usque-src/
+/build/byedpi-src/
+/linux/network/

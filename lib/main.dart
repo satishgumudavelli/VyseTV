@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io' show HttpOverrides;
 
 import 'core/accent.dart';
+import 'core/platform/open_files.dart';
 import 'data/account/account.dart';
 import 'data/account/account_sync.dart';
 import 'data/sources/addons.dart' show Addons;
@@ -18,6 +20,8 @@ import 'data/party/rooms.dart' show Rooms;
 import 'data/party/voice.dart' show Voice;
 import 'data/party/watch_party.dart' show WatchParty;
 import 'data/app_settings.dart';
+import 'data/net.dart' show NetworkOverrides;
+import 'data/network/network_modes.dart';
 import 'data/catalog/tmdb.dart' show MyList;
 import 'data/downloads/downloads.dart';
 import 'data/sources/torrents.dart' show Torrents;
@@ -49,6 +53,7 @@ import 'services/iptv/iptv_settings.dart';
 void _hideSystemBars() => SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
 Future<void> main() async {
+  raiseOpenFileLimit(); // Linux: a desktop session allows 1024 open files; the plugins and the network modes need far more
   VyseBinding.ensureInitialized(); // (Flutter's own, with reduce-motion in the app's hands: core/lean.dart)
   // Android TV and Google TV: known before anything is drawn, so the app opens in D-pad mode
   // there, with the ring on its first control
@@ -79,6 +84,9 @@ Future<void> main() async {
   }
   await IptvSettings.initialize();
   await AppSettings.initialize();
+  // network modes (WARP, Secure DNS, Anti-DPI): every HttpClient follows them; the saved ones come back without holding up start-up
+  HttpOverrides.global = NetworkOverrides();
+  unawaited(NetworkModes.instance.restore());
   // On a TV the interface is drawn the lean way (fewer frames, less paint), unless Settings says not
   Lean.decide();
   await Torrents.initialize(); // iPhone and iPad: is the engine in this build (instant elsewhere)

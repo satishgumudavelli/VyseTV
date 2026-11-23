@@ -797,7 +797,8 @@ class ExoPlayerCore(private val activity: Activity) :
       updateAudioDecoderPolicy("initialize")
 
       // Prefer Cronet for HTTP/2 multiplexing; fall back when a device's provider crashes during init.
-      val cronetEngine = getCronetEngine(activity)
+      // a network mode (WARP, Anti-DPI, Secure DNS) is on: the stream goes through the local gateway, which Cronet cannot use
+      val cronetEngine = if (com.vyse.vyse_tv.network.NetworkModesPlugin.proxyActive) null else getCronetEngine(activity)
       val dataSourceLabel: String
       val httpFactory: HttpDataSource.Factory
       if (cronetEngine != null) {

@@ -263,6 +263,8 @@ class MainActivity : FlutterActivity() {
     super.configureFlutterEngine(flutterEngine)
     flutterEngine.plugins.add(MpvPlayerPlugin())
     flutterEngine.plugins.add(ExoPlayerPlugin())
+    // WARP / Anti-DPI programs and the players' proxy (lib/data/network)
+    flutterEngine.plugins.add(com.vyse.vyse_tv.network.NetworkModesPlugin())
     flutterEngine.plugins.add(MpvAudioPlayerPlugin())
     // VyseTV: second audio-only core so audiobooks keep their own track next to music
     flutterEngine.plugins.add(MpvAudio2PlayerPlugin())

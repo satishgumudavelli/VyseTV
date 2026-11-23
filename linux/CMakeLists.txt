@@ -108,6 +108,14 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
+# Network modes (Settings -> Network): the WARP and Anti-DPI programs, built by scripts/build_usque.sh and scripts/build_byedpi.sh into
+# linux/network/. Without them the modes show as unavailable on this build.
+foreach(NETWORK_PROGRAM usque ciadpi)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/network/${NETWORK_PROGRAM}")
+    install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/network/${NETWORK_PROGRAM}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+  endif()
+endforeach()
+
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 

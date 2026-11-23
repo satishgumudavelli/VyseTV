@@ -25,6 +25,7 @@ import 'package:flutter_js/flutter_js.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import '../../network/net_state.dart';
 import '../../net.dart';
 import '../film_sources/common.dart';
 
@@ -702,7 +703,12 @@ Future<List<FoundStream>> runPlugin(String code, Map<String, Object?> query, {St
     }
     final script = code;
     try {
-      res = await Isolate.run(() => _execute(script, query, helpers)).timeout(_runTimeout + const Duration(seconds: 5));
+      // (the isolate has its own copy of the network state: hand it what the main one knows, so the plugin's requests follow WARP and the rest)
+      final net = NetState.snapshot();
+      res = await Isolate.run(() {
+        NetState.apply(net);
+        return _execute(script, query, helpers);
+      }).timeout(_runTimeout + const Duration(seconds: 5));
     } on TimeoutException {
       PluginLog.add(name, ['stopped: no answer in ${(_runTimeout + const Duration(seconds: 5)).inSeconds} s']);
       rethrow;

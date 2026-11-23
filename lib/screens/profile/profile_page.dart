@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/account/account_sync.dart';
@@ -9,6 +11,10 @@ import '../../data/catalog/meta_addons.dart' show MetaAddons;
 import '../../data/sources/film_sources/film_sources.dart';
 import '../../data/sources/film_sources/source_settings.dart';
 import '../../data/sources/torrents.dart';
+import '../../data/network/anti_dpi_presets.dart';
+import '../../data/network/dns_providers.dart';
+import '../../data/network/network_channel.dart' show NetworkCapabilities;
+import '../../data/network/network_modes.dart';
 import '../../data/playback/intro_db.dart' show SegmentKind;
 import '../../data/account/account.dart';
 import '../../core/platform/platform_detector.dart' show PlatformDetector;
@@ -49,6 +55,8 @@ import '../../widgets/page_scrollbar.dart';
 import '../../widgets/section_chrome.dart';
 import 'avatar_picker.dart';
 
+part 'network_section.dart';
+
 const _card = Color(0xFF0D0F18);
 const _danger = Color(0xFFF26B6B);
 
@@ -58,6 +66,7 @@ enum _Tab {
   appearance('Appearance', 'The ambient light behind every page, and what the navbar shows.', Icons.palette_outlined),
   addons('Addons', 'Stremio addons for catalogs, details, sources and subtitles. Synced with your account.', Icons.extension_outlined),
   sources('Sources', 'Where films and shows play from, and in what order. Synced with your account.', Icons.dns_outlined),
+  network('Network', 'Get around blocked sites: WARP, secure DNS and anti-DPI. Saved on this device.', Icons.shield_outlined),
   debrid('Debrid', 'Stream torrents from a debrid service instead of peer to peer. Saved on this device.', Icons.cloud_download_outlined),
   playback('Playback', 'How videos play by default. Saved on this device.', Icons.play_circle_outline_rounded),
   subtitles('Subtitles', 'Default captions for the player. Saved on this device.', Icons.closed_caption_outlined),
@@ -115,6 +124,7 @@ class _ProfilePageState extends State<ProfilePage> {
             _Tab.appearance => const _AppearanceTab(),
             _Tab.addons => const _AddonsTab(),
             _Tab.sources => const _SourcesTab(),
+            _Tab.network => const _NetworkTab(),
             _Tab.debrid => const _DebridTab(),
             _Tab.playback => const _PlaybackTab(),
             _Tab.subtitles => const _SubtitlesTab(),
@@ -2354,6 +2364,14 @@ class _AboutTab extends StatelessWidget {
             ],
           );
         },
+      ),
+      const _Section(
+        title: 'Network programs',
+        subtitle: 'The programs behind Settings → Network, with their licences.',
+        children: [
+          _Row(title: 'usque', subtitle: 'The Cloudflare WARP client behind WARP Mode. MIT licence, © 2025 Diniboy1123.'),
+          _Row(title: 'ByeDPI', subtitle: 'The local proxy behind Anti-DPI Mode. MIT licence, © 2024 hufrea.'),
+        ],
       ),
       _Section(
         title: 'Community',

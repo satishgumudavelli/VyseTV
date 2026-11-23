@@ -150,6 +150,16 @@ class AppSettings {
   // Media3 hands a video it can't play to mpv, which carries on from the same spot (on unless
   // turned off). Read through PlayerEngine.handOver.
   static final mpvHandOver = Setting<bool>('device.handOver', true);
+  // Network modes (data/network/network_modes.dart): this device only, so a TV's choice never reaches a phone through account sync.
+  /// Route the app's traffic through Cloudflare WARP.
+  static final netWarp = Setting<bool>('device.net.warp', false);
+  /// Secure DNS provider: 'off', 'cloudflare', 'google', 'adguard' or 'custom'; the custom resolver's address is [netDohUrl].
+  static final netDoh = Setting<String>('device.net.doh', 'off');
+  static final netDohUrl = Setting<String>('device.net.dohUrl', '');
+  /// Anti-DPI mode on or off, its preset id (data/network/anti_dpi_presets.dart) and, when edited by hand, its parameters ('' = the preset's).
+  static final netAntiDpi = Setting<bool>('device.net.antidpi', false);
+  static final netAntiDpiPreset = Setting<String>('device.net.antidpiPreset', 'split_disorder');
+  static final netAntiDpiArgs = Setting<String>('device.net.antidpiArgs', '');
   // Fewer animations and less paint, for a TV's chip: '' (not chosen: on for an Android TV),
   // 'on' or 'off'. Read through Lean (core/lean.dart).
   static final leanMotion = Setting<String>('device.lean', '');
@@ -197,6 +207,7 @@ class AppSettings {
         audioDelayMs, audioPassthrough, audioChannels, hdrOutput, matchRefreshRate, playerEngine, mpvHandOver, leanMotion, pictureShape, volumeLevelling,
         upscaler, ambientLight, partyLibrary, musicAutoplay, debridProvider, debridOn, updateAuto, updateSkipped, addonsRefreshed,
         torrentMemory, torrentPreload, torrentConnections, torrentUpload, torrentTrackers, publicTrackers, myListGrid, myListSort, partyMembers, partySounds, partyMuted, animeAdult, animeAudio,
+              netWarp, netDoh, netDohUrl, netAntiDpi, netAntiDpiPreset, netAntiDpiArgs,
       ];
 
   static Future<void> initialize() async {

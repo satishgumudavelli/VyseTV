@@ -200,6 +200,10 @@ The whole app works with the arrow keys, Enter and Escape, so a keyboard, a remo
 - **In a text box** the arrows move the caret and leave the box at the ends of the text. Escape leaves the box; in a search box it clears the text first.
 - **In Party**, Enter on a message opens its menu, and holding Enter on the talk button talks for as long as you hold it. A room's video is one stop on the room's page: Enter makes it fill the window, and Escape brings it back.
 
+## Network modes
+
+For networks that block sites, Settings → Network has three switches: **WARP Mode** (the app's traffic goes through Cloudflare WARP), **Secure DNS** (names are looked up over DNS-over-HTTPS with Cloudflare, Google, AdGuard or a resolver of your own) and **Anti-DPI Mode** (changes how a secure connection starts so inspection cannot tell where it goes; four presets and an advanced editor). WARP and Anti-DPI cannot run together. Traffic in WARP Mode is carried by Cloudflare's service. Android, Android TV and Linux for now; everything on this device and your home network (TorrServer, casting) is left alone. How it works and how to test it: [specs/001-warp-doh-anti-dpi](specs/001-warp-doh-anti-dpi/quickstart.md). The two programs it runs are built by `scripts/build_usque.sh` and `scripts/build_byedpi.sh`.
+
 ## Platforms
 
 | Platform | Minimum | What you get |
@@ -459,6 +463,7 @@ VyseTV stands on a lot of other people's work.
 - **[flutter-plezy](https://github.com/edde746/flutter-plezy)**, the patched Flutter engine for Windows, and **[mpv-build](https://github.com/edde746/mpv-build)**, the libmpv builds the players link against.
 - **[mpv](https://mpv.io/)**, **FFmpeg** and **libass**, which do the actual playing.
 - **[TorrServer](https://github.com/YouROK/TorrServer)** (GPL-3.0), by YouROK: the torrent engine.
+- **[usque](https://github.com/Diniboy1123/usque)** (MIT, © 2025 Diniboy1123): the Cloudflare WARP client behind WARP Mode. **[ByeDPI](https://github.com/hufrea/byedpi)** (MIT, © 2024 hufrea): the local proxy behind Anti-DPI Mode. The design follows the [Vega app](https://github.com/Zenda-Cross/vega-app)'s network settings.
 - **PlayTorrio** (GPL-3.0): the anime sources, the built-in torrent search and the debrid providers were ported from it.
 - **The Vyla SDK**: the film and TV sources were ported from its scrapers.
 - **Anime4K**, **ArtCNN** and **NVIDIA Image Scaling**: the upscaling shaders in `assets/shaders`.

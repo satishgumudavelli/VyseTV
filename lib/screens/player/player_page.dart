@@ -15,6 +15,8 @@ import '../../core/nav.dart' show rootNavigatorKey;
 import '../../core/logs/sub_log.dart';
 import '../../core/theme.dart';
 import '../../data/app_settings.dart';
+import '../../data/network/network_modes.dart';
+import '../../data/network/network_route.dart' show isLocalHost;
 import '../../data/playback/audio_focus.dart';
 import '../../data/anime/anilist.dart' show Anime, AniList;
 import '../../data/sources/addons.dart';
@@ -1157,7 +1159,10 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
   /// [_prepOpen]), and puts it on.
   Future<void> _open(pz.Media m, {bool play = true}) async {
     _lastOpened = m;
-    if (!_media3) return _player.open(m, play: play);
+    if (!_media3) {
+      await _viaGateway(m.uri);
+      return _player.open(m, play: play);
+    }
     final path = _subPath;
     await _player.open(m, play: play, externalSubtitles: path == null ? null : [_subFile(path)]);
     // a file picked while this open was on its way reached the player before the video did,
@@ -1166,6 +1171,16 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
     if (now != null && now != path && mounted) {
       await _player.addSubtitleFile(Uri.file(now).toString(), title: _activeSubTrack?.language, language: _activeSubTrack?.lang);
     }
+  }
+
+  /// A network mode (WARP, Anti-DPI, Secure DNS) is on: mpv's own network layer goes through the local gateway too, except for
+  /// this device and its local network (a torrent is played from a local address).
+  Future<void> _viaGateway(String uri) async {
+    final gateway = NetworkModes.instance.gatewayPort;
+    final host = Uri.tryParse(uri)?.host ?? '';
+    try {
+      await _player.setProperty('stream-lavf-o', gateway == null || host.isEmpty || isLocalHost(host) ? '' : 'http_proxy=http://127.0.0.1:$gateway');
+    } catch (_) {}
   }
 
   /// A subtitle file of ours, the way Media3 is handed one.
