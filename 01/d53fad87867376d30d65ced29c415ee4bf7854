@@ -1,0 +1,23 @@
+tool/vega_runtime/try.mjs
+  s_6b5edf213815c6::t_ba07e8753ec236 43-44,46,50
+  s_6b5edf213815c6::t_1225c18008a4b0 45,47-49,55
+  s_6b5edf213815c6::t_44009580c455c9 27
+  s_6b5edf213815c6::t_69253ab7e57b9d 19-26,28-42,52
+  s_6b5edf213815c6::t_8e096bb8fe4c60 54,56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "01d53fad87867376d30d65ced29c415ee4bf7854",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
