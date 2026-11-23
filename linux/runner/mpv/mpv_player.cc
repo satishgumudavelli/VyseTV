@@ -350,6 +350,10 @@ bool MpvPlayer::Initialize() {
 
   vyse::mpv_common::ApplyCommonStartupOptions(mpv_, audio_only_);
   mpv_set_option_string(mpv_, "terminal", "no");
+  // VyseTV: PulseAudio first (PipeWire serves it), a half-second buffer. The default PipeWire
+  // output underran whenever the video texture copy held the core up: no sound on headphones.
+  mpv_set_option_string(mpv_, "ao", "pulse,pipewire,alsa");
+  mpv_set_option_string(mpv_, "audio-buffer", "0.5");
 
   if (!audio_only_) {
     // Configure mpv for embedded playback.
