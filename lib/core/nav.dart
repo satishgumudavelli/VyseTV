@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/anime/anilist.dart';
 import '../data/catalog/discover.dart';
+import '../data/catalog/meta_addons.dart';
 import '../data/catalog/tmdb.dart';
+import '../data/sources/addons.dart' show Addons;
 import '../dpad/covered_route_focus_boundary.dart';
 import '../screens/details/details_page.dart';
 import '../screens/discover/discover_page.dart';
 import '../screens/details/person_page.dart';
+import '../screens/search/search_page.dart';
 
 /// The app's own navigator, under every tab's: full-screen pages (the player) open here, and
 /// what floats over every page (the mini player, the mini chat) sits in its overlay.
@@ -48,6 +53,32 @@ Future<void> openDiscover(
   required DiscoverQuery query,
 }) =>
     Navigator.of(context).push(ShellRoute(child: DiscoverPage(title: title, subtitle: subtitle, initial: query)));
+
+/// Opens a Stremio link in VyseTV (`stremio:///detail/…`, a search, a catalog of one of your
+/// addons; the same after Stremio Web's `#`). False when it isn't one VyseTV can open.
+Future<bool> openStremioLink(BuildContext context, String link) async {
+  switch (StremioLink.parse(link)) {
+    case StremioDetail(:final type, :final id):
+      unawaited(openDetails(context, MetaAddons.bare(type, id)));
+      return true;
+    case StremioSearch(:final query):
+      unawaited(Navigator.of(context).push(ShellRoute(child: SearchPage(query: query))));
+      return true;
+    case StremioDiscover(:final manifestUrl, :final type, :final catalogId, :final genre):
+      final url = Addons.normalize(manifestUrl);
+      final ref = MetaAddons.catalogs.where((r) => r.addon.manifestUrl == url && r.catalog.type == type && r.catalog.id == catalogId).firstOrNull;
+      if (ref == null) return false;
+      unawaited(openCatalog(context, ref, genre: genre));
+      return true;
+    case null:
+      return false;
+  }
+}
+
+/// Opens Discover on one of your metadata addons' catalogs ([genre] picked, when given).
+Future<void> openCatalog(BuildContext context, CatalogRef ref, {String? genre}) => Navigator.of(context).push(ShellRoute(
+      child: DiscoverPage(title: genre ?? ref.title, subtitle: 'From ${ref.addon.name}', catalog: ref, genre: genre),
+    ));
 
 Future<void> openPerson(BuildContext context, {required int id, required String name, String? profilePath, String? heroTag}) =>
     Navigator.of(context).push(ShellRoute(

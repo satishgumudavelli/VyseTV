@@ -1156,6 +1156,14 @@ void mpv_audio2_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
   g_mpv_audio2_plugin = mpv_plugin_new(registrar, "vyse/mpv_audio_player_2", TRUE);
 }
 
+// VyseTV: a third audio-only core that plays nothing out loud: it decodes stretches of a
+// video's sound to a file (ao=pcm) for subtitle sync by ear.
+[[maybe_unused]] static MpvPlugin* g_mpv_audio_listener_plugin = nullptr;
+
+void mpv_audio_listener_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
+  g_mpv_audio_listener_plugin = mpv_plugin_new(registrar, "vyse/mpv_audio_listener", TRUE);
+}
+
 // fl_method_success_response_new() takes its own reference to the result, so
 // a value created just for the reply must be released here.
 static FlMethodResponse* bool_success_response(gboolean value) {

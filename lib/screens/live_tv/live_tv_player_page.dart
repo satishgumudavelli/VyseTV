@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../core/layout.dart';
+import '../../core/platform/platform_detector.dart' show PlatformDetector;
 import '../../core/theme.dart';
 import '../../data/playback/audio_focus.dart';
 import '../../data/playback/player_engine.dart';
@@ -52,7 +54,16 @@ class LiveTvPlayerPage extends StatefulWidget {
   State<LiveTvPlayerPage> createState() => _LiveTvPlayerPageState();
 }
 
-class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
+class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> with WidgetsBindingObserver {
+  /// Android stopped the app (Home, the TV going to sleep): the channel stops playing, as a
+  /// film does. (Not in picture-in-picture, where the app is only paused.)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.paused || defaultTargetPlatform != TargetPlatform.android) return;
+    if (Pip.active.value || !_playing) return;
+    unawaited(_player.pause());
+  }
+
   // On an Android TV: Media3 unless Settings says mpv (PlayerEngine). A channel it can't play
   // is handed to mpv by its plugin.
   late final _player = Player(useExoPlayer: PlayerEngine.forFullScreen);
@@ -117,6 +128,7 @@ class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _subs
       ..add(_player.streams.playing.listen((v) => setState(() => _playing = v)))
       ..add(_player.streams.buffering.listen((v) => setState(() => _buffering = v)))
@@ -135,12 +147,32 @@ class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
     _poke();
   }
 
+  // ── turning the screen (a phone or a tablet in the hand), as the film player does ──
+
+  bool _turned = false;
+
+  bool get _turnable => (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS) && !PlatformDetector.isTV();
+
+  /// The screen turns the other way and stays so while the channel is open, even with the
+  /// phone's rotation lock on.
+  void _turn() {
+    final size = MediaQuery.sizeOf(context);
+    _turned = true;
+    unawaited(SystemChrome.setPreferredOrientations(
+      size.width > size.height ? const [DeviceOrientation.portraitUp] : const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
+    ));
+    _poke();
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _hide?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
+    // the phone follows its own rotation setting again
+    if (_turned) unawaited(SystemChrome.setPreferredOrientations(const []));
     if (_fullscreen && isDesktopNative) windowManager.setFullScreen(false);
     AudioFocus.release(this);
     _picture.dispose();
@@ -390,6 +422,18 @@ class _LiveTvPlayerPageState extends State<LiveTvPlayerPage> {
                           _sharing
                               ? const SizedBox.square(dimension: 40, child: Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white)))
                               : GlassIconButton(icon: Icons.groups_rounded, label: 'Watch with my room', size: 40, onTap: _share),
+                        ],
+                        if (_turnable) ...[
+                          const SizedBox(width: 10),
+                          Builder(builder: (context) {
+                            final sideways = MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
+                            return GlassIconButton(
+                              icon: sideways ? Icons.stay_current_portrait_rounded : Icons.screen_rotation_rounded,
+                              label: sideways ? 'Turn upright' : 'Turn sideways',
+                              size: 40,
+                              onTap: _turn,
+                            );
+                          }),
                         ],
                         if (widget.items.length > 1) ...[
                           const SizedBox(width: 10),

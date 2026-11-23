@@ -16,6 +16,7 @@ import 'common.dart';
 const _cardRadius = 7.0;
 
 /// Titled horizontal shelf: small header, arrow paging on desktop, skeletons, staggered entrance.
+/// A shelf that loads nothing isn't shown at all, heading and all.
 class Shelf<T> extends StatefulWidget {
   const Shelf({
     super.key,
@@ -27,7 +28,12 @@ class Shelf<T> extends StatefulWidget {
     this.spacing = 10,
     this.maxItems = 20,
     this.titleWidget,
+    this.hideOnError = false,
   });
+
+  /// A load that fails hides the shelf too, instead of offering to try again (an addon's
+  /// catalog: one that fails is left out, as in search).
+  final bool hideOnError;
 
   final String title;
 
@@ -62,7 +68,16 @@ class _ShelfState<T> extends State<Shelf<T>> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => FutureBuilder<List<T>>(
+    future: _future,
+    builder: (context, snap) {
+      // nothing came back: no empty row (nor a failed one, where it asks)
+      if ((snap.data?.isEmpty ?? false) || (snap.hasError && widget.hideOnError)) return const SizedBox.shrink();
+      return _row(context, snap);
+    },
+  );
+
+  Widget _row(BuildContext context, AsyncSnapshot<List<T>> snap) {
     final inset = Layout.inset(context);
     final phone = Layout.isPhone(context);
 
@@ -78,9 +93,8 @@ class _ShelfState<T> extends State<Shelf<T>> {
           SizedBox(
             // vertical room so the hover outline isn't clipped
             height: widget.itemHeight + 8,
-            child: FutureBuilder<List<T>>(
-              future: _future,
-              builder: (context, snap) {
+            child: Builder(
+              builder: (context) {
                 if (snap.hasError) {
                   return _RowError(
                     onRetry: () => setState(() {
@@ -528,15 +542,44 @@ class GenreGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final genres = homeGenres.take(FanGrid.columns(context) * 2).toList();
+    return FanGrid(
+      title: 'Explore genres',
+      tiles: [
+        for (final g in genres)
+          FanTile(
+            label: g.name,
+            load: () => HomeFeed.instance.genre(g.id),
+            onTap: () => openDiscover(
+              context,
+              title: g.name,
+              query: DiscoverQuery(genres: {DiscoverGenre.byName(g.name)?.name ?? g.name}),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Fan tiles under a heading, four to a row on desktop (three on tablets, two on phones): the
+/// genres, or a metadata addon's catalogs (its collections).
+class FanGrid extends StatelessWidget {
+  const FanGrid({super.key, required this.title, required this.tiles});
+  final String title;
+  final List<Widget> tiles;
+
+  static int columns(BuildContext context) => switch (Layout.of(context)) {
+    FormFactor.phone => 2,
+    FormFactor.tablet => 3,
+    FormFactor.desktop => 4,
+  };
+
+  @override
+  Widget build(BuildContext context) {
     final ff = Layout.of(context);
     final inset = Layout.inset(context);
-    final cols = switch (ff) {
-      FormFactor.phone => 2,
-      FormFactor.tablet => 3,
-      FormFactor.desktop => 4,
-    };
+    final cols = columns(context);
     const gap = 12.0;
-    final genres = homeGenres.take(cols * 2).toList();
 
     return DpadRevealBlock(
       child: Padding(
@@ -544,7 +587,7 @@ class GenreGrid extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const ShelfHeader(title: 'Explore genres'),
+          ShelfHeader(title: title),
           Padding(
             padding: EdgeInsets.fromLTRB(inset, 4, ff == FormFactor.phone ? 16 : 40, 0),
             child: LayoutBuilder(
@@ -554,14 +597,14 @@ class GenreGrid extends StatelessWidget {
                   spacing: gap,
                   runSpacing: gap,
                   children: [
-                    for (var i = 0; i < genres.length; i++)
+                    for (var i = 0; i < tiles.length; i++)
                       SizedBox(
                         width: w,
                         height: (w * .52).clamp(110.0, 170.0),
                         child: FadeSlideIn(
-                          delay: Duration(milliseconds: 40 * i),
+                          delay: Duration(milliseconds: 40 * math.min(i, 12)),
                           offset: 10,
-                          child: _GenreTile(genre: genres[i]),
+                          child: tiles[i],
                         ),
                       ),
                   ],
@@ -576,26 +619,28 @@ class GenreGrid extends StatelessWidget {
   }
 }
 
-class _GenreTile extends StatefulWidget {
-  const _GenreTile({required this.genre});
-  final Genre genre;
+/// A tile that fans three posters out over its name and spreads them on hover: a genre, or a
+/// collection (one of a metadata addon's catalogs).
+class FanTile extends StatefulWidget {
+  const FanTile({super.key, required this.label, required this.load, required this.onTap});
+  final String label;
+
+  /// The titles whose posters it fans (the first three with one).
+  final Future<List<Media>> Function() load;
+  final VoidCallback onTap;
 
   @override
-  State<_GenreTile> createState() => _GenreTileState();
+  State<FanTile> createState() => _FanTileState();
 }
 
-class _GenreTileState extends State<_GenreTile> {
-  late final _posters = HomeFeed.instance.genre(widget.genre.id);
+class _FanTileState extends State<FanTile> {
+  late final _posters = widget.load();
 
   @override
   Widget build(BuildContext context) => OutlineCard(
-    label: widget.genre.name,
+    label: widget.label,
     radius: 10,
-    onTap: () => openDiscover(
-      context,
-      title: widget.genre.name,
-      query: DiscoverQuery(genres: {DiscoverGenre.byName(widget.genre.name)?.name ?? widget.genre.name}),
-    ),
+    onTap: widget.onTap,
     builder: (hovered) => ColoredBox(
       color: const Color(0xFF0D0F18),
       child: LayoutBuilder(
@@ -652,7 +697,9 @@ class _GenreTileState extends State<_GenreTile> {
                 right: 0,
                 bottom: 10,
                 child: Text(
-                  widget.genre.name,
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: hovered ? VyseColors.text : VyseColors.textDim),
                 ),

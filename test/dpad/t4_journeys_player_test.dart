@@ -193,6 +193,8 @@ void main() {
     await Bed.settle(t, rounds: 3);
     expect(Bed.focused(), allOf(contains('MenuRow'), contains("'Off'")), reason: 'no subtitle is on: the menu opens on Off, the choice in use');
     await Bed.up(t);
+    expect(Bed.focused(), contains('Sync automatically'));
+    await Bed.up(t);
     expect(Bed.focused(), contains('Sync subtitles'));
     await Bed.up(t);
     expect(Bed.focused(), allOf(contains('MenuSegments'), contains('Subtitles')), reason: 'Up from the list reaches the tabs, on the tab that is showing');

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vyse_tv/core/platform/platform_detector.dart';
 import 'package:vyse_tv/data/playback/watch_progress.dart';
+import 'package:vyse_tv/dpad/dpad_root.dart';
 import 'package:vyse_tv/screens/details/details_page.dart';
 import 'package:vyse_tv/screens/player/player_episodes.dart';
 import 'package:vyse_tv/screens/player/player_page.dart';
@@ -17,6 +18,21 @@ import 'package:vyse_tv/widgets/common.dart';
 import 'package:vyse_tv/widgets/watched_marks.dart';
 
 import 'harness.dart';
+
+/// The text on the control that has the ring, for Material buttons (a dialog's).
+String? _materialFocus() {
+  final node = DpadRoot.debugRinged;
+  if (node?.context == null) return null;
+  String? text;
+  void visit(Element e) {
+    if (text != null) return;
+    if (e.widget is Text) text = (e.widget as Text).data;
+    e.visitChildren(visit);
+  }
+
+  (node!.context! as Element).visitChildren(visit);
+  return text;
+}
 
 void main() {
   setUpAll(() => Bed.boot(as: TargetPlatform.android));
@@ -139,6 +155,57 @@ void main() {
     await Bed.ok(t);
     expect(WatchProgress.find(show)!.episodesFinished, 0, reason: 'and back again');
     expect(find.text('0 of ${m[2]} watched'), findsOneWidget);
+    await done(t);
+  }, variant: screen);
+
+  // Testers (2026-11-23): "how do you mark a series watched?"
+  testWidgets('a series: Mark all watched beside Save marks every episode of every season; it says All watched after; pressed again, it asks first', (t) async {
+    await start(t);
+    await Bed.pumpShell(t);
+    final show = Bed.freshTitle(series: true); // 3 seasons of 8, all out
+    await Bed.push(t, DetailsPage(media: show));
+    if (!Bed.focused().contains("'Play'")) await Bed.down(t);
+    expect(Bed.focused(), contains("'Play'"));
+    await seek(t, 'SeriesWatchedButton');
+    expect(Bed.focused(), contains('Mark all watched'));
+    expect(Bed.focusInView(), isTrue);
+
+    await Bed.ok(t);
+    await Bed.settle(t, rounds: 3);
+    expect(WatchProgress.find(show)!.episodesFinished, 24, reason: 'every episode of the 3 seasons');
+    expect(WatchProgress.isSeen(show, season: 3, episode: 8), isTrue);
+    expect(WatchProgress.isSeen(show, season: 0, episode: 1), isFalse, reason: 'specials are not marked');
+    expect(Bed.focused(), allOf(contains('SeriesWatchedButton'), contains('All watched')), reason: 'the ring stays on it, and it says so');
+    await Bed.picture(t, 'watched/series_watched');
+
+    // the page opened again knows it, without a press
+    await Bed.back(t);
+    expect(find.byType(DetailsPage), findsNothing);
+    await Bed.push(t, DetailsPage(media: show));
+    await Bed.settle(t, rounds: 3);
+    expect(find.text('All watched'), findsOneWidget);
+    if (!Bed.focused().contains("'Play'")) await Bed.down(t);
+    await seek(t, 'SeriesWatchedButton');
+
+    // pressed now, it asks; Back (or Cancel) leaves everything watched
+    await Bed.ok(t);
+    await Bed.settle(t, rounds: 4);
+    expect(find.text('Mark all unwatched?'), findsOneWidget);
+    expect(_materialFocus(), 'Cancel', reason: 'the safe answer has the ring');
+    await Bed.back(t);
+    expect(find.byType(AlertDialog), findsNothing, reason: 'Back closes it');
+    expect(WatchProgress.find(show)!.episodesFinished, 24, reason: 'and changes nothing');
+    expect(Bed.focused(), contains('SeriesWatchedButton'), reason: 'the ring is back on the button');
+
+    await Bed.ok(t);
+    await Bed.settle(t, rounds: 4);
+    await Bed.right(t);
+    expect(_materialFocus(), 'Mark unwatched');
+    await Bed.ok(t);
+    await Bed.settle(t, rounds: 3);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(WatchProgress.find(show)!.episodesFinished, 0, reason: 'every episode back to unwatched');
+    expect(Bed.focused(), allOf(contains('SeriesWatchedButton'), contains('Mark all watched')));
     await done(t);
   }, variant: screen);
 

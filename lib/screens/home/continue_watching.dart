@@ -12,8 +12,10 @@ import '../../dpad/dpad_traversal.dart';
 import '../../widgets/common.dart';
 import '../../widgets/media_rows.dart' show ShelfHeader;
 import '../../widgets/watched_marks.dart';
+import 'up_next.dart';
 
-/// "Continue watching": what's half watched, newest first. Hidden when there's nothing.
+/// "Continue watching": what's half watched, newest first, and shows whose episode was watched to
+/// the end, with the next one when it's out ("Up next"). Hidden when there's nothing.
 class ContinueWatchingRow extends StatefulWidget {
   const ContinueWatchingRow({super.key});
 
@@ -24,8 +26,23 @@ class ContinueWatchingRow extends StatefulWidget {
 class _ContinueWatchingRowState extends State<ContinueWatchingRow> {
   final _scroll = ScrollController();
 
+  /// The episode each Up next card showed last: a card whose episode was just marked watched
+  /// keeps its place (and the ring) while the one after it is found.
+  final _shown = <String, PlayerEpisode>{};
+
+  @override
+  void initState() {
+    super.initState();
+    // shows watched to the end: the episode after, asked for where it isn't known yet
+    WatchProgress.entries.addListener(_lookUp);
+    _lookUp();
+  }
+
+  void _lookUp() => UpNext.lookUp(WatchProgress.entries.value);
+
   @override
   void dispose() {
+    WatchProgress.entries.removeListener(_lookUp);
     _scroll.dispose();
     super.dispose();
   }
@@ -40,52 +57,71 @@ class _ContinueWatchingRowState extends State<ContinueWatchingRow> {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<List<WatchEntry>>(
     valueListenable: WatchProgress.entries,
-    builder: (context, all, _) {
-      final entries = all.where((e) => e.inContinue).toList();
-      if (entries.isEmpty) return const SizedBox.shrink();
-      final phone = Layout.isPhone(context);
-      final w = phone ? 256.0 : 336.0;
-      final h = w * 9 / 16;
-      return DpadRevealBlock(
-        child: Padding(
-        padding: EdgeInsets.only(bottom: phone ? 22 : 30),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          ShelfHeader(
-            title: 'Continue watching',
-            onPrev: phone || entries.length < 3 ? null : () => _page(-1),
-            onNext: phone || entries.length < 3 ? null : () => _page(1),
-          ),
-          SizedBox(
-            height: h + 8,
-            child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(context).copyWith(
-                dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad, PointerDeviceKind.stylus},
-              ),
-              child: DpadRail(
-                child: ListView.separated(
-                controller: _scroll,
-                scrollDirection: Axis.horizontal,
-                padding: EdgeInsets.fromLTRB(Layout.inset(context), 4, phone ? 16 : 40, 4),
-                itemCount: entries.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 12),
-                itemBuilder: (context, i) => SizedBox(
-                  width: w,
-                  child: FadeSlideIn(
-                    key: ValueKey(entries[i].media.key),
-                    delay: Duration(milliseconds: 35 * (i < 8 ? i : 8)),
-                    offset: 10,
-                    child: _ResumeCard(entry: entries[i], phone: phone),
-                  ),
+    builder: (context, all, _) => ValueListenableBuilder<int>(
+      valueListenable: UpNext.answered,
+      builder: (context, _, _) => _row(context, all),
+    ),
+  );
+
+  Widget _row(BuildContext context, List<WatchEntry> all) {
+    final entries = <({WatchEntry entry, PlayerEpisode? next})>[];
+    final shown = <String, PlayerEpisode>{};
+    for (final e in all) {
+      if (e.inContinue) {
+        entries.add((entry: e, next: null));
+        continue;
+      }
+      final next = UpNext.of(e) ?? (UpNext.asking(e) ? _shown[e.media.key] : null);
+      if (next == null) continue;
+      entries.add((entry: e, next: next));
+      shown[e.media.key] = next;
+    }
+    _shown
+      ..clear()
+      ..addAll(shown);
+    if (entries.isEmpty) return const SizedBox.shrink();
+    final phone = Layout.isPhone(context);
+    final w = phone ? 256.0 : 336.0;
+    final h = w * 9 / 16;
+    return DpadRevealBlock(
+      child: Padding(
+      padding: EdgeInsets.only(bottom: phone ? 22 : 30),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ShelfHeader(
+          title: 'Continue watching',
+          onPrev: phone || entries.length < 3 ? null : () => _page(-1),
+          onNext: phone || entries.length < 3 ? null : () => _page(1),
+        ),
+        SizedBox(
+          height: h + 8,
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad, PointerDeviceKind.stylus},
+            ),
+            child: DpadRail(
+              child: ListView.separated(
+              controller: _scroll,
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.fromLTRB(Layout.inset(context), 4, phone ? 16 : 40, 4),
+              itemCount: entries.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (context, i) => SizedBox(
+                width: w,
+                child: FadeSlideIn(
+                  key: ValueKey(entries[i].entry.media.key),
+                  delay: Duration(milliseconds: 35 * (i < 8 ? i : 8)),
+                  offset: 10,
+                  child: _ResumeCard(entry: entries[i].entry, next: entries[i].next, phone: phone),
                 ),
               ),
-              ),
+            ),
             ),
           ),
-        ]),
         ),
-      );
-    },
-  );
+      ]),
+      ),
+    );
+  }
 }
 
 String _left(Duration d) {
@@ -98,11 +134,15 @@ String _left(Duration d) {
 
 /// Backdrop and logo; a ring-shaped play button that shows how far in you are, and a glowing
 /// line along the bottom. Hover offers to mark it watched or drop it from the row; a long press,
-/// a right click or holding OK offers the same in a menu.
+/// a right click or holding OK offers the same in a menu. With [next] (Up next), it is that
+/// episode's card: played from the start, and the one marked watched.
 class _ResumeCard extends StatefulWidget {
-  const _ResumeCard({required this.entry, required this.phone});
+  const _ResumeCard({required this.entry, required this.phone, this.next});
   final WatchEntry entry;
   final bool phone;
+
+  /// The episode after the one [entry] finished.
+  final PlayerEpisode? next;
 
   @override
   State<_ResumeCard> createState() => _ResumeCardState();
@@ -116,17 +156,22 @@ class _ResumeCardState extends State<_ResumeCard> {
     openPlayer(
       context,
       e.media,
-      episode: e.season != null && e.episode != null ? PlayerEpisode(season: e.season!, number: e.episode!, name: e.episodeName) : null,
+      // (Up next: from its start; nothing of it was played)
+      episode: widget.next ?? (e.season != null && e.episode != null ? PlayerEpisode(season: e.season!, number: e.episode!, name: e.episodeName) : null),
     );
   }
 
   // off this row only; it stays in History
   void _remove() => WatchProgress.dismiss(widget.entry.media);
 
-  /// The episode (or film) it's on, watched: it leaves the row as if played to the end.
+  /// The episode (or film) it's on, watched: it leaves the row as if played to the end. Up next's
+  /// episode: the card moves on to the one after it.
   void _watched() {
     final e = widget.entry;
-    if (e.season != null && e.episode != null) {
+    final next = widget.next;
+    if (next != null) {
+      setEpisodesWatched(context, e.media, [(season: next.season, number: next.number, name: next.name, runtime: next.runtime)], watched: true);
+    } else if (e.season != null && e.episode != null) {
       setEpisodesWatched(context, e.media, [(season: e.season!, number: e.episode!, name: e.episodeName, runtime: null)], watched: true);
     } else {
       setFilmWatched(context, e.media, watched: true);
@@ -172,9 +217,12 @@ class _ResumeCardState extends State<_ResumeCard> {
   Widget build(BuildContext context) {
     final e = widget.entry;
     final phone = widget.phone;
-    final sub = e.season != null && e.episode != null
-        ? '${episodeLabel(e.season, e.episode ?? 0)}${e.episodeName == null ? '' : '  ${e.episodeName}'}'
+    final next = widget.next;
+    final (season, episode, name) = next != null ? (next.season, next.number, next.name) : (e.season, e.episode, e.episodeName);
+    final sub = season != null && episode != null
+        ? '${episodeLabel(season, episode)}${name == null ? '' : '  $name'}'
         : (e.media.year ?? e.media.kind);
+    final fraction = next != null ? 0.0 : e.fraction;
     return GestureDetector(
       onLongPressStart: (d) => _menu(d.globalPosition),
       onSecondaryTapUp: (d) => _menu(d.globalPosition),
@@ -270,13 +318,13 @@ class _ResumeCardState extends State<_ResumeCard> {
                       margin: const EdgeInsets.symmetric(horizontal: 7),
                       decoration: const BoxDecoration(color: VyseColors.textFaint, shape: BoxShape.circle),
                     ),
-                    Text(_left(e.left), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: VyseColors.accent)),
+                    Text(next != null ? 'Up next' : _left(e.left), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: VyseColors.accent)),
                   ]),
                 ]),
               ),
               // play: a ring that fills with progress. Centre on hover; always there on touch.
               if (phone)
-                Positioned(right: 12, bottom: 14, child: _Ring(fraction: e.fraction, size: 38))
+                Positioned(right: 12, bottom: 14, child: _Ring(fraction: fraction, size: 38))
               else
                 Center(
                   child: AnimatedOpacity(
@@ -286,7 +334,7 @@ class _ResumeCardState extends State<_ResumeCard> {
                       scale: hovered ? 1 : .8,
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutBack,
-                      child: _Ring(fraction: e.fraction, size: 58),
+                      child: _Ring(fraction: fraction, size: 58),
                     ),
                   ),
                 ),
@@ -315,8 +363,9 @@ class _ResumeCardState extends State<_ResumeCard> {
                 bottom: 0,
                 child: Stack(children: [
                   Container(height: 3, color: Colors.white.withValues(alpha: .16)),
+                  if (fraction > 0)
                   FractionallySizedBox(
-                    widthFactor: e.fraction,
+                    widthFactor: fraction,
                     child: Container(
                       height: 3,
                       decoration: BoxDecoration(

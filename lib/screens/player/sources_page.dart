@@ -5,8 +5,10 @@ import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/layout.dart';
+import '../../core/nav.dart' show openStremioLink;
 import '../../core/theme.dart';
 import '../../core/lean.dart';
 import '../../data/sources/addons.dart';
@@ -14,6 +16,7 @@ import '../../data/sources/debrid/debrid.dart' show Debrid;
 import '../../data/anime/anilist.dart';
 import '../../data/anime/anime_sources.dart' show AnimeTarget;
 import '../../data/sources/badges.dart';
+import '../../data/catalog/meta_addons.dart';
 import '../../data/catalog/tmdb.dart';
 import '../../data/playback/watch_progress.dart';
 import '../../data/sources/torrents.dart';
@@ -31,8 +34,9 @@ import '../profile/profile_page.dart';
 /// Streaming mode off: before a film or an episode plays, its sources from your Stremio addons,
 /// to pick one. Each source reads as its addon wrote it (the way Stremio and Nuvio show them),
 /// with badges from your badge template under it. Anime come through here too (by Kitsu id).
-Future<void> openSources(BuildContext context, Media media, {PlayerEpisode? episode, int? runtime, AnimeTarget? anime}) =>
-    Navigator.of(context, rootNavigator: true).push(_fade(SourcesPage(media: media, episode: episode, runtime: runtime, anime: anime), name: SourcesPage.route));
+/// [notice]: a line said over it as it opens (why it opened instead of the player).
+Future<void> openSources(BuildContext context, Media media, {PlayerEpisode? episode, int? runtime, AnimeTarget? anime, String? notice}) =>
+    Navigator.of(context, rootNavigator: true).push(_fade(SourcesPage(media: media, episode: episode, runtime: runtime, anime: anime, notice: notice), name: SourcesPage.route));
 
 PageRouteBuilder<void> _fade(Widget page, {String? name}) => PageRouteBuilder(
   settings: RouteSettings(name: name),
@@ -106,8 +110,12 @@ class _Info {
 }
 
 class SourcesPage extends StatefulWidget {
-  const SourcesPage({super.key, required this.media, this.episode, this.runtime, this.anime, this.overlay = false, this.playing, this.onPick, this.onClose});
+  const SourcesPage({super.key, required this.media, this.episode, this.runtime, this.anime, this.overlay = false, this.playing, this.onPick, this.onClose, this.notice});
   final Media media;
+
+  /// Said over the page as it opens (a title from a metadata addon that TMDB doesn't have:
+  /// why it plays from your addons with Streaming mode on).
+  final String? notice;
   final PlayerEpisode? episode;
   final int? runtime;
   final AnimeTarget? anime;
@@ -129,7 +137,8 @@ class SourcesPage extends StatefulWidget {
 }
 
 class _SourcesPageState extends State<SourcesPage> {
-  late final List<Addon> _addons = Addons.streamAddons;
+  // (growable: the addon whose details carry streams of their own joins it)
+  late final List<Addon> _addons = [...Addons.streamAddons];
   late final _results = {for (final a in _addons) a.manifestUrl: _Result()};
   AddonTarget? _target;
   late final Future<_Info> _info = _loadInfo();
@@ -152,6 +161,12 @@ class _SourcesPageState extends State<SourcesPage> {
     super.initState();
     Badges.list.addListener(_badgesChanged);
     _ask();
+    final notice = widget.notice;
+    if (notice != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showToast(context, Text(notice, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)), icon: Icons.info_outline_rounded);
+      });
+    }
   }
 
   @override
@@ -181,9 +196,23 @@ class _SourcesPageState extends State<SourcesPage> {
       return;
     }
     if (!mounted) return;
-    setState(() => _target = t);
-    for (final a in _addons) {
+    // Streams the title's own details carry (Stremio's `streams` on a video): listed first, as
+    // that addon's own. An addon that isn't one of your stream addons joins the list for them.
+    final from = t.inlineFrom;
+    final inline = from == null ? const <AddonStream>[] : [for (final s in t.inline) ?AddonStream.parse(from, s)];
+    setState(() {
+      _target = t;
+      if (inline.isNotEmpty && !_addons.any((a) => a.manifestUrl == from!.manifestUrl)) {
+        _addons.insert(0, from!);
+        _results[from.manifestUrl] = _Result()
+          ..loading = false
+          ..streams = inline;
+      }
+    });
+    for (final a in [..._addons]) {
       final r = _results[a.manifestUrl]!;
+      if (!a.streams) continue; // (there only for the streams its details carry)
+      final own = a.manifestUrl == from?.manifestUrl ? inline : const <AddonStream>[];
       unawaited(
         Addons.streams(a, t).then(
           (got) {
@@ -193,8 +222,8 @@ class _SourcesPageState extends State<SourcesPage> {
             setState(() {
               r
                 ..loading = false
-                ..covered = got != null
-                ..streams = got?.streams ?? const []
+                ..covered = got != null || own.isNotEmpty
+                ..streams = [...own, ...?got?.streams]
                 ..torrents = got?.torrents ?? 0;
             });
           },
@@ -285,7 +314,8 @@ class _SourcesPageState extends State<SourcesPage> {
       case _Sort.quality:
         l.sort(_best);
     }
-    return l;
+    // links that open elsewhere (a page, a YouTube video) come after everything that plays
+    return [...l.where((s) => s.playable), ...l.where((s) => !s.playable)];
   }
 
   bool get _loading => _results.values.any((r) => r.loading);
@@ -304,6 +334,7 @@ class _SourcesPageState extends State<SourcesPage> {
     final t = _target;
     if (t == null) return;
     HapticFeedback.selectionClick();
+    if (!s.playable) return _openLink(s.external!);
     // P2P off: ask first, and start nothing unless allowed (in your room, everyone there too)
     final party = Rooms.mine.value?.iOwn == true;
     // with debrid on, torrents come from the service: nothing peer to peer to agree to
@@ -339,6 +370,16 @@ class _SourcesPageState extends State<SourcesPage> {
     Navigator.of(context).push(_fade(PlayerPage(media: _m, episode: _ep, runtime: widget.runtime, anime: widget.anime, pick: AddonPick(s, t))));
   }
 
+  /// A source that is a link: a Stremio link opens its page in VyseTV, anything else (a web page,
+  /// a YouTube video) where it lives.
+  Future<void> _openLink(String link) async {
+    if (await openStremioLink(context, link)) return;
+    final ok = await launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication).catchError((Object _) => false);
+    if (!ok && mounted) {
+      showToast(context, const Text("Couldn't open the link", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)), icon: Icons.error_outline_rounded);
+    }
+  }
+
   /// Back: closes the overlay (the video keeps playing), or leaves the page.
   void _close() => widget.overlay ? widget.onClose?.call() : Navigator.of(context).maybePop();
 
@@ -348,7 +389,25 @@ class _SourcesPageState extends State<SourcesPage> {
     return p.torrent ? s.infoHash == p.infoHash && s.fileIdx == p.fileIdx : s.url == p.url;
   }
 
-  void _builtIn() => Navigator.of(context).pushReplacement(_fade(PlayerPage(media: _m, episode: _ep, runtime: widget.runtime, anime: widget.anime)));
+  /// VyseTV's own servers instead. A title from a metadata addon plays there as its TMDB match;
+  /// one TMDB doesn't have says so and stays here.
+  Future<void> _builtIn() async {
+    var m = _m;
+    if (m.isAddon && !m.tmdbKnown) {
+      final twin = await MetaAddons.twin(m).catchError((Object _) => null);
+      if (!mounted) return;
+      if (twin == null || !twin.tmdbKnown) {
+        showToast(
+          context,
+          Text("${m.title} isn't on TMDB, so VyseTV's servers can't find it", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          icon: Icons.info_outline_rounded,
+        );
+        return;
+      }
+      m = twin;
+    }
+    unawaited(Navigator.of(context).pushReplacement(_fade(PlayerPage(media: m, episode: _ep, runtime: widget.runtime, anime: widget.anime))));
+  }
 
   void _openAddons() => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ProfilePage(addons: true)));
 
@@ -444,7 +503,8 @@ class _SourcesPageState extends State<SourcesPage> {
     final listW = math.min(720.0, size.width * .52);
     final list = _shown;
     // "Play best" is what autoplay would pick: your autoplay order when you've set one
-    final best = AutoplayOrder.arrange(list).firstOrNull ?? (list.isEmpty ? null : ([...list]..sort(_best)).first);
+    final playable = [for (final s in list) if (s.playable) s];
+    final best = AutoplayOrder.arrange(playable).firstOrNull ?? (playable.isEmpty ? null : ([...playable]..sort(_best)).first);
     return Stack(
       children: [
         // the art fills the right of the window and fades into the page behind the list
@@ -1052,6 +1112,29 @@ class _ClearButton extends StatelessWidget {
 
 /// One source: its addon's logo, the description as the addon wrote it, and the template's badges
 /// underneath.
+/// Where a source that is a link goes: VyseTV (a Stremio link), YouTube, or the browser.
+class _Opens extends StatelessWidget {
+  const _Opens({required this.link});
+  final String link;
+
+  @override
+  Widget build(BuildContext context) {
+    final where = StremioLink.parse(link) != null
+        ? 'Opens in VyseTV'
+        : (link.contains('youtube.com/') || link.contains('youtu.be/') ? 'Opens on YouTube' : 'Opens in your browser');
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.open_in_new_rounded, size: 14, color: VyseColors.accent),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(where, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: VyseColors.accent)),
+        ),
+      ],
+    );
+  }
+}
+
 class _SourceRow extends StatelessWidget {
   const _SourceRow({required this.stream, required this.phone, required this.onTap, this.playing = false});
   final AddonStream stream;
@@ -1101,9 +1184,14 @@ class _SourceRow extends StatelessWidget {
                             AddonLogo(addon: s.addon, size: 34),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: description.isEmpty
-                                  ? const SizedBox.shrink()
-                                  : Text(description, maxLines: 7, overflow: TextOverflow.ellipsis, style: _descStyle),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (description.isNotEmpty) Text(description, maxLines: 7, overflow: TextOverflow.ellipsis, style: _descStyle),
+                                  if (!s.playable) ...[SizedBox(height: description.isEmpty ? 0 : 8), _Opens(link: s.external!)],
+                                ],
+                              ),
                             ),
                             if (s.torrent) ...[const SizedBox(width: 6), _CopyMagnet(stream: s)],
                           ],
@@ -1122,6 +1210,7 @@ class _SourceRow extends StatelessWidget {
                             children: [
                               if (playing) ...[_now, const SizedBox(height: 6)],
                               if (description.isNotEmpty) Text(description, maxLines: 7, overflow: TextOverflow.ellipsis, style: _descStyle),
+                              if (!s.playable) ...[SizedBox(height: description.isEmpty ? 0 : 8), _Opens(link: s.external!)],
                               if (badges.isNotEmpty) ...[SizedBox(height: description.isEmpty ? 0 : 12), BadgeRow(badges: badges)],
                             ],
                           ),

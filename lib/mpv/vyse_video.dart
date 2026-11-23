@@ -43,6 +43,14 @@ class VyseVideo extends StatefulWidget {
 
 class _VyseVideoState extends State<VyseVideo> {
   StreamSubscription<bool>? _playing;
+  StreamSubscription<bool>? _buffering;
+
+  /// The screen stays awake a while after the video stops, not just while it plays: Media3
+  /// says "not playing" for every stop to load more, and letting the wake lock go then, on a
+  /// TV nobody has touched for a quarter of an hour, starts its screen saver over the film
+  /// (testers' Fire TVs: black after 15 to 20 minutes, the sound going on).
+  Timer? _sleep;
+  static const _grace = Duration(seconds: 30);
   StreamSubscription<void>? _loaded;
   StreamSubscription<void>? _restart;
   StreamSubscription<void>? _started;
@@ -66,6 +74,7 @@ class _VyseVideoState extends State<VyseVideo> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.player, widget.player)) {
       _playing?.cancel();
+      _buffering?.cancel();
       _loaded?.cancel();
       _restart?.cancel();
       _started?.cancel();
@@ -75,8 +84,9 @@ class _VyseVideoState extends State<VyseVideo> {
   }
 
   void _listen() {
-    _setAwake(widget.player.state.playing);
-    _playing = widget.player.streams.playing.listen(_setAwake);
+    _wake();
+    _playing = widget.player.streams.playing.listen((_) => _wake());
+    _buffering = widget.player.streams.buffering.listen((_) => _wake());
     _firstFrame.value = widget.player.state.hasRenderedFrame;
     _restart = widget.player.streams.playbackRestart.listen((_) => _firstFrame.value = true);
     _started = widget.player.streams.fileStarted.listen((_) => _firstFrame.value = false);
@@ -93,6 +103,22 @@ class _VyseVideoState extends State<VyseVideo> {
     if (mounted && id != _textureId) setState(() => _textureId = id);
   }
 
+  /// Awake while the video plays or loads; asleep [_grace] after it stops for good (paused,
+  /// ended, failed).
+  void _wake() {
+    final s = widget.player.state;
+    if (s.playing || s.buffering) {
+      _sleep?.cancel();
+      _sleep = null;
+      _setAwake(true);
+    } else if (_awake) {
+      _sleep ??= Timer(_grace, () {
+        _sleep = null;
+        if (mounted) _setAwake(false);
+      });
+    }
+  }
+
   void _setAwake(bool on) {
     if (on == _awake) return;
     _awake = on;
@@ -102,6 +128,8 @@ class _VyseVideoState extends State<VyseVideo> {
   @override
   void dispose() {
     _playing?.cancel();
+    _buffering?.cancel();
+    _sleep?.cancel();
     _loaded?.cancel();
     _restart?.cancel();
     _started?.cancel();

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import 'meta_addons.dart';
 import 'tmdb.dart';
 
 enum MediaType { all, movie, tv }
@@ -287,14 +288,32 @@ Future<DiscoverResult> fetchDiscover(DiscoverQuery q, int page) async {
   return (items: items, total: total, pages: pages);
 }
 
-/// Holds the live query and the accumulated, de-duplicated results with infinite paging.
+/// Holds the live query and the accumulated, de-duplicated results with infinite paging: from
+/// TMDB, or from one of your metadata addons' catalogs ([catalog]).
 class DiscoverController extends ChangeNotifier {
-  DiscoverController(this._query) {
+  DiscoverController(this._query, [this._catalog, this._genre]) {
     _load(reset: true);
   }
 
   DiscoverQuery _query;
   DiscoverQuery get query => _query;
+
+  /// The addon catalog on show (null: TMDB, by [query]) and its genre picked (null: all of it).
+  CatalogRef? _catalog;
+  String? _genre;
+  CatalogRef? get catalog => _catalog;
+  String? get genre => _genre;
+  int _skip = 0; // titles the catalog has given so far: where its next page starts
+  bool _more = false;
+
+  /// Shows [c] (null: TMDB again), at [genre].
+  void browse(CatalogRef? c, {String? genre}) {
+    if (c == _catalog && genre == _genre) return;
+    _catalog = c;
+    _genre = genre;
+    _debounce?.cancel();
+    _load(reset: true);
+  }
 
   final List<Media> items = [];
   final _seen = <String>{};
@@ -310,7 +329,7 @@ class DiscoverController extends ChangeNotifier {
   Object? error;
   Timer? _debounce;
 
-  bool get hasMore => _page < _pages && _page < 500;
+  bool get hasMore => _catalog != null ? _more : _page < _pages && _page < 500;
   bool get initialLoading => loading && items.isEmpty;
 
   void update(DiscoverQuery q, {bool debounce = false}) {
@@ -340,6 +359,38 @@ class DiscoverController extends ChangeNotifier {
     notifyListeners();
 
     final page = reset ? 1 : _page + 1;
+    final c = _catalog;
+    if (c != null) {
+      // an addon's catalog: a page at a time, for as long as each brings something new
+      try {
+        final skip = reset ? 0 : _skip;
+        final got = await MetaAddons.page(c.addon, c.catalog, genre: _genre, skip: skip);
+        if (token != _token) return;
+        if (reset) {
+          items.clear();
+          _seen.clear();
+          generation++;
+        }
+        var added = 0;
+        for (final m in got) {
+          if (_seen.add(m.key)) {
+            items.add(m);
+            added++;
+          }
+        }
+        _skip = skip + got.length;
+        _more = c.catalog.skip && added > 0;
+        total = 0; // a catalog doesn't say how many it has
+        _page = page;
+      } catch (e) {
+        if (token != _token) return;
+        error = e;
+      }
+      loading = false;
+      reloading = false;
+      notifyListeners();
+      return;
+    }
     try {
       final r = await fetchDiscover(_query, page);
       if (token != _token) return;

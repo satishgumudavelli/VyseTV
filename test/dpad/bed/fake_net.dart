@@ -11,13 +11,17 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 /// What a fake answer is made of.
 class FakeReply {
-  const FakeReply(this.status, this.body, {this.type = 'application/json; charset=utf-8'});
+  const FakeReply(this.status, this.body, {this.type = 'application/json; charset=utf-8', this.ranged = false});
   FakeReply.json(Object data, {int status = 200}) : this(status, utf8.encode(jsonEncode(data)));
   static const notFound = FakeReply(404, <int>[]);
 
   final int status;
   final List<int> body;
   final String type;
+
+  /// A file a request can ask part of ("Range: bytes=…"), as a video host answers: 206 and the
+  /// part asked for.
+  final bool ranged;
 }
 
 /// Decides the answer for one request. Return null for "no such page" (a 404).
@@ -149,7 +153,15 @@ class _Request implements HttpClientRequest {
   Future<HttpClientResponse> close() async {
     final wait = net.delay?.call(uri) ?? Duration.zero;
     if (wait > Duration.zero) await Future<void>.delayed(wait);
-    if (!_done.isCompleted) _done.complete(_Response(net.answer(method, uri)));
+    var reply = net.answer(method, uri);
+    final range = RegExp(r'bytes=(\d+)-(\d*)').firstMatch(headers.value('range') ?? '');
+    if (reply.ranged && reply.status == 200 && range != null) {
+      final start = int.parse(range[1]!);
+      final last = range[2]!.isEmpty ? reply.body.length - 1 : int.parse(range[2]!);
+      final end = last < reply.body.length ? last : reply.body.length - 1;
+      reply = FakeReply(206, start > end ? const [] : reply.body.sublist(start, end + 1), type: reply.type);
+    }
+    if (!_done.isCompleted) _done.complete(_Response(reply));
     return _done.future;
   }
 

@@ -8,7 +8,9 @@ import 'package:flutter/services.dart';
 import '../../core/layout.dart';
 import '../../core/logs/perf.dart';
 import '../../core/theme.dart';
+import '../../data/catalog/meta_addons.dart';
 import '../../data/catalog/tmdb.dart';
+import '../../data/sources/addons.dart';
 import '../../dpad/dpad_navigator.dart';
 import '../../dpad/dpad_reveal.dart';
 import '../../dpad/dpad_traversal.dart' show DpadStart;
@@ -17,6 +19,7 @@ import '../../widgets/hero_carousel.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../data/playback/watch_progress.dart';
+import 'addon_home.dart';
 import 'continue_watching.dart';
 import '../../widgets/media_rows.dart';
 import '../../widgets/page_scrollbar.dart';
@@ -35,7 +38,24 @@ class _HomePageState extends State<HomePage> {
   final _focus = FocusNode();
   final _heroKey = GlobalKey<HeroCarouselState>();
   final _feed = HomeFeed.instance;
-  late Future<List<Media>> _hero = _feed.hero();
+  late Future<List<Media>> _hero = _loadHero();
+
+  // The hero is TMDB's while TMDB is on, else made from your first catalogs: asked again when
+  // that changes in Settings > Addons.
+  late String _heroFrom = _heroSource;
+  String get _heroSource => Addons.tmdbOn ? 'tmdb' : [for (final r in MetaAddons.catalogs) r.key].take(3).join(',');
+  Future<List<Media>> _loadHero() => Addons.tmdbOn ? _feed.hero() : AddonHome.hero();
+
+  void _onAddons() {
+    if (!mounted) return;
+    if (afterBuild(_onAddons)) return;
+    setState(() {
+      final from = _heroSource;
+      if (from == _heroFrom) return;
+      _heroFrom = from;
+      _hero = _loadHero();
+    });
+  }
 
   bool _immersive = false;
   Timer? _idle;
@@ -45,11 +65,13 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    Addons.list.addListener(_onAddons);
     _armIdle();
   }
 
   @override
   void dispose() {
+    Addons.list.removeListener(_onAddons);
     _idle?.cancel();
     _scroll.dispose();
     _focus.dispose();
@@ -166,6 +188,17 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// TMDB and your metadata addons with catalogs, as Home lays out their rows: in your order,
+  /// those that are on (TMDB first when the list isn't read yet).
+  List<Addon> get _order {
+    final l = Addons.list.value;
+    return [
+      if (!l.any((a) => a.manifestUrl == Addon.tmdb.manifestUrl)) Addon.tmdb,
+      for (final a in l)
+        if (a.enabled && (a.manifestUrl == Addon.tmdb.manifestUrl || (!a.builtIn && a.catalogs.isNotEmpty))) a,
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -255,13 +288,18 @@ class _HomePageState extends State<HomePage> {
                   builder: (context, snap) {
                     if (snap.hasError) {
                       return _HeroError(
-                        onRetry: () => setState(() => _hero = _feed.hero()),
+                        from: Addons.tmdbOn ? 'TMDB' : 'your addons',
+                        onRetry: () => setState(() => _hero = _loadHero()),
                       );
                     }
                     final items = (snap.data ?? const <Media>[])
                         .where((m) => m.backdropPath != null)
                         .take(8)
                         .toList();
+                    // your addons gave nothing with a backdrop: no hero, the rows start at the top
+                    if (items.isEmpty && snap.connectionState == ConnectionState.done && !Addons.tmdbOn) {
+                      return SizedBox(height: Layout.topChrome(context) + 12);
+                    }
                     if (items.isEmpty) {
                       return SizedBox(
                         height: heroH,
@@ -298,24 +336,31 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         SizedBox(height: phone ? 8 : 4),
                         const ContinueWatchingRow(),
-                        landscape('Hot right now', _feed.hero),
-                        _BecauseRow(hero: _hero, feed: _feed, posterWidth: posterW),
-                        top10("Today's top 10 films", _feed.topMoviesToday),
-                        posters('Series everyone is watching', _feed.popularTv),
-                        Shelf<WatchProvider>(
-                          title: 'Streaming services',
-                          load: _feed.providers,
-                          itemWidth: phone ? 120 : 172,
-                          itemHeight: phone ? 92 : 118,
-                          maxItems: 40,
-                          itemBuilder: (_, p, _) => PlatformTile(provider: p),
-                        ),
-                        landscape('In cinemas now', _feed.nowPlaying),
-                        posters('Anime picks', _feed.anime),
-                        top10("Today's top 10 series", _feed.topTvToday),
-                        const GenreGrid(),
-                        posters('All-time greats', _feed.topRated),
-                        landscape('Coming soon', _feed.upcoming),
+                        // TMDB's rows and each metadata addon's, in your order (Settings > Addons)
+                        for (final a in _order)
+                          if (a.manifestUrl == Addon.tmdb.manifestUrl) ...[
+                            landscape('Hot right now', _feed.hero),
+                            _BecauseRow(hero: _hero, feed: _feed, posterWidth: posterW),
+                            top10("Today's top 10 films", _feed.topMoviesToday),
+                            posters('Series everyone is watching', _feed.popularTv),
+                            Shelf<WatchProvider>(
+                              title: 'Streaming services',
+                              load: _feed.providers,
+                              itemWidth: phone ? 120 : 172,
+                              itemHeight: phone ? 92 : 118,
+                              maxItems: 40,
+                              itemBuilder: (_, p, _) => PlatformTile(provider: p),
+                            ),
+                            landscape('In cinemas now', _feed.nowPlaying),
+                            posters('Anime picks', _feed.anime),
+                            top10("Today's top 10 series", _feed.topTvToday),
+                            const GenreGrid(),
+                            posters('All-time greats', _feed.topRated),
+                            landscape('Coming soon', _feed.upcoming),
+                          ] else
+                            AddonSection(key: ValueKey('addon/${a.manifestUrl}'), addon: a, posterWidth: posterW),
+                        // TMDB off: genre cards from your addons, or where to turn one on
+                        if (!Addons.tmdbOn) Addons.catalogAddons.isEmpty ? const NoMetadata() : const AddonGenreGrid(),
                         const _Footer(),
                       ],
                     ),
@@ -361,7 +406,8 @@ class _FadeAway extends StatelessWidget {
 }
 
 class _HeroError extends StatelessWidget {
-  const _HeroError({required this.onRetry});
+  const _HeroError({required this.from, required this.onRetry});
+  final String from;
   final VoidCallback onRetry;
 
   @override
@@ -377,9 +423,9 @@ class _HeroError extends StatelessWidget {
             color: VyseColors.textFaint,
           ),
           const SizedBox(height: 12),
-          const Text(
-            "Couldn't reach TMDB. Check your connection.",
-            style: TextStyle(color: VyseColors.textDim),
+          Text(
+            "Couldn't reach $from. Check your connection.",
+            style: const TextStyle(color: VyseColors.textDim),
           ),
           const SizedBox(height: 14),
           TextButton(onPressed: onRetry, child: const Text('Try again')),
@@ -452,7 +498,7 @@ class _BecauseRowState extends State<_BecauseRow> {
     builder: (context, entries, _) => FutureBuilder<List<Media>>(
       future: widget.hero,
       builder: (context, snap) {
-        final watching = [for (final e in entries) if (e.inContinue && !e.media.anime) e.media];
+        final watching = [for (final e in entries) if (e.inContinue && !e.media.anime && !e.media.isAddon) e.media];
         final keys = {for (final m in watching) m.key};
         final trending = [for (final m in snap.data ?? const <Media>[]) if (!keys.contains(m.key)) m].take(8).toList();
         final all = [...watching, ...trending];

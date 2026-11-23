@@ -4,6 +4,7 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vyse_tv/core/nav.dart';
@@ -28,6 +29,7 @@ void main() {
   final tv = OnScreens([Screens.tv]);
 
   var starred = 0;
+  var opened = 0;
 
   /// A portal's card, as Live TV > Portals draws it: the card opens the portal, and it has two
   /// buttons of its own.
@@ -45,7 +47,7 @@ void main() {
                   child: InfoTile(
                     title: name,
                     lines: const ['http://portal.test', 'Expires Unlimited  ·  0/1 connections'],
-                    onTap: () {},
+                    onTap: () => opened++,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -146,6 +148,32 @@ void main() {
     // back on the card: its ring again, and none left on the star
     await Bed.focus(t, find.descendant(of: find.widgetWithText(InfoTile, name), matching: find.byType(Pressable)).first);
     expect(chromeOf(t, name).shown, 1);
+    await t.pumpWidget(const SizedBox());
+  }, variant: tv);
+
+  // Eleventh round (2026-11-23), Live TV > Portals: "the pencil (doesn't rename) - the copy icon
+  // (doesn't copy...) - the star doesn't favorite either. Clicking on any of the 3 just opens up
+  // the channels and categories of the login." The card's own OK handler took the key on its way
+  // up from the focused button.
+  testWidgets('OK on a button inside a card presses that button, not the card; OK on the card still opens it', (t) async {
+    starred = 0;
+    opened = 0;
+    await t.pumpWidget(portals());
+    await Bed.settle(t, rounds: 2);
+    await Bed.dpadMode(t);
+    const name = 'EELAKQP8D53GQWT';
+    final star = find.descendant(of: find.widgetWithText(InfoTile, name), matching: find.byIcon(Icons.star_border_rounded));
+    Focus.of(t.element(star)).requestFocus();
+    await Bed.settle(t, rounds: 2);
+    await Bed.ok(t);
+    expect((starred, opened), (1, 0), reason: 'Enter pressed the star');
+    // a remote's own OK key, as an Android TV sends it
+    await t.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
+    await Bed.settle(t, rounds: 2);
+    expect((starred, opened), (2, 0), reason: 'select pressed the star');
+    await Bed.focus(t, find.descendant(of: find.widgetWithText(InfoTile, name), matching: find.byType(Pressable)).first);
+    await Bed.ok(t);
+    expect((starred, opened), (2, 1), reason: 'the card itself opens on OK');
     await t.pumpWidget(const SizedBox());
   }, variant: tv);
 

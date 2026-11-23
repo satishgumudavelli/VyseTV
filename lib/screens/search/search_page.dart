@@ -10,19 +10,25 @@ import '../../core/lean.dart';
 import '../../dpad/dpad_root.dart' show backBindings;
 import '../../dpad/dpad_traversal.dart';
 import '../../dpad/input_mode_tracker.dart';
+import '../../data/catalog/meta_addons.dart';
 import '../../data/catalog/tmdb.dart';
+import '../../data/sources/addons.dart';
 import '../../widgets/common.dart';
 import '../../widgets/voice_search.dart';
 import '../../widgets/media_rows.dart';
 import '../../widgets/page_scrollbar.dart';
 import '../../data/trackers/tracker_hub.dart';
 import 'open_link.dart';
+import '../home/addon_home.dart' show AddonGenreGrid, NoMetadata, afterBuild;
 import '../player/player_page.dart';
 
 /// Search: a glowing bar up top, then sliders. Before typing you get recents, suggestions,
 /// trending and genres; while typing, a Top result spotlight plus Movies / TV / People rows.
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({super.key, this.query});
+
+  /// Opens already searching for this (a Stremio link's search, opened over another page).
+  final String? query;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -44,6 +50,15 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     super.initState();
+    final q = widget.query?.trim() ?? '';
+    if (q.isNotEmpty) {
+      // opened on a search: its results, with the bar holding it (and no keyboard)
+      _text.text = q;
+      _before = q;
+      _query = q;
+      _text.addListener(_onTyped);
+      return;
+    }
     _text.addListener(_onTyped);
     // Land with the cursor ready, once the page transition has settled.
     Future.delayed(const Duration(milliseconds: 350), () {
@@ -124,6 +139,8 @@ class _SearchPageState extends State<SearchPage> {
     final inset = Layout.inset(context);
     final top = Layout.topChrome(context) + (phone ? 12 : 34);
 
+    // opened over another page (a Stremio link's search): a way back, as on Discover
+    final pushed = widget.query != null && Navigator.of(context).canPop();
     return ColoredBox(
       color: VyseColors.bg,
       child: Stack(children: [
@@ -131,9 +148,16 @@ class _SearchPageState extends State<SearchPage> {
         PageScrollbar(
           controller: _scroll,
           child: CustomScrollView(controller: _scroll, slivers: [
+            if (pushed)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(inset - 8, top, 0, 0),
+                  child: Align(alignment: Alignment.centerLeft, child: _BackLink(onTap: () => Navigator.of(context).maybePop())),
+                ),
+              ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(inset, top, phone ? 16 : 40, phone ? 18 : 30),
+                padding: EdgeInsets.fromLTRB(inset, pushed ? 10 : top, phone ? 16 : 40, phone ? 18 : 30),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 720),
@@ -178,6 +202,25 @@ class _SearchPageState extends State<SearchPage> {
       ]),
     );
   }
+}
+
+class _BackLink extends StatelessWidget {
+  const _BackLink({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+    onTap: onTap,
+    builder: (context, hovered, _) => AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.fromLTRB(6, 5, 12, 5),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), color: hovered ? Colors.white.withValues(alpha: .1) : Colors.transparent),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.chevron_left_rounded, size: 20, color: hovered ? VyseColors.text : VyseColors.textDim),
+        Text('Back', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: hovered ? VyseColors.text : VyseColors.textDim)),
+      ]),
+    ),
+  );
 }
 
 /// A link is in the bar: what it is, how it will play, and a button (Enter does the same).
@@ -421,7 +464,38 @@ class _Idle extends StatefulWidget {
 }
 
 class _IdleState extends State<_Idle> {
-  late final _trending = HomeFeed.instance.trendingToday();
+  /// What to try searching for: TMDB's trending titles, or with TMDB off your first catalog's
+  /// (asked again when that changes in Settings > Addons).
+  CatalogRef? get _source => Addons.tmdbOn ? null : [for (final r in MetaAddons.catalogs) if (r.catalog.board) r].firstOrNull;
+  late CatalogRef? _from = _source;
+  late bool _tmdb = Addons.tmdbOn;
+  late Future<List<Media>> _trending = _load();
+
+  Future<List<Media>> _load() => _tmdb
+      ? HomeFeed.instance.trendingToday()
+      : (_from == null ? Future.value(const <Media>[]) : MetaAddons.page(_from!.addon, _from!.catalog).catchError((Object _) => const <Media>[]));
+
+  void _onAddons() {
+    if (!mounted || (Addons.tmdbOn == _tmdb && _source == _from)) return;
+    if (afterBuild(_onAddons)) return;
+    setState(() {
+      _tmdb = Addons.tmdbOn;
+      _from = _source;
+      _trending = _load();
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    Addons.list.addListener(_onAddons);
+  }
+
+  @override
+  void dispose() {
+    Addons.list.removeListener(_onAddons);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -487,14 +561,28 @@ class _IdleState extends State<_Idle> {
           );
         },
       ),
-      Shelf<Media>(
-        title: 'Trending today',
-        load: () => _trending,
-        itemWidth: landW,
-        itemHeight: landW * 9 / 16,
-        itemBuilder: (_, m, _) => LandscapeCard(media: m),
-      ),
-      const GenreGrid(),
+      if (_tmdb) ...[
+        Shelf<Media>(
+          title: 'Trending today',
+          load: () => _trending,
+          itemWidth: landW,
+          itemHeight: landW * 9 / 16,
+          itemBuilder: (_, m, _) => LandscapeCard(media: m),
+        ),
+        const GenreGrid(),
+      ] else if (_from == null)
+        const NoMetadata(compact: true)
+      else ...[
+        Shelf<Media>(
+          key: ValueKey(_from!.key),
+          title: _from!.title,
+          load: () async => [for (final m in await _trending) if (m.backdropPath != null) m],
+          itemWidth: landW,
+          itemHeight: landW * 9 / 16,
+          itemBuilder: (_, m, _) => LandscapeCard(media: m),
+        ),
+        const AddonGenreGrid(),
+      ],
     ]);
   }
 }
@@ -566,25 +654,73 @@ class _Results extends StatefulWidget {
   State<_Results> createState() => _ResultsState();
 }
 
-class _ResultsState extends State<_Results> {
-  late Future<(List<Media>, List<Media>, List<Person>, List<Studio>)> _all = _load();
+typedef _Found = (List<Media>, List<Media>, List<Person>, List<Studio>, List<(String, List<Media>)>);
 
-  Future<(List<Media>, List<Media>, List<Person>, List<Studio>)> _load() {
+class _ResultsState extends State<_Results> {
+  late Future<_Found> _all = _load();
+
+  /// TMDB's films, shows, people and studios (while TMDB is on), with what your addons' catalogs
+  /// found merged in: their films and shows into TMDB's rows, other kinds (anime, channels…) in
+  /// rows of their own. A title both found comes once, as TMDB's.
+  Future<_Found> _load() async {
     final feed = HomeFeed.instance;
     final q = widget.query;
+    final tmdb = Addons.tmdbOn
+        ? (
+            feed.searchMedia(q, tv: false),
+            feed.searchMedia(q, tv: true),
+            feed.searchPeople(q),
+            // A studio lookup failing shouldn't sink the whole search.
+            feed.searchStudios(q).catchError((Object _) => <Studio>[]),
+          ).wait
+        : null;
+    final addons = MetaAddons.searchable ? MetaAddons.search(q) : Future.value(const <(String, Media)>[]);
+    var (movies, shows, people, studios) = (const <Media>[], const <Media>[], const <Person>[], const <Studio>[]);
+    Object? failed;
+    if (tmdb != null) {
+      try {
+        (movies, shows, people, studios) = await tmdb;
+      } catch (e) {
+        failed = e;
+      }
+    }
+    final found = await addons;
+    if (failed != null && found.isEmpty) throw failed;
+    if (found.isEmpty) return (movies, shows, people, studios, const <(String, List<Media>)>[]);
+
+    String norm(Media m) => '${m.title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')}|${m.year ?? ''}|${m.isTv}';
+    final keys = {for (final m in [...movies, ...shows]) m.key};
+    final same = {for (final m in [...movies, ...shows]) norm(m)};
+    final moreMovies = <Media>[], moreShows = <Media>[], others = <String, List<Media>>{};
+    for (final (kind, m) in found) {
+      if (!keys.add(m.key) || !same.add(norm(m))) continue;
+      switch (kind) {
+        case 'movie':
+          moreMovies.add(m);
+        case 'series':
+          moreShows.add(m);
+        default:
+          (others[MetaAddons.typeLabel(kind)] ??= []).add(m);
+      }
+    }
+    // TMDB's and the addons' in turn, best matches of each first: a row shows twenty, and
+    // what the addons found mustn't all fall past the end of TMDB's
+    List<Media> turns(List<Media> a, List<Media> b) => [
+      for (var i = 0; i < a.length || i < b.length; i++) ...[if (i < a.length) a[i], if (i < b.length) b[i]],
+    ];
     return (
-      feed.searchMedia(q, tv: false),
-      feed.searchMedia(q, tv: true),
-      feed.searchPeople(q),
-      // A studio lookup failing shouldn't sink the whole search.
-      feed.searchStudios(q).catchError((Object _) => <Studio>[]),
-    ).wait;
+      turns(movies, moreMovies),
+      turns(shows, moreShows),
+      people,
+      studios,
+      [for (final e in others.entries) (e.key, e.value)],
+    );
   }
 
   /// Most popular title among the closest matches from both catalogues.
-  Media? _topResult(List<Media> movies, List<Media> shows) {
+  Media? _topResult(List<Media> movies, List<Media> shows, [List<Media> others = const []]) {
     final q = widget.query.toLowerCase();
-    final pool = [...movies.take(6), ...shows.take(6)].where((m) => m.backdropPath != null).toList();
+    final pool = [...movies.take(6), ...shows.take(6), ...others.take(6)].where((m) => m.backdropPath != null).toList();
     if (pool.isEmpty) return null;
     int score(Media m) {
       final t = m.title.toLowerCase();
@@ -608,7 +744,7 @@ class _ResultsState extends State<_Results> {
       FormFactor.desktop => (MediaQuery.sizeOf(context).width * .1).clamp(140.0, 184.0),
     };
 
-    return FutureBuilder<(List<Media>, List<Media>, List<Person>, List<Studio>)>(
+    return FutureBuilder<_Found>(
       future: _all,
       builder: (context, snap) {
         if (snap.hasError) {
@@ -621,13 +757,21 @@ class _ResultsState extends State<_Results> {
         }
         if (!snap.hasData) return _ResultsSkeleton(posterW: posterW);
 
-        final (movies, shows, rawPeople, studios) = snap.data!;
+        // TMDB off, and none of your addons takes a search
+        if (!Addons.tmdbOn && !MetaAddons.searchable) {
+          return const _Empty(
+            icon: Icons.extension_outlined,
+            title: 'Nothing to search',
+            body: 'TMDB is off and none of your metadata addons can search. Turn one on in Settings > Addons.',
+          );
+        }
+        final (movies, shows, rawPeople, studios, others) = snap.data!;
         // TMDB lists every name-match; lead with recognisable faces.
         final people = [...rawPeople]..sort((a, b) {
             final photo = (b.photo != null ? 1 : 0) - (a.photo != null ? 1 : 0);
             return photo != 0 ? photo : b.popularity.compareTo(a.popularity);
           });
-        if (movies.isEmpty && shows.isEmpty && people.isEmpty && studios.isEmpty) {
+        if (movies.isEmpty && shows.isEmpty && people.isEmpty && studios.isEmpty && others.isEmpty) {
           return _Empty(
             icon: Icons.search_off_rounded,
             title: 'No results for "${widget.query}"',
@@ -635,7 +779,7 @@ class _ResultsState extends State<_Results> {
           );
         }
 
-        final top = _topResult(movies, shows);
+        final top = _topResult(movies, shows, [for (final o in others) ...o.$2]);
         List<Media> withPosters(List<Media> l) => l.where((m) => m.posterPath != null && m != top).toList();
         final q = widget.query;
 
@@ -663,6 +807,17 @@ class _ResultsState extends State<_Results> {
               itemHeight: posterW * 1.5 + 38,
               itemBuilder: (_, m, _) => _TitledPoster(media: m, heroTag: 'search/shows/${m.key}'),
             ),
+          // what your addons found that is neither a film nor a show: anime, channels…
+          for (final (kind, list) in others)
+            if (withPosters(list).isNotEmpty)
+              Shelf<Media>(
+                key: ValueKey('$kind/$q'),
+                title: kind,
+                load: () async => withPosters(list),
+                itemWidth: posterW,
+                itemHeight: posterW * 1.5 + 38,
+                itemBuilder: (_, m, _) => _TitledPoster(media: m, heroTag: 'search/$kind/${m.key}'),
+              ),
           if (people.isNotEmpty)
             Shelf<Person>(
               key: ValueKey('people/$q'),

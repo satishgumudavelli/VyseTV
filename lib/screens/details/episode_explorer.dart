@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../core/format.dart';
 import '../../core/layout.dart';
 import '../../core/theme.dart';
+import '../../data/catalog/meta_addons.dart';
 import '../../data/catalog/tmdb.dart';
 import '../../data/playback/watch_progress.dart';
 import '../../dpad/dpad_traversal.dart' show Dpad, DpadRail;
@@ -140,6 +141,15 @@ class _EpisodeExplorerState extends State<EpisodeExplorer> with SingleTickerProv
   /// One request per season, shared; a failed one is forgotten so reopening retries.
   Future<List<ExplorerEpisode>> _load(Season s) {
     final show = widget.show!;
+    // a title from a metadata addon: the episodes its details list (kept with them)
+    if (show.isAddon) {
+      return MetaAddons.meta(show)
+          .then((m) => [
+                for (final v in m.season(s.number))
+                  ExplorerEpisode(v.episode, v.name, v.overview, v.thumbnail, v.thumbnail, v.released, v.runtime, 0),
+              ])
+          .catchError((Object _) => const <ExplorerEpisode>[]);
+    }
     final key = '${show.id}/${s.number}';
     return _cache[key] ??= Tmdb.get('/tv/${show.id}/season/${s.number}')
         .then((json) => (json['episodes'] as List).cast<Map<String, dynamic>>().map(ExplorerEpisode.fromTmdb).toList())
@@ -610,10 +620,12 @@ class _Preview extends StatelessWidget {
         ),
         if (show != null && s != null) ...[
           const SizedBox(height: 18),
+          // (an episode listed for a later date can still be tried: the dates are sometimes
+          // wrong, two episodes come out together, and the sources may have it already)
           _PlayEpisode(
             focusNode: playNode,
-            label: e.upcoming ? 'Not out yet' : 'Play E${e.number}',
-            enabled: !e.upcoming,
+            label: e.upcoming ? 'Try E${e.number}' : 'Play E${e.number}',
+            enabled: true,
             onTap: () => openPlayer(
               context,
               show,
@@ -622,7 +634,7 @@ class _Preview extends StatelessWidget {
           ),
         ] else if (onPlay != null) ...[
           const SizedBox(height: 18),
-          _PlayEpisode(focusNode: playNode, label: e.upcoming ? 'Not out yet' : 'Play E${e.number}', enabled: !e.upcoming, onTap: () => onPlay!(e)),
+          _PlayEpisode(focusNode: playNode, label: e.upcoming ? 'Try E${e.number}' : 'Play E${e.number}', enabled: true, onTap: () => onPlay!(e)),
         ],
         // under Play, not beside it: Left and Right from Play change the episode
         if (onMark != null) ...[

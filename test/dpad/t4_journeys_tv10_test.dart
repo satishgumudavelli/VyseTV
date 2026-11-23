@@ -298,8 +298,11 @@ void main() {
       expect(opens(), 1, reason: 'nothing plays by itself before the end: the credits are the episode\'s too');
       await theEnd(t);
       expect(card()!.auto, isTrue, reason: 'the end: the countdown starts');
-      expect(find.textContaining('Playing in'), findsOneWidget);
-      await t.pump(const Duration(seconds: 4));
+      expect(find.text('Playing in 10'), findsOneWidget, reason: 'ten seconds to react (three was too quick)');
+      await t.pump(const Duration(seconds: 5));
+      expect(opens(), 1, reason: 'still waiting halfway');
+      expect(find.text('Playing in 5'), findsOneWidget);
+      await t.pump(const Duration(seconds: 5));
       await Bed.settle(t, rounds: 4);
       expect(opens(), 2, reason: 'and the next episode plays');
       await Bed.closePlayer(t);
@@ -313,7 +316,7 @@ void main() {
       expect(card(), isNull);
       await theEnd(t);
       expect(card()?.auto, isTrue);
-      await t.pump(const Duration(seconds: 4));
+      await t.pump(const Duration(seconds: 10));
       await Bed.settle(t, rounds: 4);
       expect(opens(), 2);
       await Bed.closePlayer(t);

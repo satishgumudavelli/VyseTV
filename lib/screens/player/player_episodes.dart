@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/anime/anilist.dart';
+import '../../data/catalog/meta_addons.dart';
 import '../../data/catalog/tmdb.dart';
 import '../../data/playback/watch_progress.dart';
 import '../../widgets/common.dart';
@@ -55,6 +56,10 @@ class EpisodeStore {
 
   Future<List<EpisodeInfo>> season(int n) => _seasons.putIfAbsent(n, () async {
     try {
+      // a title from a metadata addon: the episodes its details list
+      if (show.isAddon) {
+        return [for (final v in (await MetaAddons.meta(show)).season(n)) EpisodeInfo(n, v.episode, v.name, v.overview, v.thumbnail, v.runtime, v.released)];
+      }
       final j = await Tmdb.get('/tv/${show.id}/season/$n');
       return [for (final e in (j['episodes'] as List? ?? const [])) EpisodeInfo.fromJson(n, e as Map<String, dynamic>)];
     } catch (_) {
@@ -287,7 +292,8 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
               playing: playing,
               start: identical(e, start),
               entry: identical(e, into),
-              onTap: e.upcoming ? null : () => widget.onPick(e),
+              // (listed for a later date: still yours to try)
+              onTap: () => widget.onPick(e),
               seen: _seen(e),
               onMark: e.upcoming ? null : () => _mark(e),
             );
@@ -410,7 +416,7 @@ class _EpisodesPanelState extends State<EpisodesPanel> {
                                   short: short,
                                   playing: e.season == widget.current.season && e.number == widget.current.number,
                                   start: identical(e, start),
-                                  onTap: e.upcoming ? null : () => widget.onPick(e),
+                                  onTap: () => widget.onPick(e),
                                   seen: _seen(e),
                                   onMark: e.upcoming ? null : () => _mark(e),
                                 ),
@@ -622,6 +628,10 @@ class _EpisodeRow extends StatelessWidget {
 
 // ───────────────────────── Up next ─────────────────────────
 
+/// How long Up next waits at the end of an episode, with Auto next on, before the next one plays
+/// by itself (the card, and the small window's pill). Three seconds was too quick to react to.
+const upNextWait = Duration(seconds: 10);
+
 /// "Up next" card. With autoplay on, a light runs round its edge for [countdown] and then the
 /// next episode starts; clicking plays it now, × dismisses it. With autoplay off it just waits.
 class UpNextCard extends StatefulWidget {
@@ -632,7 +642,7 @@ class UpNextCard extends StatefulWidget {
     required this.onPlay,
     required this.onDismiss,
     this.compact = false,
-    this.countdown = const Duration(seconds: 3),
+    this.countdown = upNextWait,
   });
   final EpisodeInfo episode;
   final bool auto;

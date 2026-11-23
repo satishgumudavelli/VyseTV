@@ -347,6 +347,8 @@ class TrackerHub {
   }
 
   static void _listChanged(Media m, bool added) {
+    // (a title from a metadata addon that isn't matched to TMDB: the services wouldn't know it)
+    if (!m.tmdbKnown) return;
     var queued = false;
     for (final id in _scrobblers) {
       if (!_live(id) || !_listEnabled(id)) continue;
@@ -360,6 +362,7 @@ class TrackerHub {
 
   /// A title removed from History here (call after removing it). Only with that switch on.
   static void historyRemoved(Media m) {
+    if (!m.tmdbKnown) return;
     var queued = false;
     for (final id in _scrobblers) {
       if (!_live(id) || !_historyEnabled(id)) continue;

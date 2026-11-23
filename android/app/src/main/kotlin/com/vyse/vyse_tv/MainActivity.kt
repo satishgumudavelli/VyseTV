@@ -266,6 +266,8 @@ class MainActivity : FlutterActivity() {
     flutterEngine.plugins.add(MpvAudioPlayerPlugin())
     // VyseTV: second audio-only core so audiobooks keep their own track next to music
     flutterEngine.plugins.add(MpvAudio2PlayerPlugin())
+    // VyseTV: a third that plays nothing out loud: it decodes a video's sound for subtitle sync
+    flutterEngine.plugins.add(MpvAudioListenerPlugin())
     externalPlayerChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
 
     // Upstream's device signals: lib/core/platform/device_performance.dart picks the lighter
@@ -485,6 +487,9 @@ class MainActivity : FlutterActivity() {
 
   /** Audiobooks' own mpv audio core (upstream ships one; VyseTV needs two). */
   class MpvAudio2PlayerPlugin : MpvPlayerPlugin(channelBase = "vyse/mpv_audio_player_2", audioOnly = true)
+
+  /** Decodes stretches of a video's sound to a file (ao=pcm) for subtitle sync by ear. */
+  class MpvAudioListenerPlugin : MpvPlayerPlugin(channelBase = "vyse/mpv_audio_listener", audioOnly = true)
 
   private companion object {
     const val TAG = "VyseMainActivity"

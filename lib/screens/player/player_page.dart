@@ -43,9 +43,14 @@ import '../../mpv/mpv.dart' as pz;
 import '../../data/playback/watch_progress.dart';
 import '../../data/trackers/media_ref.dart';
 import '../../data/trackers/tracker_hub.dart';
+import '../../data/subtitles/auto_sync.dart';
+import '../../data/subtitles/mkv_subtitle_index.dart';
+import '../../data/subtitles/sound_listener.dart';
+import '../../data/subtitles/sound_sync.dart';
 import '../../data/subtitles/subtitle_style.dart';
 import '../../data/subtitles/subtitle_match.dart';
 import '../../data/subtitles/subtitles.dart' as sub;
+import '../../data/catalog/meta_addons.dart';
 import '../../data/catalog/tmdb.dart' hide Video;
 import '../../widgets/common.dart';
 import '../../widgets/dialogs/debrid_consent.dart';
@@ -96,6 +101,30 @@ Future<void> openPlayer(BuildContext context, Media media, {PlayerEpisode? episo
     }
     if (!context.mounted) return;
     return openAnimePlayer(context, a, episode: episode?.number ?? 1);
+  }
+  // A collection from a metadata addon (TMDB Collections and the like): its first film not
+  // watched to the end plays, as the film it is.
+  if (media.isAddon && episode == null) {
+    final part = await MetaAddons.partToPlay(media, (p) => WatchProgress.find(p)?.finished ?? false);
+    if (!context.mounted) return;
+    if (part != null) media = part;
+  }
+  // A title from a metadata addon, with Streaming mode on: VyseTV's sources play it as its TMDB
+  // match. One that can't be matched plays from your addons' sources, and says so.
+  if (media.isAddon && !media.tmdbKnown && AppSettings.streamingMode.value) {
+    Media? twin;
+    var unreachable = false;
+    try {
+      twin = await MetaAddons.twin(media);
+    } catch (_) {
+      unreachable = true;
+    }
+    if (!context.mounted) return;
+    if (twin == null || !twin.tmdbKnown) {
+      final why = unreachable ? "Couldn't reach TMDB to find ${media.title}" : "${media.title} isn't on TMDB";
+      return openSources(context, media, episode: episode, runtime: runtime, notice: '$why, so it plays from your addons');
+    }
+    media = twin;
   }
   // your room (streaming mode off: once you've picked a source for it)
   if (Rooms.mine.value?.iOwn == true && AppSettings.streamingMode.value) {
@@ -175,6 +204,11 @@ String _speedLabel(double s) => s == 1 ? 'Normal' : '${s == s.roundToDouble() ? 
 /// Media3 unless Settings says mpv: PlayerEngine). Shows controls, subtitle sync, episodes.
 /// controls and the settings panel. Esc leaves, S opens settings, C subtitles, F full screen.
 class PlayerPage extends StatefulWidget {
+  /// Tests: a phone's or a tablet's touch screen (double tap to skip, hold for 2x, swipes),
+  /// whatever the computer running them is.
+  @visibleForTesting
+  static bool? debugTouch;
+
   const PlayerPage({
     super.key,
     required this.media,
@@ -377,11 +411,24 @@ class _PlayerView extends StatefulWidget {
   State<_PlayerView> createState() => _PlayerPageState();
 }
 
-class _PlayerPageState extends State<_PlayerView> {
+class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
+  /// Android stopped the app (Home, another app, the TV going to sleep) with the video playing:
+  /// it pauses, whichever engine plays it. (Media3 played on, sound and all, behind the home
+  /// screen.) Not in picture-in-picture, where the app is only paused, and not in a watch
+  /// party, where a pause would be everyone's.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.paused || defaultTargetPlatform != TargetPlatform.android) return;
+    if (pz.Pip.active.value || widget.party || widget.embedded || !_playing) return;
+    unawaited(_player.pause());
+  }
+
   late final Future<String?> _logo = widget.server != null
       ? Future.value(widget.server!.logo)
       : widget.anime != null
       ? Future.value()
+      : widget.media.isAddon
+      ? HomeFeed.instance.logo(widget.media)
       : Tmdb.logo(widget.media).catchError((Object _) => null);
   late PlayerEpisode? _ep = widget.episode;
   late final EpisodeStore? _store = widget.server != null
@@ -531,7 +578,8 @@ class _PlayerPageState extends State<_PlayerView> {
   }
 
   // ── touch: lock and swipe gestures ──
-  static final _touch = !kIsWeb && (Platform.isAndroid || Platform.isIOS) && !PlatformDetector.isTV(); // (a TV has no touchscreen)
+  static final _deviceTouch = !kIsWeb && (Platform.isAndroid || Platform.isIOS) && !PlatformDetector.isTV(); // (a TV has no touchscreen)
+  static bool get _touch => PlayerPage.debugTouch ?? _deviceTouch;
   bool _locked = false; // UI hidden, touches ignored
   bool _lockHint = false; // unlock button, shown for a moment after a tap while locked
   Timer? _lockTimer;
@@ -584,6 +632,24 @@ class _PlayerPageState extends State<_PlayerView> {
   List<pz.AudioTrack> _audioTracks = const [];
   pz.AudioTrack? _audioNow;
   List<SyncCue> _cues = const []; // lines of the subtitle in use, for the sync panel
+  // ── automatic subtitle sync (data/subtitles/auto_sync.dart): the downloaded file in use is
+  // timed by the video's own subtitles, read from the video file's index, or heard as the film
+  // plays (mpv keeps the video's own track on, hidden, as its second subtitle) ──
+  List<Span>? _syncFile; // the file being timed; null when nothing is
+  int _syncRun = 0; // the newest attempt: an older one that answers late is dropped
+  SyncMap? _syncMap; // where the file's lines belong, followed as the film plays
+  bool _syncSaid = false; // the "synced" note was shown for this file
+  String? _indexFor; // the video whose index was read for this file
+  AutoSync? _autoSync; // listening by ear, for the file in use; null when not
+  String? _autoSyncSid; // the video's own track it listens to (mpv's number for it)
+  String? _autoSyncUrl; // the video it listens on: another one starts it over
+  int _autoSyncLooked = 0; // lines heard at the last look
+  bool _autoSyncBusy = false; // a look is under way
+  DateTime _syncReported = DateTime(0); // when a party last heard of a change
+  double? _autoOffset; // the delay it set last (the next file may be timed too); null once you set one
+  pz.Media? _lastOpened; // what the player opened last (the sound is heard from it)
+  String? _earFor; // the video listened to by ear for this file
+  final _ear = SoundListener(); // hears stretches of its sound (sound_listener.dart)
   String _subtitle = AppSettings.autoSubtitles.value ? AppSettings.subtitleLanguage.value : 'Off';
   double _speed = 1;
   double _volume = playersHaveVolume ? 80 : 100; // (on a TV the remote sets the volume)
@@ -613,6 +679,7 @@ class _PlayerPageState extends State<_PlayerView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _picture.attach();
     SubLog.line('==== player opened: ${widget.media.title}${widget.media.isTv ? ' (show)' : ''}');
     if (SubLog.enabled) unawaited(_player.setLogLevel('info').catchError((Object _) {}));
@@ -660,6 +727,9 @@ class _PlayerPageState extends State<_PlayerView> {
           _seekTarget = null;
           _position.value = p; // land the bar right away
         }
+        final secs = p.inMilliseconds / 1000;
+        _autoSync?.position(secs);
+        _applySyncMap(secs);
         if (_veil && !_buffering && mounted) setState(() => _veil = false);
         // mpv reports the position every frame; the bar only needs a few updates a second,
         // and each update rebuilds it
@@ -699,6 +769,7 @@ class _PlayerPageState extends State<_PlayerView> {
       ..add(_player.streams.playbackRestart.listen((_) => _reportFirstFrame()))
       ..add(_player.streams.fileLoaded.listen((_) => unawaited(_applyShape(fresh: true))))
       ..add(_player.streams.error.listen((e) => _editReport((r) => r.withFailure(e.message))))
+      ..add(_player.secondaryLines.listen(_autoSyncHeard))
       ;
     if (_media3) {
       _subs
@@ -737,6 +808,7 @@ class _PlayerPageState extends State<_PlayerView> {
     for (final setting in _pictureSettings) {
       setting.addListener(_pictureChanged);
     }
+    AppSettings.autoSyncSubtitles.addListener(_autoSyncSetting);
     pz.Pip.active.addListener(_pipChanged);
     pz.Pip.isSupported().then((ok) {
       if (mounted && ok && !widget.embedded) setState(() => _pipOk = true);
@@ -748,7 +820,7 @@ class _PlayerPageState extends State<_PlayerView> {
     // start the player where the volume control says it is
     unawaited(_player.setVolume(_volume));
     if (_touch) {
-      ScreenBrightness.instance.application.then((b) => _brightness = b, onError: (Object _) {});
+      ScreenBrightness.instance.application.then<void>((b) => _brightness = b, onError: (Object _) {});
     }
     _loadAndPlay();
     // Opened from a plain Play button: fill in the episode's name and length.
@@ -790,6 +862,7 @@ class _PlayerPageState extends State<_PlayerView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _subCheckTimer?.cancel();
     _syncTimer?.cancel();
     SubLog.line('==== player closed');
@@ -805,11 +878,14 @@ class _PlayerPageState extends State<_PlayerView> {
     for (final setting in _pictureSettings) {
       setting.removeListener(_pictureChanged);
     }
+    AppSettings.autoSyncSubtitles.removeListener(_autoSyncSetting);
     pz.Pip.active.removeListener(_pipChanged);
     if (_pipOk) unawaited(pz.Pip.setAutoReady(false));
     // the desktop mini player is the app window itself: give it back its size
     if (pz.Pip.active.value) unawaited(pz.Pip.exit());
     _sleepTimer?.cancel();
+    _tapSkipTimer?.cancel();
+    _ear.stop();
     unawaited(_display.restore());
     _scanTimer?.cancel();
     _saveProgress();
@@ -1078,6 +1154,7 @@ class _PlayerPageState extends State<_PlayerView> {
   /// Opens [m]. Media3 takes the subtitle file in use along with the video (mpv was told in
   /// [_prepOpen]), and puts it on.
   Future<void> _open(pz.Media m, {bool play = true}) async {
+    _lastOpened = m;
     if (!_media3) return _player.open(m, play: play);
     final path = _subPath;
     await _player.open(m, play: play, externalSubtitles: path == null ? null : [_subFile(path)]);
@@ -1576,9 +1653,15 @@ class _PlayerPageState extends State<_PlayerView> {
     // carrying on with this film or episode: the subtitle and timing you had beat Settings
     final sameEp = saved != null && saved.season == ep?.season && saved.episode == ep?.number;
     _restoreSub = sameEp && !_follower ? saved.subtitle : null;
-    if (_restoreSub != null && _restoreSub!['off'] != true) _subOffset = saved!.subDelay;
+    _autoOffset = null;
+    if (_restoreSub != null && _restoreSub!['off'] != true) {
+      _subOffset = saved!.subDelay;
+      // timed by the automatic sync, not by you: it may be timed again (another source, a later spot)
+      if (_restoreSub!['autoSync'] == true) _autoOffset = _subOffset;
+    }
     _player.stop();
     _subPath = null;
+    _autoSyncStop();
     setState(() {
       _loadingSources = true;
       _started = false;
@@ -1616,9 +1699,20 @@ class _PlayerPageState extends State<_PlayerView> {
     // the host shared a source but is still finding this episode's: wait for it
     if (_follower && WatchParty.state.value?.source != null) return;
     if (widget.anime != null) return _loadAnime(id);
+    // A title from a metadata addon plays from the film sources as its TMDB match, with its
+    // episodes where TMDB counts them. One that isn't matched has nothing for them to find.
+    if (!widget.media.tmdbKnown) {
+      setState(() {
+        _loadingSources = false;
+        _error = "${widget.media.title} isn't on TMDB, so VyseTV's sources can't find it. Turn off Streaming mode to play it from your addons.";
+      });
+      return;
+    }
+    final (fs, fe) = await MetaAddons.tmdbEpisode(widget.media, ep?.season, ep?.number);
+    if (!mounted || id != _loadId) return;
     final subs = _filmSubtitles(ep);
     if (!widget.media.isTv || ep != null) {
-      fetchSegments(tmdbId: widget.media.id, season: ep?.season, episode: ep?.number).then((s) {
+      fetchSegments(tmdbId: widget.media.id, season: fs, episode: fe).then((s) {
         if (mounted && id == _loadId) setState(() => _segments = s);
       });
     }
@@ -1630,8 +1724,8 @@ class _PlayerPageState extends State<_PlayerView> {
     final session = _session = FilmSession(
       tmdbId: widget.media.id,
       isTv: widget.media.isTv,
-      season: ep?.season,
-      episode: ep?.number,
+      season: fs,
+      episode: fe,
       order: _hostOrder ? theirs : activeFilmSources(),
       onChange: () {
         if (mounted && id == _loadId) setState(() {});
@@ -1711,7 +1805,7 @@ class _PlayerPageState extends State<_PlayerView> {
     // this device's own subtitle list, asked for now rather than once the video is open (the
     // host's subtitle is looked up in it: their links to some files only work for them)
     final subs = widget.anime == null ? _filmSubtitles(ep) : null;
-    if (widget.anime == null && (!widget.media.isTv || ep != null)) {
+    if (widget.anime == null && widget.media.tmdbKnown && !widget.media.isAddon && (!widget.media.isTv || ep != null)) {
       fetchSegments(tmdbId: widget.media.id, season: ep?.season, episode: ep?.number).then((s) {
         if (mounted && id == _loadId) setState(() => _segments = s);
       });
@@ -1815,21 +1909,33 @@ class _PlayerPageState extends State<_PlayerView> {
 
   // ── a source picked from your addons ──
 
-  /// Your subtitle addons' files for the episode now playing (none when you have none).
+  /// Your subtitle addons' files for the episode now playing (none when you have none), and
+  /// those of the stream picked from your addons (its own, and the addons asked with its file's
+  /// name and size, as Stremio asks).
   Future<List<sub.SubtitleTrack>> _addonSubtitles(PlayerEpisode? ep) async {
-    if (Addons.subtitleAddons.isEmpty) return const [];
+    final picked = _pick?.stream;
+    final own = picked?.subtitles ?? const <sub.SubtitleTrack>[];
+    if (Addons.subtitleAddons.isEmpty) return own;
     try {
       final t = await Addons.target(widget.media, season: ep?.season, episode: ep?.number, anime: widget.anime?.anime);
-      return await Addons.subtitles(t);
+      return [...own, ...await Addons.subtitles(t, filename: picked?.filename, size: picked?.sizeBytes)];
     } catch (_) {
-      return const [];
+      return own;
     }
   }
 
-  /// Films and shows: the usual subtitle sites plus your subtitle addons.
+  /// Films and shows: the usual subtitle sites plus your subtitle addons. (A title from a
+  /// metadata addon: the sites only once it is matched to TMDB, with its episode where TMDB
+  /// counts it.)
   Future<List<sub.SubtitleTrack>> _filmSubtitles(PlayerEpisode? ep) async {
+    Future<List<sub.SubtitleTrack>> sites() async {
+      if (!widget.media.tmdbKnown) return const [];
+      final (s, e) = await MetaAddons.tmdbEpisode(widget.media, ep?.season, ep?.number);
+      return sub.fetchSubtitles(widget.media, season: s, episode: e);
+    }
+
     final l = await Future.wait([
-      sub.fetchSubtitles(widget.media, season: ep?.season, episode: ep?.number).catchError((Object _) => <sub.SubtitleTrack>[]),
+      sites().catchError((Object _) => <sub.SubtitleTrack>[]),
       _addonSubtitles(ep),
     ]);
     return [...l[0], ...l[1]];
@@ -1938,6 +2044,7 @@ class _PlayerPageState extends State<_PlayerView> {
       }
     }
     _pickBuiltIn(id);
+    unawaited(_autoSyncArm());
   }
 
   /// The badges for what's on screen: the addon stream's, or the picture size on our own servers.
@@ -2229,7 +2336,7 @@ class _PlayerPageState extends State<_PlayerView> {
     } else {
       src = Addons.sourceOf(pick);
     }
-    if (widget.anime == null && (!widget.media.isTv || ep != null)) {
+    if (widget.anime == null && widget.media.tmdbKnown && !widget.media.isAddon && (!widget.media.isTv || ep != null)) {
       fetchSegments(tmdbId: widget.media.id, season: ep?.season, episode: ep?.number).then((s) {
         if (mounted && id == _loadId) setState(() => _segments = s);
       });
@@ -2562,6 +2669,8 @@ class _PlayerPageState extends State<_PlayerView> {
         'url': t.url,
         'format': t.format,
         if (t.translated) 'translated': true,
+        // the timing is the automatic sync's, not yours (see _loadAndPlay)
+        if (_autoOffset != null && _autoOffset == _subOffset) 'autoSync': true,
       };
     }
     return _subsChosen ? const {'off': true} : null;
@@ -2627,6 +2736,7 @@ class _PlayerPageState extends State<_PlayerView> {
       // a track inside the video file: the player already has it
       final sid = track.url.substring(8);
       _subPath = null;
+      _autoSyncStop(); // (in time already; and it may be the one listened to)
       try {
         if (_media3) {
           final t = _player.state.tracks.subtitle.where((x) => x.id == sid).firstOrNull;
@@ -2646,6 +2756,7 @@ class _PlayerPageState extends State<_PlayerView> {
     }
     if (track == null) {
       _subPath = null;
+      _autoSyncStop();
       if (!_media3) await _player.command(['change-list', 'sub-files', 'clr', '']);
       await _player.selectSubtitleTrack(pz.SubtitleTrack.off);
       if (mounted) setState(() { _activeSubTrack = null; _subtitle = 'Off'; _cues = const []; });
@@ -2683,6 +2794,7 @@ class _PlayerPageState extends State<_PlayerView> {
         await _dropOtherSubs(path);
       }
       if (mounted) setState(() { _activeSubTrack = track; _subtitle = track.language; _cues = cues; });
+      _autoSyncStart();
       _warnIfShort(cues);
       _partyReport();
       unawaited(_checkSubs('after pick'));
@@ -2847,6 +2959,261 @@ class _PlayerPageState extends State<_PlayerView> {
       context,
       Text('These subtitles stop at ${clock(end)} of ${clock(total)}. They are probably for another video; try another.', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
       icon: Icons.warning_amber_rounded,
+    );
+  }
+
+  // ── automatic subtitle sync ──
+
+  /// Starts timing the downloaded file just put on by the video's own subtitles: from the video
+  /// file's index when it keeps one (whatever the engine), and on mpv also as it plays, with the
+  /// video's own track on, hidden; with none of its own, by the speech in its sound (whatever
+  /// the engine). Not when it is off in Settings, for a party guest on the
+  /// host's subtitles (the host's timing comes with them), or when the timing is yours: set by
+  /// hand, or remembered that way.
+  void _autoSyncStart() {
+    _autoSyncStop();
+    if (!AppSettings.autoSyncSubtitles.value || (_follower && !_ownSubs) || _subPath == null || _cues.isEmpty) return;
+    if (_subOffset != 0 && _subOffset != _autoOffset) return;
+    final file = _syncFile = [for (final c in _cues) (c.start, c.end)];
+    _syncSaid = false;
+    if (!_media3) {
+      _autoSync = AutoSync(file);
+      _autoSyncUrl = _playUrl;
+      _autoSyncLooked = 0;
+    }
+    unawaited(_autoSyncArm());
+  }
+
+  /// The video's own text subtitle to time a file by: a full one (not only the forced lines),
+  /// plain before styled (ASS signs and songs blur the timing), without sound descriptions when
+  /// there is a choice, in the file's language first, then English.
+  sub.SubtitleTrack? _autoSyncRef() {
+    final want = _activeSubTrack?.lang;
+    int rank(sub.SubtitleTrack t) =>
+        (t.format == 'ass' ? 8 : 0) + (RegExp(r'\b(SDH|CC)\b').hasMatch(t.release) ? 4 : 0) + (t.lang == want ? 0 : (t.lang == 'en' ? 1 : 2));
+    sub.SubtitleTrack? best;
+    for (final t in _builtIn) {
+      if (!t.url.startsWith('mpv-sid:') || t.release.contains('Forced')) continue;
+      if (best == null || rank(t) < rank(best)) best = t;
+    }
+    return best;
+  }
+
+  /// Looks for the video's own subtitles, again after each open: in the file's index (once for
+  /// each video), and on mpv as it plays, with the video's own track as its hidden second subtitle
+  /// (every open starts with none). Another video (a source or server switch) starts over.
+  Future<void> _autoSyncArm() async {
+    final file = _syncFile;
+    if (file == null) return;
+    final src = _source < _sources.length ? _sources[_source] : null;
+    if (src != null && !src.hls && _playUrl.isNotEmpty && _indexFor != _playUrl) {
+      _indexFor = _playUrl;
+      unawaited(_autoSyncFromIndex(_syncRun, _playUrl, src.headers, file));
+    }
+    // a website's stream keeps no index (and rarely subtitles of its own): by ear
+    if (src != null && src.hls) unawaited(_autoSyncByEar());
+    if (_autoSync == null || _media3) return;
+    final ref = _autoSyncRef();
+    if (ref == null) return; // nothing of the video's own to go by (yet)
+    if (_autoSyncUrl != _playUrl) {
+      _autoSync = AutoSync(file);
+      _autoSyncUrl = _playUrl;
+      _autoSyncLooked = 0;
+    }
+    final sid = ref.url.substring('mpv-sid:'.length);
+    if (sid == _autoSyncSid && _player.state.track.secondarySubtitle?.id == sid) return;
+    _autoSyncSid = sid;
+    SubLog.line('AUTO-SYNC listening to built-in #$sid (${ref.language}${ref.release.isEmpty ? '' : ' · ${ref.release}'}, ${ref.format})');
+    try {
+      await _player.setProperty('secondary-sub-visibility', 'no'); // first: it never shows
+      await _player.setProperty('secondary-sub-delay', '0');
+      if (_autoSyncSid != sid) return; // stopped meanwhile (another subtitle, your own timing)
+      await _player.setProperty('secondary-sid', sid);
+    } catch (e) {
+      SubLog.line('  AUTO-SYNC could not put it on: $e');
+    }
+  }
+
+  /// The video's own subtitles from the file's index: the whole film at once. A fit is followed
+  /// from then on, and the hidden track is taken off (there is nothing more to learn). With no
+  /// index, by ear.
+  Future<void> _autoSyncFromIndex(int run, String url, Map<String, String> headers, List<Span> file) async {
+    final tracks = await MkvSubtitleIndex.read(url, headers: headers);
+    if (run != _syncRun || !mounted) return;
+    // a full text track (not only the forced lines), plain before styled (ASS signs and songs
+    // blur the timing), without sound descriptions when there is a choice, in the file's
+    // language first, then English
+    final want = (_activeSubTrack?.lang ?? '').toLowerCase();
+    bool same(String a, String b) => a.length >= 2 && b.length >= 2 && a.substring(0, 2) == b.substring(0, 2);
+    int rank(MkvSubtitleTrack t) =>
+        (t.codec.contains('ASS') || t.codec.contains('SSA') ? 8 : 0) +
+        (t.hearingImpaired || RegExp(r'\b(SDH|CC)\b').hasMatch(t.name) ? 4 : 0) +
+        (same(t.lang.toLowerCase(), want) ? 0 : (t.lang.toLowerCase().startsWith('en') ? 1 : 2));
+    MkvSubtitleTrack? ref;
+    for (final t in tracks ?? const <MkvSubtitleTrack>[]) {
+      if (!t.text || t.forced || t.lines.length < 50) continue;
+      if (ref == null || rank(t) < rank(ref)) ref = t;
+    }
+    if (ref == null) {
+      SubLog.line('AUTO-SYNC no index of the video\'s own subtitles${tracks == null ? '' : ' (${tracks.length} subtitle tracks indexed)'}');
+      return _autoSyncByEar();
+    }
+    final end = math.max(ref.lines.last.$2, _duration.value.inMilliseconds / 1000);
+    final v = await fitInBackground(ref.lines, file, [(0, end + 1)], whole: true);
+    if (run != _syncRun || !mounted) return;
+    SubLog.line('AUTO-SYNC from the index ($ref): ${v.kind.name}: ${v.why}');
+    if (v.kind != AutoSyncKind.fits) return; // (mpv may still hear something as it plays)
+    _stopListening();
+    _follow(v.map!);
+  }
+
+  /// Takes the video's own track off mpv's second subtitle.
+  void _stopListening() {
+    _autoSync = null;
+    final sid = _autoSyncSid;
+    _autoSyncSid = null;
+    if (sid != null && !_media3) unawaited(_player.setProperty('secondary-sid', 'no').catchError((Object _) {}));
+  }
+
+  /// "Sync automatically" turned off or on while you watch (in the subtitle menu, or Settings):
+  /// off stops it and undoes a timing it set; on lines the file up now, even over a timing of
+  /// your own (you asked it to).
+  void _autoSyncSetting() {
+    if (!mounted) return;
+    if (AppSettings.autoSyncSubtitles.value) {
+      if (_syncFile == null && _subPath != null && !(_follower && !_ownSubs)) {
+        _autoOffset = _subOffset;
+        _autoSyncStart();
+      }
+    } else {
+      final its = _autoOffset != null && (_subOffset - _autoOffset!).abs() < .01;
+      _autoSyncStop();
+      _autoOffset = null;
+      if (its && _subOffset != 0) {
+        _subOffset = 0;
+        _applySubDelay();
+        if (widget.party) _partyReport();
+      }
+    }
+    setState(() {});
+  }
+
+  /// What "Sync automatically" is doing for this video, under it in the subtitle menu.
+  String get _autoSyncNote {
+    final on = AppSettings.autoSyncSubtitles.value;
+    if (on && _syncMap != null) return 'Synced to the video';
+    if (on && _follower && !_ownSubs) return "The host's timing is used";
+    if (on && _subPath != null && _subOffset != 0 && _subOffset != _autoOffset) return 'Your own timing comes first';
+    return 'Lines them up with the video';
+  }
+
+  void _autoSyncStop() {
+    _syncRun++;
+    _syncFile = null;
+    _syncMap = null;
+    _indexFor = null;
+    _ear.stop();
+    _earFor = null;
+    _stopListening();
+  }
+
+  /// The file timed by the film's speech (sound_sync.dart), for a video with nothing of its own
+  /// to go by: no index, and on mpv no text subtitles to follow as it plays. Once the film is
+  /// playing, two stretches of its sound, where the file has dialogue, are decoded ahead by
+  /// mpv's listener core (nothing is played out loud) and heard for speech; then two more if
+  /// that wasn't clear. Only a clear fit is followed. Not for a torrent: the stretches would
+  /// come from its peers, taking from the film's own download.
+  Future<void> _autoSyncByEar() async {
+    final media = _lastOpened;
+    if (_syncFile == null || media == null || _earFor == media.uri || _syncMap != null) return;
+    _earFor = media.uri;
+    final run = _syncRun;
+    // the film playing, its length and tracks known (and not competing with its start)
+    for (var i = 0; i < 90 && (!_started || _duration.value <= Duration.zero || _reopening); i++) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (run != _syncRun || !mounted) return;
+    }
+    if (!_started || _syncMap != null || _torrent != null) return;
+    if (!_media3 && _autoSyncRef() != null) return; // its own subtitles, followed as it plays
+    final lines = spokenLines([for (final c in _cues) (c.start, c.end, c.text)]);
+    final offset = _offset; // (a stream opened part way along counts its time from there)
+    final spots = listenAt(lines, _duration.value.inMilliseconds / 1000, _position.value.inMilliseconds / 1000);
+    SubLog.line('AUTO-SYNC by ear: listening at ${spots.map((s) => '${s.round()}s').join(', ')}');
+    final heard = <Heard>[];
+    try {
+      for (var k = 0; k < spots.length; k++) {
+        final h = await _ear.hear(media.uri, media.headers ?? const {}, spots[k] - offset);
+        if (run != _syncRun || !mounted || _syncMap != null) return;
+        SubLog.line('  heard ${spots[k].round()}s: ${h == null ? 'nothing' : '${(h.speech.where((x) => x == 1).length / h.speech.length * 100).round()}% speech'}');
+        if (h != null) heard.add(Heard(spots[k], h.speech));
+        if (heard.length < 2 || (k != 1 && k != spots.length - 1)) continue;
+        final v = await fitToSpeechInBackground(heard, lines);
+        if (run != _syncRun || !mounted) return;
+        SubLog.line('AUTO-SYNC by ear: ${v.kind.name}: ${v.why}');
+        if (v.kind == AutoSyncKind.fits) return _follow(v.map!);
+      }
+    } finally {
+      if (run == _syncRun && mounted) _ear.stop(); // nothing more to hear
+    }
+  }
+
+  /// A line of the video's own track, as it shows (hidden). Every 8 lines once there are enough
+  /// (every 40 after a couple of hundred), a look at where the file fits, away from the screen's
+  /// thread. A fit is followed, and the listening goes on, so a part further on that needs
+  /// another shift is found too. Only a clear answer changes anything.
+  void _autoSyncHeard((double, double) line) {
+    final a = _autoSync;
+    if (a == null || _reopening) return;
+    if (!AppSettings.autoSyncSubtitles.value) return _autoSyncStop();
+    a.line(line.$1 + _offset, line.$2 + _offset);
+    final every = a.lineCount < AutoSync.maxLines ? 8 : 40;
+    if (_autoSyncBusy || a.lineCount < minLines || a.lineCount - _autoSyncLooked < every) return;
+    _autoSyncLooked = a.lineCount;
+    _autoSyncBusy = true;
+    final run = _syncRun, heard = a.lineCount;
+    fitInBackground(a.heard, a.file, a.played).then((v) {
+      _autoSyncBusy = false;
+      if (run != _syncRun || !mounted || _autoSync != a) return;
+      SubLog.line('AUTO-SYNC as it plays: ${v.kind.name}: ${v.why}');
+      if (v.kind == AutoSyncKind.fits) return _follow(v.map!);
+      // nothing clear after a couple of hundred lines, and nothing found before: let it go
+      if (heard >= AutoSync.maxLines && _syncMap == null) _stopListening();
+    }, onError: (Object e) {
+      _autoSyncBusy = false;
+      SubLog.line('AUTO-SYNC failed: $e');
+    });
+  }
+
+  /// Follows [m] from now on: the file's delay is kept to it as the film plays.
+  void _follow(SyncMap m) {
+    _syncMap = m;
+    _applySyncMap(_position.value.inMilliseconds / 1000);
+  }
+
+  /// The file's delay for this moment of the film [t], by the map being followed. The first
+  /// change says so; the ones after (a file that slides, a part with another shift) are quiet.
+  void _applySyncMap(double t) {
+    final m = _syncMap;
+    if (m == null || !mounted) return;
+    final d = (m.delayAt(t) * 100).round() / 100;
+    if ((d - _subOffset).abs() < .05) return;
+    _autoOffset = d;
+    setState(() => _subOffset = d);
+    _applySubDelay();
+    // (a party's guests on the host's subtitles follow the host's delay)
+    if (widget.party && DateTime.now().difference(_syncReported) > const Duration(seconds: 5)) {
+      _syncReported = DateTime.now();
+      _partyReport();
+    }
+    if (_syncSaid) return;
+    _syncSaid = true;
+    showToast(
+      context,
+      Text(
+        m.simple ? 'Subtitles synced to the video (${d >= 0 ? '+' : '−'}${d.abs().toStringAsFixed(1)}s)' : 'Subtitles synced to the video, all the way through',
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      icon: Icons.subtitles_rounded,
     );
   }
 
@@ -3735,6 +4102,81 @@ class _PlayerPageState extends State<_PlayerView> {
     return hit;
   }
 
+  // ── a phone or a tablet: double-tap a side to skip, hold for 2x ──
+  int _tapSkip = 0; // the side being skipped by taps: -1 back, 1 forward; 0 none
+  int _tapSkips = 0; // skips in this run of taps
+  Timer? _tapSkipTimer;
+  int _touchSide = 0; // the side of the last single tap, and when it was
+  DateTime? _touchAt;
+  bool _chromeBeforeTaps = false; // the controls showed before the first tap of the run
+  bool _held = false; // held down: playing at 2x
+
+  /// A tap on the picture. On a phone or a tablet, a double tap on the left or right half skips
+  /// back or forward, and while that goes on each tap on the same side skips again (the first
+  /// tap's showing or hiding of the controls is undone). Otherwise: the controls, the panels,
+  /// and a double click for full screen, as before.
+  void _pictureTap(double x, double width) {
+    _keys.requestFocus(); // clicking the picture leaves any text field
+    if (_locked) return _flashUnlock();
+    if (_touch && _canSwipe) {
+      final side = x < width / 2 ? -1 : 1;
+      final now = DateTime.now();
+      if (_tapSkip == side) return _skipByTap(side);
+      final last = _touchAt;
+      if (last != null && side == _touchSide && now.difference(last) < const Duration(milliseconds: 300)) {
+        _touchAt = null;
+        return _skipByTap(side);
+      }
+      _touchAt = now;
+      _touchSide = side;
+      _chromeBeforeTaps = _chrome;
+    }
+    if (_sync || _episodes) {
+      setState(() => _sync = _episodes = false);
+    } else if (!_touch && _isDoubleTap()) {
+      _toggleFullscreen();
+    } else if (_panel) {
+      setState(() => _panel = false);
+    } else if (_chrome) {
+      setState(() => _chrome = false);
+    } else {
+      _poke();
+    }
+  }
+
+  void _skipByTap(int side) {
+    if (_follower && !WatchParty.canCommand) return _hostOnly();
+    _seek(_position.value + Duration(seconds: AppSettings.seekSeconds.value * side));
+    // (the controls stay as they were before the taps)
+    if (!_chromeBeforeTaps) _hide?.cancel();
+    setState(() {
+      _chrome = _chromeBeforeTaps;
+      if (_tapSkip != side) _tapSkips = 0;
+      _tapSkip = side;
+      _tapSkips++;
+    });
+    if (_chromeBeforeTaps) _poke();
+    _tapSkipTimer?.cancel();
+    _tapSkipTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) setState(() => _tapSkip = _tapSkips = 0);
+    });
+  }
+
+  /// Held down on the picture: 2x until let go (playing, and not in a watch party, where the
+  /// room keeps everyone at one speed).
+  void _holdStart() {
+    if (!_canSwipe || _locked || widget.party || !_playing) return;
+    HapticFeedback.lightImpact();
+    _player.setRate(2);
+    setState(() => _held = true);
+  }
+
+  void _holdEnd() {
+    if (!_held) return;
+    _player.setRate(_speed);
+    if (mounted) setState(() => _held = false);
+  }
+
 
   /// Shows the controls and restarts the idle timer. They stay while the panel is open.
   void _poke() {
@@ -3880,22 +4322,10 @@ class _PlayerPageState extends State<_PlayerView> {
               onVerticalDragStart: _canSwipe ? (d) => _swipeStart(d, size.width) : null,
               onVerticalDragUpdate: _canSwipe ? (d) => _swipeUpdate(d, size.height) : null,
               onVerticalDragEnd: _canSwipe ? (_) => _swipeEnd() : null,
-              onTap: () {
-                _keys.requestFocus(); // clicking the picture leaves any text field
-                if (_locked) {
-                  _flashUnlock();
-                } else if (_sync || _episodes) {
-                  setState(() => _sync = _episodes = false);
-                } else if (_isDoubleTap()) {
-                  _toggleFullscreen();
-                } else if (_panel) {
-                  setState(() => _panel = false);
-                } else if (_chrome) {
-                  setState(() => _chrome = false);
-                } else {
-                  _poke();
-                }
-              },
+              onTapUp: (d) => _pictureTap(d.localPosition.dx, size.width),
+              onLongPressStart: _touch && _canSwipe ? (_) => _holdStart() : null,
+              onLongPressEnd: _touch ? (_) => _holdEnd() : null,
+              onLongPressCancel: _touch ? _holdEnd : null,
               child: Stack(children: [
                 // The player: mpv renders into a native surface behind Flutter; VyseVideo
                 // clears the pixels here so it shows through whatever the page paints below.
@@ -3906,6 +4336,16 @@ class _PlayerPageState extends State<_PlayerView> {
                 // on a phone the middle button turns into the spinner while the controls are up
                 if (_loadingSources || (_buffering && (!phone || !_chromeUp)))
                   Center(child: RepaintBoundary(child: _Spinner(note: _error ?? _note ?? _loadNote ?? (_torrent != null ? _torrentNote : _searchNote)))),
+                // a phone or a tablet: what taps on a side skipped, and 2x while held
+                if (_tapSkip != 0)
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    left: _tapSkip < 0 ? side + 24 : null,
+                    right: _tapSkip > 0 ? side + 24 : null,
+                    child: Center(child: _SkipBadge(forward: _tapSkip > 0, seconds: _tapSkips * AppSettings.seekSeconds.value)),
+                  ),
+                if (_held) Positioned(top: top + 18, left: 0, right: 0, child: const Center(child: _FastBadge())),
                 // Shade behind the controls, so they read over any picture.
                 _fade(
                   Align(
@@ -4125,6 +4565,9 @@ class _PlayerPageState extends State<_PlayerView> {
                         offset: _subOffset,
                         onOffset: (v) {
                           if (_follower) _ownSubs = true; // their own timing from now on
+                          // yours from now on: the automatic sync stops for this file
+                          _autoOffset = null;
+                          _autoSyncStop();
                           setState(() => _subOffset = v);
                           _applySubDelay();
                           // the sync panel nudges in small steps: send where it settles
@@ -4500,6 +4943,9 @@ class _PlayerPageState extends State<_PlayerView> {
         _setSubtitleTrack(t);
       },
       onSync: _openSync,
+      autoSync: AppSettings.autoSyncSubtitles.value,
+      autoSyncNote: _autoSyncNote,
+      onAutoSync: AppSettings.autoSyncSubtitles.set,
     ),
     _Tab.speed => SpeedPane(
       speeds: [for (final s in _speeds) (s, _speedLabel(s))],
@@ -4659,6 +5105,50 @@ class _Backdrop extends StatelessWidget {
       ),
     ]);
   }
+}
+
+/// What taps on a side of the picture skipped, at that side.
+class _SkipBadge extends StatelessWidget {
+  const _SkipBadge({required this.forward, required this.seconds});
+  final bool forward;
+  final int seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(forward ? Icons.fast_forward_rounded : Icons.fast_rewind_rounded, size: 22, color: Colors.white);
+    return IgnorePointer(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(color: Colors.black.withValues(alpha: .55), borderRadius: BorderRadius.circular(28)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (!forward) ...[icon, const SizedBox(width: 6)],
+          Text(
+            '${forward ? '+' : '−'}${seconds}s',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white, fontFeatures: [FontFeature.tabularFigures()]),
+          ),
+          if (forward) ...[const SizedBox(width: 6), icon],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Shown while the picture is held down: playing at 2x.
+class _FastBadge extends StatelessWidget {
+  const _FastBadge();
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: .55), borderRadius: BorderRadius.circular(18)),
+      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+        Text('2x', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+        SizedBox(width: 4),
+        Icon(Icons.fast_forward_rounded, size: 18, color: Colors.white),
+      ]),
+    ),
+  );
 }
 
 class _Spinner extends StatelessWidget {
@@ -5288,8 +5778,8 @@ class _MiniWindowState extends State<_MiniWindow> {
 }
 
 /// "Up next" in the small window: a pill that plays the next episode when pressed, and by
-/// itself after three seconds with autoplay on, like the full-size card (the ring round its
-/// icon is the wait).
+/// itself after [upNextWait] with autoplay on, like the full-size card (the ring round its icon
+/// is the wait).
 class _MiniNext extends StatefulWidget {
   const _MiniNext({super.key, required this.label, required this.auto, required this.onPlay});
   final String label;
@@ -5302,7 +5792,7 @@ class _MiniNext extends StatefulWidget {
 
 class _MiniNextState extends State<_MiniNext> with SingleTickerProviderStateMixin {
   // a clock, not a flourish: it keeps its length where animations are cut short (core/lean.dart)
-  late final _timer = AnimationController(vsync: this, duration: const Duration(seconds: 3), animationBehavior: AnimationBehavior.preserve);
+  late final _timer = AnimationController(vsync: this, duration: upNextWait, animationBehavior: AnimationBehavior.preserve);
 
   @override
   void initState() {

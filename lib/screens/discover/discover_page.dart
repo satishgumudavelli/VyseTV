@@ -7,13 +7,19 @@ import '../../core/nav.dart';
 import '../../core/theme.dart';
 import '../../core/lean.dart';
 import '../../data/catalog/discover.dart';
+import '../../data/catalog/meta_addons.dart';
 import '../../data/catalog/tmdb.dart';
+import '../../data/sources/addons.dart';
+import '../../dpad/dpad_traversal.dart' show DpadRail;
 import '../../widgets/common.dart';
 import '../../widgets/media_rows.dart';
 import '../../widgets/page_scrollbar.dart';
+import '../home/addon_home.dart' show NoMetadata, afterBuild;
 
 /// Browse everything on TMDB: a filter column on the left, sort pills and an endless poster grid
-/// on the right. On tablets and phones the filters live in a sheet.
+/// on the right. On tablets and phones the filters live in a sheet. With metadata addons on, a
+/// row of their catalogs above lets you browse one of those instead (its genres in place of the
+/// sort and filters); with TMDB off, only those.
 class DiscoverPage extends StatefulWidget {
   const DiscoverPage({
     super.key,
@@ -21,6 +27,8 @@ class DiscoverPage extends StatefulWidget {
     this.subtitle = 'Movies and TV shows',
     this.initial = const DiscoverQuery(),
     this.logo,
+    this.catalog,
+    this.genre,
   });
 
   final String title;
@@ -30,18 +38,86 @@ class DiscoverPage extends StatefulWidget {
   /// Studio / network logo shown above the title.
   final String? logo;
 
+  /// Opens on one of your metadata addons' catalogs, at [genre] when given.
+  final CatalogRef? catalog;
+  final String? genre;
+
   @override
   State<DiscoverPage> createState() => _DiscoverPageState();
 }
 
 class _DiscoverPageState extends State<DiscoverPage> {
-  late final _c = DiscoverController(widget.initial);
+  /// The addon catalogs this page can show (its type's, for the Movies and TV Shows pages).
+  /// None on a page that is TMDB's own (a studio, a service, a genre of TMDB's). Read again when
+  /// your addons change in Settings (a section's page stays while you're away from it).
+  late List<CatalogRef> _catalogs = _fitting();
+
+  List<CatalogRef> _fitting() {
+    final q = widget.initial;
+    final tmdbOnly = widget.catalog == null && (widget.logo != null || q.providers.isNotEmpty || q.companies.isNotEmpty || q.networks.isNotEmpty || q.genres.isNotEmpty);
+    if (tmdbOnly && Addons.tmdbOn) return const <CatalogRef>[];
+    bool fits(AddonCatalog c) => switch (q.type) {
+      MediaType.movie => c.type == 'movie',
+      MediaType.tv => c.type != 'movie',
+      MediaType.all => true,
+    };
+    final all = [for (final r in MetaAddons.catalogs) if (r.catalog.browsable && (widget.catalog != null || fits(r.catalog))) r];
+    return [if (widget.catalog != null && !all.contains(widget.catalog)) widget.catalog!, ...all];
+  }
+
+  /// Where it starts: the catalog asked for, or with TMDB off the first one that fits.
+  late final CatalogRef? _first = widget.catalog ?? (Addons.tmdbOn ? null : _catalogs.firstOrNull);
+
+  /// TMDB is off and none of your catalogs fits this page: nothing to ask anyone.
+  bool get _empty => !Addons.tmdbOn && (_made?.catalog ?? _first) == null && _catalogs.isEmpty;
+
+  /// Your addons changed: the catalogs on offer follow, and what's on show moves to one that is
+  /// still there (TMDB turned off: the first catalog; back on, or the catalog gone: TMDB).
+  void _onAddons() {
+    if (!mounted) return;
+    if (afterBuild(_onAddons)) return;
+    setState(() {
+      _catalogs = _fitting();
+      final made = _made;
+      if (made == null) return;
+      final cat = made.catalog;
+      if (cat != null && !_catalogs.contains(cat)) {
+        _browse(Addons.tmdbOn ? null : _catalogs.firstOrNull);
+      } else if (cat == null && !Addons.tmdbOn && _catalogs.isNotEmpty) {
+        _browse(_catalogs.first);
+      }
+    });
+  }
+
+  DiscoverController? _made;
+  DiscoverController get _c => _made ??= DiscoverController(
+    widget.initial,
+    _first,
+    widget.genre ?? (_first?.catalog.genreRequired == true ? _first!.catalog.genres.firstOrNull : null),
+  );
   final _scroll = ScrollController();
   final _filterScroll = ScrollController();
+
+  void _browse(CatalogRef? r) {
+    _c.browse(r, genre: r != null && r.catalog.genreRequired ? r.catalog.genres.firstOrNull : null);
+    if (_scroll.hasClients && _scroll.offset > 0) {
+      _scroll.animateTo(0, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
+    }
+  }
+
+  void _pickGenre(String? g) {
+    final r = _c.catalog;
+    if (r == null) return;
+    _c.browse(r, genre: g);
+    if (_scroll.hasClients && _scroll.offset > 0) {
+      _scroll.animateTo(0, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    Addons.list.addListener(_onAddons);
     _scroll.addListener(() {
       if (_scroll.position.extentAfter < 1000) _c.loadMore();
     });
@@ -49,7 +125,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   @override
   void dispose() {
-    _c.dispose();
+    Addons.list.removeListener(_onAddons);
+    _made?.dispose();
     _scroll.dispose();
     _filterScroll.dispose();
     super.dispose();
@@ -202,6 +279,20 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final desktop = Layout.of(context) == FormFactor.desktop;
     final top = Layout.topChrome(context) + (Layout.isPhone(context) ? 12 : 26);
 
+    if (_empty) {
+      final phone = Layout.isPhone(context);
+      return ColoredBox(
+        color: VyseColors.bg,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(phone ? 16.0 : Layout.inset(context), top, phone ? 16.0 : 40.0, 40),
+          children: [
+            _Header(title: widget.title, subtitle: 'From your addons', total: 0, logo: null),
+            const NoMetadata(compact: true, message: 'TMDB is off and none of your metadata addons has a catalog for this page. Turn one on in Settings > Addons.'),
+          ],
+        ),
+      );
+    }
+
     return ColoredBox(
       color: VyseColors.bg,
       child: Stack(children: [
@@ -210,13 +301,30 @@ class _DiscoverPageState extends State<DiscoverPage> {
         ListenableBuilder(
           listenable: _c,
           builder: (context, _) {
+            final cat = _c.catalog;
+            // TMDB (while it's on) and your addons' catalogs, when there's a choice
+            final choices = (Addons.tmdbOn && widget.catalog == null ? 1 : 0) + _catalogs.length;
             return _Results(
               controller: _c,
               scroll: _scroll,
               top: top,
-              header: _Header(title: widget.title, subtitle: widget.subtitle, total: _c.total, logo: widget.logo),
+              header: _Header(
+                title: widget.title,
+                subtitle: cat == null ? widget.subtitle : 'From ${cat.addon.name}',
+                total: _c.total,
+                logo: widget.logo,
+              ),
               onApply: _apply,
-              onOpenFilters: desktop ? _openFilterDrawer : _openFilterSheet,
+              onOpenFilters: cat != null ? null : (desktop ? _openFilterDrawer : _openFilterSheet),
+              sources: choices < 2
+                  ? null
+                  : _CatalogBar(
+                      catalogs: _catalogs,
+                      tmdb: Addons.tmdbOn && widget.catalog == null,
+                      selected: cat,
+                      onPick: _browse,
+                    ),
+              genres: cat == null ? null : _GenreBar(catalog: cat.catalog, selected: _c.genre, onPick: _pickGenre),
             );
           },
         ),
@@ -328,6 +436,8 @@ class _Results extends StatelessWidget {
     required this.header,
     required this.onApply,
     required this.onOpenFilters,
+    this.sources,
+    this.genres,
   });
 
   final DiscoverController controller;
@@ -336,6 +446,12 @@ class _Results extends StatelessWidget {
   final Widget? header;
   final void Function(DiscoverQuery q, {bool debounce}) onApply;
   final VoidCallback? onOpenFilters;
+
+  /// The catalogs to browse (TMDB, your addons'), when there's a choice.
+  final Widget? sources;
+
+  /// An addon's catalog: its genres, in place of the sort and the filters.
+  final Widget? genres;
 
   @override
   Widget build(BuildContext context) {
@@ -360,14 +476,19 @@ class _Results extends StatelessWidget {
           sliver: SliverToBoxAdapter(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (header != null) ...[header!, const SizedBox(height: 20)],
-              Row(children: [
-                Expanded(child: _SortBar(sort: q.sort, onChanged: (s) => onApply(q.copyWith(sort: s)))),
-                if (onOpenFilters != null) ...[
-                  const SizedBox(width: 10),
-                  _FiltersButton(count: q.activeFilters, onTap: onOpenFilters!),
-                ],
-              ]),
-              _ActiveFilters(query: q, onChanged: onApply),
+              if (sources != null) ...[sources!, const SizedBox(height: 12)],
+              if (genres != null)
+                genres!
+              else ...[
+                Row(children: [
+                  Expanded(child: _SortBar(sort: q.sort, onChanged: (s) => onApply(q.copyWith(sort: s)))),
+                  if (onOpenFilters != null) ...[
+                    const SizedBox(width: 10),
+                    _FiltersButton(count: q.activeFilters, onTap: onOpenFilters!),
+                  ],
+                ]),
+                _ActiveFilters(query: q, onChanged: onApply),
+              ],
               const SizedBox(height: 16),
               // Thin progress line while a new result set is on its way.
               AnimatedOpacity(
@@ -402,9 +523,11 @@ class _Results extends StatelessWidget {
 
   Widget _grid(BuildContext context, double maxExtent) {
     final c = controller;
+    // an addon catalog of square or landscape pictures: cards of that shape
+    final shape = c.catalog == null ? 'poster' : MetaAddons.shapeOf(c.catalog!);
     final delegate = SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: maxExtent,
-      childAspectRatio: 2 / 3,
+      maxCrossAxisExtent: maxExtent * switch (shape) { 'landscape' => 1.8, 'square' => 1.15, _ => 1.0 },
+      childAspectRatio: switch (shape) { 'landscape' => 16 / 9, 'square' => 1.0, _ => 2 / 3 },
       mainAxisSpacing: 14,
       crossAxisSpacing: 12,
     );
@@ -419,6 +542,19 @@ class _Results extends StatelessWidget {
             child: const Shimmer(child: SkeletonBox(width: double.infinity, height: double.infinity, radius: 7)),
           ),
           childCount: 18,
+        ),
+      );
+    }
+
+    final cat = c.catalog;
+    if (c.items.isEmpty && cat != null) {
+      return SliverToBoxAdapter(
+        child: _Message(
+          icon: c.error != null ? Icons.wifi_off_rounded : Icons.travel_explore_rounded,
+          title: c.error != null ? "Couldn't reach ${cat.addon.name}" : 'Nothing here',
+          body: c.error != null ? 'Check your connection and try again.' : '${cat.addon.name} lists nothing here${c.genre == null ? '' : ' for ${c.genre}'}.',
+          action: 'Retry',
+          onAction: c.retry,
         ),
       );
     }
@@ -455,7 +591,7 @@ class _Results extends StatelessWidget {
               key: ValueKey('${c.generation}/${m.key}'),
               delay: Duration(milliseconds: 22 * (i % 20)),
               offset: 12,
-              child: _DiscoverCard(media: m, showKind: c.query.type == MediaType.all),
+              child: _DiscoverCard(media: m, showKind: cat == null && c.query.type == MediaType.all),
             );
           },
           childCount: c.items.length,
@@ -599,6 +735,122 @@ class _DiscoverCard extends StatelessWidget {
       ]),
     );
   }
+}
+
+// ───────────────────────── Addon catalogs ─────────────────────────
+
+/// What the page browses: TMDB, or one of your metadata addons' catalogs. One row to a D-pad,
+/// entered on the one on show.
+class _CatalogBar extends StatelessWidget {
+  const _CatalogBar({required this.catalogs, required this.tmdb, required this.selected, required this.onPick});
+  final List<CatalogRef> catalogs;
+  final bool tmdb;
+  final CatalogRef? selected;
+  final ValueChanged<CatalogRef?> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    // the addon's name only when more than one addon has catalogs here
+    final named = {for (final r in catalogs) r.addon.manifestUrl}.length > 1;
+    return _PillRow(
+      options: [
+        if (tmdb) (key: 'tmdb', label: 'TMDB', note: null),
+        for (final r in catalogs) (key: r.key, label: r.title, note: named ? r.addon.name : null),
+      ],
+      selected: selected?.key ?? 'tmdb',
+      onPick: (k) => onPick(k == 'tmdb' ? null : catalogs.firstWhere((r) => r.key == k)),
+    );
+  }
+}
+
+/// An addon catalog's genres: all of it (unless it lists one at a time), or one genre.
+class _GenreBar extends StatelessWidget {
+  const _GenreBar({required this.catalog, required this.selected, required this.onPick});
+  final AddonCatalog catalog;
+  final String? selected;
+  final ValueChanged<String?> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    if (catalog.genres.isEmpty) return const SizedBox.shrink();
+    return _PillRow(
+      options: [
+        if (!catalog.genreRequired) (key: '', label: 'All', note: null),
+        for (final g in catalog.genres) (key: g, label: g, note: null),
+      ],
+      selected: selected ?? '',
+      onPick: (k) => onPick(k.isEmpty ? null : k),
+    );
+  }
+}
+
+/// Pills in the sort bar's look, scrolling sideways; the one picked has the accent dot.
+class _PillRow extends StatelessWidget {
+  const _PillRow({required this.options, required this.selected, required this.onPick});
+  final List<({String key, String label, String? note})> options;
+  final String selected;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: .06)),
+        ),
+        child: DpadRail(
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            for (final o in options)
+              Pressable(
+                onTap: () => onPick(o.key),
+                railEntry: o.key == selected,
+                builder: (context, hovered, pressed) {
+                  final on = o.key == selected;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(9),
+                      color: on ? const Color(0xFF242842) : Colors.white.withValues(alpha: hovered ? .05 : 0),
+                      boxShadow: on ? [BoxShadow(color: Colors.black.withValues(alpha: .35), blurRadius: 10, offset: const Offset(0, 3))] : null,
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        width: on ? 6 : 0,
+                        height: 6,
+                        margin: EdgeInsets.only(right: on ? 7 : 0),
+                        decoration: const BoxDecoration(color: VyseColors.accent, shape: BoxShape.circle),
+                      ),
+                      Text(
+                        o.label,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: on ? FontWeight.w700 : FontWeight.w600,
+                          color: on || hovered ? VyseColors.text : VyseColors.textDim,
+                        ),
+                      ),
+                      if (o.note != null) ...[
+                        const SizedBox(width: 6),
+                        Text(o.note!, maxLines: 1, softWrap: false, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: VyseColors.textFaint)),
+                      ],
+                    ]),
+                  );
+                },
+              ),
+          ]),
+        ),
+      ),
+    ),
+  );
 }
 
 // ───────────────────────── Sort + active filters ─────────────────────────

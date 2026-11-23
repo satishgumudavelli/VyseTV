@@ -46,10 +46,12 @@ class PlayerNative extends PlayerBase {
   /// VyseTV: [secondary] uses the second audio core
   /// (`vyse/mpv_audio_player_2`), so audiobooks keep their own loaded
   /// track next to music's.
-  PlayerNative.audio({bool secondary = false})
-    : methodChannel = MethodChannel(secondary ? 'vyse/mpv_audio_player_2' : 'vyse/mpv_audio_player'),
+  /// [listener] uses the third (`vyse/mpv_audio_listener`), which decodes a video's sound to a
+  /// file for subtitle sync by ear and plays nothing out loud.
+  PlayerNative.audio({bool secondary = false, bool listener = false})
+    : methodChannel = MethodChannel(listener ? 'vyse/mpv_audio_listener' : (secondary ? 'vyse/mpv_audio_player_2' : 'vyse/mpv_audio_player')),
       eventChannel = EventChannel(
-        secondary ? 'vyse/mpv_audio_player_2/events' : 'vyse/mpv_audio_player/events',
+        listener ? 'vyse/mpv_audio_listener/events' : (secondary ? 'vyse/mpv_audio_player_2/events' : 'vyse/mpv_audio_player/events'),
       ),
       audioOnly = true,
       _hardwareDecoding = true;

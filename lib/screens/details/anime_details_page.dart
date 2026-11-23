@@ -609,8 +609,14 @@ class _AnimeBody extends StatelessWidget {
               _Pill(icon: Icons.play_arrow_rounded, label: playLabel, primary: true, onTap: onPlay),
               if (!a.isAdult) const _AudioToggle(),
               _SaveButton(media: a.media),
-              // a series' episodes are marked in its episode list
+              // a series' episodes are marked in its episode list, or all at once here
               if (a.isMovie) WatchedButton(media: a.media, runtime: a.duration),
+              if (!a.isMovie)
+                SeriesWatchedButton(
+                  media: a.media,
+                  seasons: [Season(0, 'Episodes', a.episodes ?? 0, null, null)],
+                  episodes: (_) async => [for (final e in await AnimeEpisodeStore(a).season(0)) if (!e.upcoming) e.toMark()],
+                ),
               _RoundAction(icon: Icons.open_in_new_rounded, tooltip: 'Open on AniList', onTap: () => _open(context, link)),
               _RoundAction(icon: Icons.groups_outlined, tooltip: 'Watch party', onTap: () => startWatchParty(context, a.media)),
             ],

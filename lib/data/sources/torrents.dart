@@ -52,9 +52,41 @@ class Torrents {
     }
   }
 
-  /// Phones and tablets get a smaller cache and fewer connections than desktops. On iOS the
+  /// Phones, tablets and TVs get a smaller cache and fewer connections than desktops. On iOS the
   /// engine shares the app's own memory, and iOS ends an app that takes too much.
   static bool get _phone => Platform.isAndroid || Platform.isIOS;
+
+  // ── Settings > Playback > Torrents ──
+
+  /// The memory the engine keeps pieces in, in MB: this device's default, and the choices.
+  static int get defaultMemory => _phone ? 256 : 1024;
+  static List<int> get memoryChoices => _phone ? const [128, 256, 512, 1024] : const [512, 1024, 2048, 4096];
+  static int get memory => _chosen(AppSettings.torrentMemory.value, memoryChoices, defaultMemory);
+
+  /// How much of the start of the video is fetched before the player opens it, in MB (the end,
+  /// where an MKV keeps its index, is fetched too). Never more than half the memory.
+  static const defaultPreload = 4;
+  static const preloadChoices = [4, 16, 32, 64];
+  static int get preload => _chosen(AppSettings.torrentPreload.value, preloadChoices, defaultPreload).clamp(1, memory ~/ 2);
+
+  /// Peers one torrent connects to at once.
+  static int get defaultConnections => _phone ? 150 : 300;
+  static List<int> get connectionChoices => _phone ? const [50, 100, 150, 300] : const [100, 200, 300, 500];
+  static int get connections => _chosen(AppSettings.torrentConnections.value, connectionChoices, defaultConnections);
+
+  static int _chosen(int saved, List<int> choices, int fallback) => choices.contains(saved) ? saved : fallback;
+
+  /// Your own trackers, added to every torrent: whatever in [text] looks like a tracker's
+  /// address (udp, http, https or ws), one per line, or split by spaces or commas.
+  static List<String> trackersIn(String text) => {
+    for (final w in text.split(RegExp(r'[\s,]+')))
+      if (RegExp(r'^(udp|https?|wss?)://[^\s/:]+(:\d+)?(/\S*)?$', caseSensitive: false).hasMatch(w)) w,
+  }.toList();
+  static List<String> get yourTrackers => trackersIn(AppSettings.torrentTrackers.value);
+
+  /// The settings the engine runs with, as Settings has them now.
+  @visibleForTesting
+  static Map<String, Object> get debugEngineSettings => _fast;
 
   static Future<TorrServerController> _ready() => _starting ??= () async {
     final c = createTorrServerController();
@@ -112,18 +144,38 @@ class Torrents {
       } catch (_) {}
     }
     try {
+      final want = _fast;
       final s = await c.getSettings();
-      await c.setSettings(TorrServerSettings.fromJson({...s.toJson(), ..._fast}));
+      await c.setSettings(TorrServerSettings.fromJson({...s.toJson(), ...want}));
+      _applied = want;
     } catch (_) {}
-    unawaited(_loadTrackers());
+    if (AppSettings.publicTrackers.value) unawaited(_loadTrackers());
     return c;
   }();
+
+  /// The settings the engine took last.
+  static Map<String, Object>? _applied;
+
+  /// Settings > Playback > Torrents changed since the engine took its settings: it takes them now,
+  /// when nothing else is playing or downloading ([idle]), as the engine starts its torrent side
+  /// over to take them and lets go of the torrents it has. (Ones only prepared on the sources
+  /// page go with it; a torrent that plays is added again anyway.) Otherwise they wait.
+  static Future<void> _tune(TorrServerController c, {required bool idle}) async {
+    final want = _fast;
+    if (!idle || _applied == null || mapEquals(_applied, want)) return;
+    try {
+      final s = await c.getSettings();
+      await c.setSettings(TorrServerSettings.fromJson({...s.toJson(), ...want}));
+      _applied = want;
+    } catch (_) {}
+  }
 
   /// TorrServer tuned for streaming as fast as it can:
   /// * a big read-ahead window (most of a large cache), so many pieces ahead of the playhead are
   ///   asked for at once, from many peers;
-  /// * playback starts after a small preload (2% of the cache), not half of it;
-  /// * up to 300 connections per torrent (150 on phones), DHT, PEX, local peer discovery, uTP
+  /// * playback starts after a small preload (see [preload]), not half of the cache;
+  /// * up to 300 connections per torrent (150 on phones; Settings can change both, and the
+  ///   memory, and turn uploading off), DHT, PEX, local peer discovery, uTP
   ///   and UPnP all on, no encryption requirement (it turns peers away);
   /// * extra public trackers on every torrent, uploading on (peers give more to those who give);
   /// * a torrent stays connected two minutes after the player lets go (a pause, a seek back).
@@ -131,16 +183,17 @@ class Torrents {
     // pieces live in memory only, and go when a torrent is dropped
     'UseDisk': false,
     'RemoveCacheOnDrop': true,
-    'CacheSize': (_phone ? 256 : 1024) << 20,
+    'CacheSize': memory << 20,
     'ReaderReadAHead': 95,
     'PreloadCache': 2,
-    'ConnectionsLimit': _phone ? 150 : 300,
+    'ConnectionsLimit': connections,
     // IPv6 off (TorrServer's default): on networks without working IPv6 the engine spends its
     // slots on peers it can't reach and stalls at a few peers and 0 KB/s. Measured on a large
     // public torrent: with it on, 1.3-2.4 MB/s, nothing for the first 10-16 s, and a stall;
     // off, 4.1-4.8 MB/s and data within ~8 s every time.
     'EnableIPv6': false,
-    'RetrackersMode': 1,
+    // the engine's own extra trackers, with the public ones
+    'RetrackersMode': AppSettings.publicTrackers.value ? 1 : 0,
     'ResponsiveMode': true,
     'ForceEncrypt': false,
     'DisableTCP': false,
@@ -150,7 +203,7 @@ class Torrents {
     'DisableUPNP': Platform.isIOS,
     'DisableDHT': false,
     'DisablePEX': false,
-    'DisableUpload': false,
+    'DisableUpload': !AppSettings.torrentUpload.value,
     'DownloadRateLimit': 0,
     'UploadRateLimit': 0,
     'EnableLPD': !Platform.isIOS,
@@ -215,6 +268,7 @@ class Torrents {
     final hash = infoHash.toLowerCase();
     final first = _downloading.add(hash) && _playing.isEmpty && _downloading.length == 1;
     final c = await _ready();
+    await _tune(c, idle: first);
     await c.addTorrent(magnet: _magnet(hash, trackers, title), title: title);
     if (first && Platform.isAndroid) {
       unawaited(_channel.invokeMethod<void>('startForegroundService').catchError((Object _) {}));
@@ -253,6 +307,7 @@ class Torrents {
     unawaited(() async {
       try {
         final c = await _ready();
+        await _tune(c, idle: _playing.isEmpty && _downloading.isEmpty);
         await c.addTorrent(magnet: _magnet(hash, trackers, title), title: title);
       } catch (_) {
         _prepared.remove(hash);
@@ -260,13 +315,14 @@ class Torrents {
     }());
   }
 
-  /// A magnet link for [hash], with the addon's trackers and our usual ones, to copy elsewhere.
+  /// A magnet link for [hash], with the addon's trackers, yours and the public ones (unless
+  /// turned off), to copy elsewhere.
   static String magnet(String hash, {List<String> trackers = const [], String? title}) => _magnet(hash, trackers, title);
 
   static String _magnet(String hash, List<String> trackers, String? title) {
     final m = StringBuffer('magnet:?xt=urn:btih:$hash');
     if (title != null) m.write('&dn=${Uri.encodeQueryComponent(title)}');
-    for (final t in {...trackers, ..._trackers}) {
+    for (final t in {...trackers, ...yourTrackers, if (AppSettings.publicTrackers.value) ..._trackers}) {
       m.write('&tr=${Uri.encodeQueryComponent(t)}');
     }
     return m.toString();
@@ -297,6 +353,7 @@ class Torrents {
     // torrents it only prepared) mustn't take this one
     final first = _playing.add(hash) && _playing.length == 1;
     final c = await _ready();
+    await _tune(c, idle: first && _downloading.isEmpty);
     // re-added if it was let go meanwhile (adding one already there just returns it)
     await c.addTorrent(magnet: _magnet(hash, trackers, title), title: title);
     if (first && Platform.isAndroid) {
@@ -333,13 +390,14 @@ class Torrents {
     return url;
   }
 
-  static const _head = 4 << 20, _tail = 6 << 20;
+  static const _tail = 6 << 20;
 
-  /// Fetches the first 4 MB and last 6 MB of the file before the player opens it: a player reads the
-  /// start, then jumps to the end (an MKV's index, an MP4's moov) before playing. Straight after
-  /// a torrent is added those parts may not be there yet, and a player left waiting on them long
-  /// enough gives up on the stream, leaving the engine with nothing to download. Up to 90 s;
-  /// the player is told to be patient beyond that.
+  /// Fetches the start of the file ([preload], 4 MB unless Settings says more) and its last 6 MB
+  /// before the player opens it: a player reads the start, then jumps to the end (an MKV's
+  /// index, an MP4's moov) before playing. Straight after a torrent is added those parts may not
+  /// be there yet, and a player left waiting on them long enough gives up on the stream, leaving
+  /// the engine with nothing to download. Up to 90 s; the player is told to be patient beyond
+  /// that.
   static Future<void> _warm(String url, int length) async {
     final client = HttpClient();
     Future<void> read(int from, int to) async {
@@ -348,10 +406,11 @@ class Torrents {
       await (await rq.close()).drain<void>();
     }
 
+    final head = preload << 20;
     try {
       await Future.wait([
-        read(0, (length < _head ? length : _head) - 1),
-        if (length > _head + _tail) read(length - _tail, length - 1),
+        read(0, (length < head ? length : head) - 1),
+        if (length > head + _tail) read(length - _tail, length - 1),
       ]).timeout(const Duration(seconds: 90));
     } catch (_) {
       // slow swarm: the player opens anyway, and waits

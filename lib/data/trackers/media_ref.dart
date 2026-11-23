@@ -34,8 +34,14 @@ class MediaRef {
   String get itemKey => '$key/${season ?? ''}/${episode ?? ''}';
 
   /// What the player is playing: an anime from AniList when [anime] is given (or [media] is
-  /// one), else a TMDB film, or a TMDB show's episode (null without one).
+  /// one), else a TMDB film, or a TMDB show's episode (null without one). A title from a
+  /// metadata addon counts only once it is matched to TMDB (null before), and an episode of one
+  /// only where its addon numbers episodes as TMDB does (IMDb's and TMDB's own ids; not Kitsu's).
   static MediaRef? playing(Media media, {Anime? anime, int? season, int? episode}) {
+    if (anime == null && media.isAddon) {
+      final own = media.addonId!;
+      if (!media.tmdbKnown || (media.isTv && !own.startsWith('tt') && !own.startsWith('tmdb:'))) return null;
+    }
     if (anime != null || media.anime) {
       final n = episode ?? (anime?.isMovie ?? !media.isTv ? 1 : null);
       if (n == null) return null;
@@ -68,7 +74,7 @@ class MediaRef {
     key: media.key,
     title: media.title,
     year: int.tryParse(media.year ?? ''),
-    tmdb: media.anime ? null : media.id,
+    tmdb: media.anime || !media.tmdbKnown ? null : media.id,
     anilist: media.anime ? media.id : null,
   );
 

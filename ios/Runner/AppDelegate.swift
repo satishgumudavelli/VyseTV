@@ -33,5 +33,8 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "MpvAudio2PlayerPlugin") {
       MpvAudioPlayerPlugin.registerSecondary(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "MpvAudioListenerPlugin") {
+      MpvAudioPlayerPlugin.registerListener(with: registrar)
+    }
   }
 }

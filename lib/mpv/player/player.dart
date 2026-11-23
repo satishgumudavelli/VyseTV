@@ -395,6 +395,7 @@ abstract class Player {
   Stream<String> get subText;
   (int, int) get currentVideoSize;
   Stream<(int, int)> get videoSize;
+  Stream<(double, double)> get secondaryLines;
 
   /// VyseTV: whether an mpv core is doing the playing. Always, on the mpv backends; on the
   /// Android Media3 backend only once it has handed the video over to its mpv fallback.
@@ -481,9 +482,12 @@ abstract class Player {
   /// this instance when video playback claims the session (see
   /// `PlaybackCoordinator`), and the video core only exists while the video
   /// player screen is open.
-  factory Player.audio({bool secondary = false}) {
+  ///
+  /// VyseTV: [listener] is a third audio-only core that plays nothing out loud: it decodes
+  /// stretches of a video's sound to a file (`ao=pcm`) for subtitle sync by ear.
+  factory Player.audio({bool secondary = false, bool listener = false}) {
     if (Platform.isAndroid || Platform.isMacOS || Platform.isIOS || Platform.isWindows || Platform.isLinux) {
-      return PlayerNative.audio(secondary: secondary);
+      return PlayerNative.audio(secondary: secondary, listener: listener);
     }
     throw UnsupportedError('Player is not supported on this platform');
   }

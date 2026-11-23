@@ -14,6 +14,7 @@ import '../sources/addons.dart';
 import '../sources/debrid/debrid.dart';
 import '../sources/film_sources/film_sources.dart' show FilmSource;
 import '../sources/film_sources/source_settings.dart';
+import '../sources/torrents.dart';
 import '../subtitles/subtitle_style.dart';
 
 /// Everything Edit on your phone can change, in the order and words of Settings. The phone page
@@ -178,6 +179,27 @@ class _Text extends PhoneItem {
     if (t.isEmpty || t.length > max) return null;
     setting.set(t);
     return PhoneTook('$title: $t');
+  }
+}
+
+String _size(int mb) => mb >= 1024 ? '${mb ~/ 1024} GB' : '$mb MB';
+
+/// Your trackers, typed on the phone: addresses split by spaces, commas or lines. Empty clears them.
+class _Trackers extends PhoneItem {
+  _Trackers() : super(AppSettings.torrentTrackers.key, 'Your trackers', 'Added to every torrent. Separate them with spaces');
+  @override
+  String get kind => 'text';
+  @override
+  Map<String, Object?> get fields => {'value': Torrents.yourTrackers.join(' '), 'max': 4000, 'placeholder': 'udp://tracker.example.org:1337/announce'};
+  @override
+  List<Listenable> get watched => [AppSettings.torrentTrackers];
+  @override
+  Future<PhoneTook?> take(Map<String, Object?> change) async {
+    final v = change['v'];
+    if (v is! String || v.length > 4000) return null;
+    final list = Torrents.trackersIn(v);
+    AppSettings.torrentTrackers.set(list.join('\n'));
+    return PhoneTook('Your trackers: ${list.length}');
   }
 }
 
@@ -442,6 +464,18 @@ List<PhoneSection> phoneSections({required List<SubtitleFontChoice> fonts}) {
       for (final (k, name) in const [(SegmentKind.intro, 'Intro'), (SegmentKind.recap, 'Recap'), (SegmentKind.preview, 'Preview'), (SegmentKind.credits, 'Credits')])
         _SkipButton(k, name),
     ]),
+    if (Torrents.supported)
+      PhoneSection('torrents', 'Torrents', 'For torrent sources, with P2P streaming on.', [
+        _Choice<int>(AppSettings.torrentMemory, 'Memory', [for (final m in Torrents.memoryChoices) (m, _size(m))],
+            sub: 'More plays smoother; too much can close VyseTV on a TV with little memory', shown: (_) => Torrents.memory),
+        _Choice<int>(AppSettings.torrentPreload, 'Load before playing', [for (final m in Torrents.preloadChoices) (m, _size(m))],
+            sub: 'More takes longer to start, with fewer stops early on', shown: (_) => Torrents.preload),
+        _Choice<int>(AppSettings.torrentConnections, 'Connections', [for (final n in Torrents.connectionChoices) (n, '$n')],
+            sub: 'Peers per torrent at once', shown: (_) => Torrents.connections),
+        _Toggle(AppSettings.torrentUpload, 'Upload while watching', 'Peers send more to those who share. Off: download only'),
+        _Toggle(AppSettings.publicTrackers, 'Public trackers', 'Add well-known public trackers to every torrent'),
+        _Trackers(),
+      ]),
     PhoneSection('player', 'Sound and picture', 'Set for this TV only.', [
       if (PlayerEngine.offered) _Engine(),
       _Stepper(AppSettings.audioDelayMs, 'Audio sync', min: -5000, max: 5000, step: 50, fmt: 'delay', zero: 'In sync', sub: 'Fixes lip-sync. + plays the sound later'),
@@ -457,6 +491,7 @@ List<PhoneSection> phoneSections({required List<SubtitleFontChoice> fonts}) {
     ]),
     PhoneSection('subtitles', 'Subtitles', 'Default captions for the player.', [
       _Choice<String>(AppSettings.subtitleLanguage, 'Default language', [for (final l in subtitleLanguages) (l, l)], kind: 'select', sub: "If a video doesn't have it, no subtitles are loaded."),
+      _Toggle(AppSettings.autoSyncSubtitles, 'Sync automatically', "Lines downloaded subtitles up with the video's own, or with the voices in it"),
       _Group('Caption style'),
       if (!m3)
         _Choice<String>(AppSettings.subtitleFont, 'Font', [

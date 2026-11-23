@@ -35,6 +35,8 @@ void mpv_audio_plugin_register_with_registrar(FlPluginRegistrar* registrar);
 
 // VyseTV: second audio-only core (audiobooks), channel vyse/mpv_audio_player_2.
 void mpv_audio2_plugin_register_with_registrar(FlPluginRegistrar* registrar);
+// VyseTV: the core that decodes a video's sound for subtitle sync, channel vyse/mpv_audio_listener.
+void mpv_audio_listener_plugin_register_with_registrar(FlPluginRegistrar* registrar);
 
 G_END_DECLS
 

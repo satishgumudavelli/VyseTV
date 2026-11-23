@@ -106,6 +106,7 @@ class WatchEntry {
       'genre_ids': media.genreIds,
       'date': media.date.isNotEmpty ? media.date : (media.year ?? ''),
       if (media.anime) 'anime': true,
+      ...media.addonFields,
     },
     if (season != null) 's': season,
     if (episode != null) 'e': episode,

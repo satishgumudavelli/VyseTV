@@ -113,6 +113,8 @@ bool FlutterWindow::OnCreate() {
       flutter_controller_->engine()->GetRegistrarForPlugin("MpvAudioPlayerPlugin"));
   MpvAudio2PlayerPluginRegisterWithRegistrar(
       flutter_controller_->engine()->GetRegistrarForPlugin("MpvAudio2PlayerPlugin"));
+  MpvAudioListenerPluginRegisterWithRegistrar(
+      flutter_controller_->engine()->GetRegistrarForPlugin("MpvAudioListenerPlugin"));
 
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 

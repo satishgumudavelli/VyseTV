@@ -1383,7 +1383,20 @@ class SpeedPane extends StatelessWidget {
 
 /// Tracks and how they look: side by side when there's room, otherwise a tab each.
 class SubtitlesPane extends StatefulWidget {
-  const SubtitlesPane({super.key, required this.fit, required this.offset, required this.tracks, required this.loading, required this.active, required this.onTrack, required this.onSync, this.art});
+  const SubtitlesPane({
+    super.key,
+    required this.fit,
+    required this.offset,
+    required this.tracks,
+    required this.loading,
+    required this.active,
+    required this.onTrack,
+    required this.onSync,
+    this.art,
+    this.autoSync = false,
+    this.autoSyncNote,
+    this.onAutoSync,
+  });
   final PanelFit fit;
   final double offset;
   final List<sub.SubtitleTrack> tracks;
@@ -1392,6 +1405,12 @@ class SubtitlesPane extends StatefulWidget {
   final ValueChanged<sub.SubtitleTrack?> onTrack;
   final VoidCallback onSync;
   final String? art;
+
+  /// "Sync automatically" (the setting of that name), under Sync subtitles when [onAutoSync] is
+  /// given; [autoSyncNote] says what it is doing for this video.
+  final bool autoSync;
+  final String? autoSyncNote;
+  final ValueChanged<bool>? onAutoSync;
 
   @override
   State<SubtitlesPane> createState() => _SubtitlesPaneState();
@@ -1463,6 +1482,12 @@ class _SubtitlesPaneState extends State<SubtitlesPane> {
             onTap: widget.onSync,
           ),
         ),
+        // (a setting, not a choice of subtitle: its state in words, no tick)
+        if (widget.onAutoSync case final onAutoSync?)
+          Rise(
+            index: i++,
+            child: MenuRow(title: 'Sync automatically', detail: widget.autoSyncNote, value: widget.autoSync ? 'On' : 'Off', onTap: () => onAutoSync(!widget.autoSync)),
+          ),
         Rise(
           index: i++,
           child: MenuRow(title: 'Off', selected: widget.active == null, onTap: () => widget.onTrack(null)),
@@ -1620,7 +1645,15 @@ class _SubtitlesPaneState extends State<SubtitlesPane> {
             TvNote(active == null ? 'Subtitles are off. Pick a language to see what it has.' : 'Off turns subtitles off.'),
         ],
       ),
-      _SubtitleStyle(art: widget.art, tv: true, offset: widget.offset, onSync: widget.onSync),
+      _SubtitleStyle(
+        art: widget.art,
+        tv: true,
+        offset: widget.offset,
+        onSync: widget.onSync,
+        autoSync: widget.autoSync,
+        autoSyncNote: widget.autoSyncNote,
+        onAutoSync: widget.onAutoSync,
+      ),
     ]);
   }
 
@@ -1663,14 +1696,17 @@ class _SubtitlesPaneState extends State<SubtitlesPane> {
 /// The player used to offer S / M / L / XL and three colours of its own, which fought with a
 /// size or colour picked in Settings.
 class _SubtitleStyle extends StatelessWidget {
-  const _SubtitleStyle({this.art, this.tv = false, this.offset = 0, this.onSync});
+  const _SubtitleStyle({this.art, this.tv = false, this.offset = 0, this.onSync, this.autoSync = false, this.autoSyncNote, this.onAutoSync});
   final String? art;
 
   /// A TV's Style column: no preview (the subtitles themselves show through the menu, and
-  /// change as the settings do), and Sync first.
+  /// change as the settings do), and Sync first, then Sync automatically.
   final bool tv;
   final double offset;
   final VoidCallback? onSync;
+  final bool autoSync;
+  final String? autoSyncNote;
+  final ValueChanged<bool>? onAutoSync;
 
   static const _label = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: MenuInk.dim);
 
@@ -1809,6 +1845,7 @@ class _SubtitleStyle extends StatelessWidget {
                 detail: offset == 0 ? 'Line them up with the dialogue' : 'Offset ${offset > 0 ? '+' : ''}${offset}s',
                 onTap: onSync!,
               ),
+            if (onAutoSync case final onAutoSync?) MenuToggle(title: 'Sync automatically', detail: autoSyncNote, value: autoSync, onChanged: onAutoSync),
             ...controls,
           ],
         );

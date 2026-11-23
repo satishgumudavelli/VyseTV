@@ -471,6 +471,14 @@ class _FocusableWrapperState extends State<FocusableWrapper> with SingleTickerPr
     }
 
     if (key.isSelectKey) {
+      // VyseTV: OK presses the control that has the ring. When that is a button inside this one
+      // (a card's own Material buttons: a portal's rename, copy and star), the key only passes
+      // through here on its way up to Flutter's shortcuts, which press that button; this one
+      // must not answer for it. (A text field inside keeps the old way: OK there is the field's.)
+      if (!node.hasPrimaryFocus && !isTextEditingFocused()) {
+        _selectLongPress.reset();
+        return finish(KeyEventResult.ignored, 'select-belongs-to-a-control-inside');
+      }
       // VyseTV: with a mouse or a finger in charge the focus is not drawn, so OK must not
       // press something the user cannot see. An arrow brings the ring back first.
       if (InputModeTracker.currentMode != InputMode.keyboard) {

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../anime/anime_page.dart';
 import '../party/watch_start.dart';
+import '../player/player_episodes.dart' show AnimeEpisodeStore, EpisodeStore;
 import '../player/player_page.dart';
 
 import '../../core/format.dart';
@@ -18,6 +19,7 @@ import '../../data/anime/anilist.dart';
 import '../../data/playback/watch_progress.dart';
 import '../../data/app_settings.dart';
 import '../../data/catalog/discover.dart';
+import '../../data/catalog/meta_addons.dart';
 import '../../data/catalog/tmdb.dart';
 import '../../dpad/dpad_traversal.dart';
 import '../../dpad/focus_chrome.dart' show FocusRingTarget;
@@ -170,6 +172,20 @@ class _DetailsPageState extends State<DetailsPage> {
     String count(int n, String one) => '$n ${n == 1 ? one : '${one}s'}';
 
     final tabs = <(String, Widget)>[
+      // a collection (TMDB Collections and the like): its films, each opening a page of its own
+      if (d.parts.isNotEmpty)
+        (
+          'Films',
+          Shelf<Media>(
+            title: count(d.parts.length, 'film'),
+            load: () async => d.parts,
+            maxItems: 60,
+            itemWidth: posterW,
+            itemHeight: posterW * 1.5,
+            spacing: 14,
+            itemBuilder: (_, m, _) => PosterCard(media: m, heroTag: 'part/${d.media.key}/${m.key}'),
+          ),
+        ),
       if (d.seasons.any((s) => s.episodes > 0))
         (
           'Episodes',
@@ -178,7 +194,7 @@ class _DetailsPageState extends State<DetailsPage> {
             child: EpisodeExplorer(show: d.media, seasons: [for (final s in d.seasons) if (s.episodes > 0) s]),
           ),
         ),
-      if (d.cast.isNotEmpty)
+      if (d.cast.isNotEmpty && !d.media.isAddon)
         (
           'Cast',
           Shelf<CastMember>(
@@ -521,7 +537,7 @@ class _TitleBlock extends StatelessWidget {
                   alignment: centered ? WrapAlignment.center : WrapAlignment.start,
                   spacing: 6,
                   runSpacing: 6,
-                  children: [for (final g in details!.genres) _GenreChip(label: g, isTv: media.isTv)],
+                  children: [for (final g in details!.genres) _GenreChip(label: g, media: media)],
                 ),
               ),
       ),
@@ -539,9 +555,11 @@ class _MetaLine extends StatelessWidget {
   Widget build(BuildContext context) {
     const dim = TextStyle(color: Color(0xFFC3C7D4), fontSize: 13);
     final d = details;
+    final films = d?.parts.length ?? 0;
     final parts = <Widget>[
       if (media.year != null) Text(media.year!, style: dim),
-      Text(media.kind, style: dim),
+      Text(films > 0 ? 'Collection' : media.kind, style: dim),
+      if (films > 0) Text('$films film${films == 1 ? '' : 's'}', style: dim),
       if (d?.runtime != null) Text(fmtRuntime(d!.runtime!, perEpisode: media.isTv), style: dim),
       if (d?.seasonCount != null) Text('${d!.seasonCount} season${d.seasonCount == 1 ? '' : 's'}', style: dim),
     ];
@@ -556,6 +574,8 @@ class _MetaLine extends StatelessWidget {
           parts[i],
         ],
         const SizedBox(width: 2),
+        // (an addon title with no rating, a collection say: no "0.0")
+        if (!media.isAddon || media.rating > 0)
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -589,9 +609,22 @@ class _MetaLine extends StatelessWidget {
 }
 
 class _GenreChip extends StatelessWidget {
-  const _GenreChip({required this.label, required this.isTv});
+  const _GenreChip({required this.label, required this.media});
   final String label;
-  final bool isTv;
+  final Media media;
+
+  bool get isTv => media.isTv;
+
+  /// A title from a metadata addon: the first of your catalogs of its kind that lists this genre
+  /// (null: none does, and the chip is only a label).
+  CatalogRef? get _catalog {
+    final kind = media.addonType;
+    final all = [
+      for (final r in MetaAddons.catalogs)
+        if (r.catalog.browsable && r.catalog.genres.any((g) => g.toLowerCase() == label.toLowerCase())) r,
+    ];
+    return all.where((r) => r.catalog.type == kind).firstOrNull ?? all.firstOrNull;
+  }
 
   void _open(BuildContext context) {
     final g = DiscoverGenre.byName(label);
@@ -605,7 +638,31 @@ class _GenreChip extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Pressable(
+  Widget build(BuildContext context) {
+    if (media.isAddon) {
+      final r = _catalog;
+      final chip = AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), color: Colors.white.withValues(alpha: .08)),
+        child: Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: VyseColors.textDim)),
+      );
+      if (r == null) return chip;
+      final genre = r.catalog.genres.firstWhere((g) => g.toLowerCase() == label.toLowerCase());
+      return Pressable(
+        onTap: () => openCatalog(context, r, genre: genre),
+        builder: (context, hovered, _) => AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), color: Colors.white.withValues(alpha: hovered ? .16 : .08)),
+          child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: hovered ? VyseColors.text : VyseColors.textDim)),
+        ),
+      );
+    }
+    return _tmdbChip(context);
+  }
+
+  Widget _tmdbChip(BuildContext context) => Pressable(
     onTap: () => _open(context),
     builder: (context, hovered, _) => AnimatedContainer(
       duration: const Duration(milliseconds: 150),
@@ -680,6 +737,10 @@ class _Actions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // "Mark all watched" marks the real seasons (not specials), or an addon's run with no seasons
+    final real = [for (final s in details?.seasons ?? const <Season>[]) if (s.number > 0 && s.episodes > 0) s];
+    final marked = real.isNotEmpty || !media.isAddon ? real : [for (final s in details?.seasons ?? const <Season>[]) if (s.episodes > 0) s];
+    final store = EpisodeStore(media);
     return Wrap(
       alignment: centered ? WrapAlignment.center : WrapAlignment.start,
       spacing: 8,
@@ -690,8 +751,16 @@ class _Actions extends StatelessWidget {
           label: 'Play',
           primary: true,
           onTap: () {
-            // Shows start at episode 1 of the first real season (season 0 is usually specials).
-            final first = details?.seasons.where((s) => s.number > 0 && s.episodes > 0).firstOrNull;
+            // a collection: its first film not watched to the end
+            final films = details?.parts ?? const <Media>[];
+            if (films.isNotEmpty) {
+              openPlayer(context, films.where((p) => !(WatchProgress.find(p)?.finished ?? false)).firstOrNull ?? films.first);
+              return;
+            }
+            // Shows start at episode 1 of the first real season (season 0 is usually specials;
+            // an addon's run with no seasons is season 0).
+            final first = details?.seasons.where((s) => s.number > 0 && s.episodes > 0).firstOrNull ??
+                (media.isAddon ? details?.seasons.where((s) => s.episodes > 0).firstOrNull : null);
             openPlayer(
               context,
               media,
@@ -701,8 +770,15 @@ class _Actions extends StatelessWidget {
           },
         ),
         _SaveButton(media: media),
-        // a show's episodes are marked in its episode list
-        if (!media.isTv) WatchedButton(media: media, runtime: details?.runtime),
+        // a show's episodes are marked in its episode list (or all at once here), a collection's
+        // films on their own pages
+        if (!media.isTv && (details?.parts.isEmpty ?? true)) WatchedButton(media: media, runtime: details?.runtime),
+        if (media.isTv && !media.anime && marked.isNotEmpty)
+          SeriesWatchedButton(
+            media: media,
+            seasons: marked,
+            episodes: (n) async => [for (final e in await store.season(n)) if (!e.upcoming) e.toMark()],
+          ),
         _RoundAction(
           icon: Icons.groups_outlined,
           tooltip: 'Watch party',
@@ -896,6 +972,8 @@ class _FactsPanel extends StatelessWidget {
       if (media.isTv) ('Episodes', d.episodeCount?.toString()),
       (media.isTv ? 'Created by' : 'Director', join(d.directors)),
       if (!media.isTv) ('Writers', join(d.writers)),
+      // an addon title's cast: names only (there are no pages of theirs to open)
+      if (media.isAddon) ('Starring', join([for (final c in d.cast.take(6)) c.name])),
     ];
     final studios = media.isTv ? d.networks : d.studios;
     final tail = <(String, String?)>[
@@ -1142,17 +1220,26 @@ class _CastSkeleton extends StatelessWidget {
         children: [
           const SkeletonBox(width: 60, height: 14, radius: 4),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              for (var i = 0; i < 8; i++) ...[
-                Container(
-                  width: 76,
-                  height: 76,
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: VyseColors.surface),
-                ),
-                const SizedBox(width: 24),
-              ],
-            ],
+          // eight faces, cut off where the screen ends (a phone fits three)
+          ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.centerLeft,
+              maxWidth: double.infinity,
+              fit: OverflowBoxFit.deferToChild,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < 8; i++) ...[
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: const BoxDecoration(shape: BoxShape.circle, color: VyseColors.surface),
+                    ),
+                    const SizedBox(width: 24),
+                  ],
+                ],
+              ),
+            ),
           ),
         ],
       ),

@@ -112,6 +112,8 @@ static void my_application_activate(GApplication* application) {
       fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(view), "MpvAudioPlugin"));
   mpv_audio2_plugin_register_with_registrar(
       fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(view), "MpvAudio2Plugin"));
+  mpv_audio_listener_plugin_register_with_registrar(
+      fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(view), "MpvAudioListenerPlugin"));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

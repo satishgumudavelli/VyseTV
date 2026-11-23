@@ -115,6 +115,8 @@ class AppSettings {
 
   // Subtitles
   static final subtitleLanguage = Setting<String>('subs.lang', 'English');
+  // A downloaded subtitle lined up with the video's own subtitles, when it has some
+  static final autoSyncSubtitles = Setting<bool>('subs.autoSync', true);
   // (on a TV, read from across the room, they start larger; a size the user chose is kept)
   static final subtitleSize = Setting<int>('subs.size', PlatformDetector.isTV() ? 44 : 28);
   static final subtitleColor = Setting<int>('subs.color', 0xFFFFFFFF);
@@ -169,15 +171,29 @@ class AppSettings {
   static final updateAuto = Setting<bool>('device.update.auto', true);
   static final updateSkipped = Setting<String>('device.update.skipped', '');
 
+  // Addons: when their manifests were last read again (ms since 1970), to keep them current.
+  static final addonsRefreshed = Setting<int>('device.addons.refreshed', 0);
+
+  // Torrents (Settings > Playback > Torrents). Memory (MB), what loads before playing (MB) and
+  // connections describe this device, 0 being its default (Torrents has them); your trackers,
+  // one per line, travel with your account.
+  static final torrentMemory = Setting<int>('device.torrent.memory', 0);
+  static final torrentPreload = Setting<int>('device.torrent.preload', 0);
+  static final torrentConnections = Setting<int>('device.torrent.connections', 0);
+  static final torrentUpload = Setting<bool>('device.torrent.upload', true);
+  static final torrentTrackers = Setting<String>('play.trackers', '');
+  static final publicTrackers = Setting<bool>('play.publicTrackers', true);
+
   static List<Setting<Object?>> get _all => [
         displayName, avatarUrl, avatarLabel, themeId, navOrder, navOff,
         addons, streamingMode, autoNext, autoplayBest, autoplayOrder, autoplayRest, autoSubtitles, seekSeconds, skipButtonsOff, p2pStreaming, sourceOrder, sourcesOff, trackAniList, trackRewatches, simklScrobble, simklList, simklHistory,
         traktScrobble, traktList, traktHistory,
-        subtitleLanguage, subtitleSize, subtitleColor,
+        subtitleLanguage, autoSyncSubtitles, subtitleSize, subtitleColor,
         subtitleBackground, subtitleFont, subtitleBold, subtitleItalic, subtitleBackColor, subtitleOutline, subtitleOutlineColor,
         subtitleShadow, subtitleShadowColor, subtitleBlur, subtitleSpacing, subtitleTop, subtitleLift, subtitleOnPicture, subtitleAss,
         audioDelayMs, audioPassthrough, audioChannels, hdrOutput, matchRefreshRate, playerEngine, leanMotion, pictureShape, volumeLevelling,
-        upscaler, ambientLight, partyLibrary, musicAutoplay, debridProvider, debridOn, updateAuto, updateSkipped, myListGrid, myListSort, partyMembers, partySounds, partyMuted, animeAdult, animeAudio,
+        upscaler, ambientLight, partyLibrary, musicAutoplay, debridProvider, debridOn, updateAuto, updateSkipped, addonsRefreshed,
+        torrentMemory, torrentPreload, torrentConnections, torrentUpload, torrentTrackers, publicTrackers, myListGrid, myListSort, partyMembers, partySounds, partyMuted, animeAdult, animeAudio,
       ];
 
   static Future<void> initialize() async {

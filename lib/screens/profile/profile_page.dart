@@ -2,8 +2,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/account/account_sync.dart';
 import '../../data/sources/addons.dart';
+import '../../data/catalog/meta_addons.dart' show MetaAddons;
 import '../../data/sources/film_sources/film_sources.dart';
 import '../../data/sources/film_sources/source_settings.dart';
+import '../../data/sources/torrents.dart';
 import '../../data/playback/intro_db.dart' show SegmentKind;
 import '../../data/account/account.dart';
 import '../../core/platform/platform_detector.dart' show PlatformDetector;
@@ -51,7 +53,7 @@ enum _Tab {
   account('Account', 'Your profile, sign-in and sync.', Icons.person_outline_rounded),
   party('Party profile', 'How everyone in Party sees you.', Icons.public_rounded),
   appearance('Appearance', 'The ambient light behind every page, and what the navbar shows.', Icons.palette_outlined),
-  addons('Addons', 'Stremio addons for sources and subtitles. Synced with your account.', Icons.extension_outlined),
+  addons('Addons', 'Stremio addons for catalogs, details, sources and subtitles. Synced with your account.', Icons.extension_outlined),
   sources('Sources', 'Where films and shows play from, and in what order. Synced with your account.', Icons.dns_outlined),
   debrid('Debrid', 'Stream torrents from a debrid service instead of peer to peer. Saved on this device.', Icons.cloud_download_outlined),
   playback('Playback', 'How videos play by default. Saved on this device.', Icons.play_circle_outline_rounded),
@@ -1372,7 +1374,93 @@ class _PlaybackTab extends StatelessWidget {
         ],
       ),
       const _AutoplayOrder(),
+      if (Torrents.supported) const _TorrentSection(),
     ],
+  );
+}
+
+/// Settings → Playback → Torrents: how the torrent engine runs on this device (memory, what
+/// loads before playing, connections, uploading) and the trackers added to every torrent.
+class _TorrentSection extends StatelessWidget {
+  const _TorrentSection();
+
+  static String _size(int mb) => mb >= 1024 ? '${mb ~/ 1024} GB' : '$mb MB';
+
+  Future<void> _editTrackers(BuildContext context) async {
+    final c = TextEditingController(text: Torrents.yourTrackers.join('\n'));
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: VyseColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Your trackers', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        content: SizedBox(
+          width: 460,
+          child: TextField(
+            controller: c,
+            autofocus: true,
+            minLines: 4,
+            maxLines: 8,
+            keyboardType: TextInputType.multiline,
+            style: const TextStyle(fontSize: 13.5, height: 1.4),
+            decoration: const InputDecoration(hintText: 'One per line, like udp://tracker.example.org:1337/announce'),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('Save')),
+        ],
+      ),
+    );
+    c.dispose();
+    if (text == null) return;
+    final list = Torrents.trackersIn(text);
+    AppSettings.torrentTrackers.set(list.join('\n'));
+    final words = text.split(RegExp(r'[\s,]+')).where((w) => w.isNotEmpty).toSet();
+    final bad = words.length - list.length;
+    if (!context.mounted) return;
+    final saved = list.isEmpty ? 'No trackers of your own' : '${list.length} ${list.length == 1 ? 'tracker' : 'trackers'} saved';
+    showToast(
+      context,
+      Text(bad > 0 ? '$saved. Left out $bad that ${bad == 1 ? "isn't a tracker" : "aren't trackers"}' : saved, style: const TextStyle(fontSize: 13)),
+      icon: bad > 0 ? Icons.info_outline_rounded : Icons.check_circle_rounded,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([AppSettings.torrentMemory, AppSettings.torrentPreload, AppSettings.torrentConnections, AppSettings.torrentTrackers]),
+    builder: (context, _) {
+      final yours = Torrents.yourTrackers.length;
+      return _Section(
+        title: 'Torrents',
+        subtitle: 'For torrent sources, with P2P streaming on. Changes apply from the next torrent you play',
+        children: [
+          _Row(
+            title: 'Memory',
+            subtitle: 'How much of the video is kept ready. More plays smoother; too much can close VyseTV on a device with little memory',
+            below: _Choice<int>(value: Torrents.memory, options: Torrents.memoryChoices, label: _size, onChanged: AppSettings.torrentMemory.set),
+          ),
+          _Row(
+            title: 'Load before playing',
+            subtitle: 'More takes longer to start, with fewer stops early on',
+            below: _Choice<int>(value: Torrents.preload, options: Torrents.preloadChoices, label: _size, onChanged: AppSettings.torrentPreload.set),
+          ),
+          _Row(
+            title: 'Connections',
+            subtitle: 'Peers per torrent at once. Fewer can help a slow router',
+            below: _Choice<int>(value: Torrents.connections, options: Torrents.connectionChoices, label: (v) => '$v', onChanged: AppSettings.torrentConnections.set),
+          ),
+          _Row(title: 'Upload while watching', subtitle: 'Peers send more to those who share. Off: download only', trailing: _Toggle(AppSettings.torrentUpload)),
+          _Row(title: 'Public trackers', subtitle: 'Add well-known public trackers to every torrent, to find more peers', trailing: _Toggle(AppSettings.publicTrackers)),
+          _Row(
+            title: 'Your trackers',
+            subtitle: yours == 0 ? 'Trackers of your own, added to every torrent' : '$yours added to every torrent',
+            trailing: _SmallButton(label: yours == 0 ? 'Add' : 'Edit', icon: yours == 0 ? Icons.add_rounded : Icons.edit_outlined, onTap: () => _editTrackers(context)),
+          ),
+        ],
+      );
+    },
   );
 }
 
@@ -1746,6 +1834,16 @@ class _SubtitlesTab extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+      _Section(
+        title: 'Timing',
+        children: [
+          _Row(
+            title: 'Sync automatically',
+            subtitle: "Lines downloaded subtitles up with the video's own, or with the voices in it",
+            trailing: _Toggle(AppSettings.autoSyncSubtitles),
           ),
         ],
       ),
@@ -2466,7 +2564,9 @@ class _AddonsTabState extends State<_AddonsTab> {
       final a = await Addons.install(text);
       _link.clear();
       _failed = false;
-      _message = '${a.name} is installed${a.streams && a.subtitles ? ' (sources and subtitles)' : a.streams ? ' (sources)' : ' (subtitles)'}.';
+      final gives = [if (a.catalogs.isNotEmpty) 'catalogs', if (a.meta) 'details', if (a.streams) 'sources', if (a.subtitles) 'subtitles'];
+      final what = gives.length < 2 ? gives.join() : '${gives.take(gives.length - 1).join(', ')} and ${gives.last}';
+      _message = '${a.name} is installed ($what).${a.catalogs.isNotEmpty ? ' Its catalogs are on Home, Discover and search.' : ''}';
     } catch (e) {
       _failed = true;
       _message = '$e';
@@ -2479,8 +2579,8 @@ class _AddonsTabState extends State<_AddonsTab> {
     children: [
       _Section(
         title: 'Add an addon',
-        subtitle: 'Paste a Stremio addon link. Stream addons fill the sources screen (Streaming mode off in Playback); '
-            'subtitle addons add their files to every video.',
+        subtitle: 'Paste a Stremio addon link. Metadata addons add their catalogs to Home, Discover and search; '
+            'stream addons fill the sources screen (Streaming mode off in Playback); subtitle addons add their files to every video.',
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 18),
@@ -2540,7 +2640,7 @@ class _AddonsTabState extends State<_AddonsTab> {
           title: 'Your addons',
           subtitle: list.isEmpty
               ? null
-              : 'Sources are listed in this order. Torrent results play with P2P streaming (Playback) or your debrid service (Debrid).',
+              : 'Home rows and sources follow this order. Torrent results play with P2P streaming (Playback) or your debrid service (Debrid).',
           children: list.isEmpty
               ? const [
                   Padding(
@@ -2551,8 +2651,219 @@ class _AddonsTabState extends State<_AddonsTab> {
               : [for (final (i, a) in list.indexed) _AddonRow(addon: a, first: i == 0, last: i == list.length - 1)],
         ),
       ),
+      const _AddonLists(),
     ],
   );
+}
+
+/// Addons to install from the lists your addons offer (Stremio's addon catalogs: Cinemeta has
+/// an Official and a Community list). Shown when one of yours has a list.
+class _AddonLists extends StatefulWidget {
+  const _AddonLists();
+
+  @override
+  State<_AddonLists> createState() => _AddonListsState();
+}
+
+class _AddonListsState extends State<_AddonLists> {
+  static const _first = 20; // shown before "Show all"
+  String? _picked; // the list on show (its key)
+  Future<List<Addon>>? _future;
+  String? _futureOf;
+  bool _all = false;
+  final _busy = <String>{};
+  final _failed = <String, String>{};
+
+  static String _key((Addon, AddonCatalog) l) => '${l.$1.manifestUrl}|${l.$2.id}';
+
+  /// One per list (a list offered for each kind is the same list: its "all kinds" copy, or the
+  /// first), from your addons that are on.
+  static List<(Addon, AddonCatalog)> _lists(List<Addon> installed) {
+    final out = <String, (Addon, AddonCatalog)>{};
+    for (final a in installed) {
+      if (!a.enabled || a.builtIn) continue;
+      for (final c in a.addonCatalogs) {
+        final k = _key((a, c));
+        if (out[k] == null || c.type == 'all') out[k] = (a, c);
+      }
+    }
+    return out.values.toList();
+  }
+
+  Future<void> _install(Addon a) async {
+    setState(() {
+      _busy.add(a.manifestUrl);
+      _failed.remove(a.manifestUrl);
+    });
+    try {
+      await Addons.install(a.manifestUrl);
+    } catch (e) {
+      _failed[a.manifestUrl] = '$e';
+    }
+    if (mounted) setState(() => _busy.remove(a.manifestUrl));
+  }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<List<Addon>>(
+    valueListenable: Addons.list,
+    builder: (context, installed, _) {
+      final lists = _lists(installed);
+      if (lists.isEmpty) return const SizedBox.shrink();
+      final picked = lists.where((l) => _key(l) == _picked).firstOrNull ?? lists.first;
+      if (_futureOf != _key(picked)) {
+        _futureOf = _key(picked);
+        _future = MetaAddons.addonList(picked.$1, picked.$2);
+      }
+      bool has(Addon a) => installed.any((x) => x.manifestUrl == a.manifestUrl || x.id == a.id);
+      return _Section(
+        title: 'Find addons',
+        subtitle: 'From the lists your addons offer. Installing one adds it to Your addons.',
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final l in lists)
+                  _SmallButton(
+                    label: '${l.$2.name} · ${l.$1.name}',
+                    primary: _key(l) == _key(picked),
+                    onTap: () => setState(() {
+                      _picked = _key(l);
+                      _all = false;
+                    }),
+                  ),
+              ],
+            ),
+          ),
+          FutureBuilder<List<Addon>>(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Text("Couldn't load this list from ${picked.$1.name}.", style: const TextStyle(fontSize: 13.5, color: VyseColors.textDim)),
+                );
+              }
+              final found = snap.data;
+              if (found == null) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+                );
+              }
+              if (found.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Text('This list is empty.', style: TextStyle(fontSize: 13.5, color: VyseColors.textDim)),
+                );
+              }
+              final shown = _all ? found : found.take(_first).toList();
+              return Column(
+                children: [
+                  for (final (i, a) in shown.indexed) ...[
+                    if (i > 0) const Divider(height: 1, thickness: 1, color: VyseColors.stroke),
+                    _ListedAddon(
+                      addon: a,
+                      installed: has(a),
+                      busy: _busy.contains(a.manifestUrl),
+                      error: _failed[a.manifestUrl],
+                      onInstall: () => _install(a),
+                    ),
+                  ],
+                  if (shown.length < found.length) ...[
+                    const Divider(height: 1, thickness: 1, color: VyseColors.stroke),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _SmallButton(label: 'Show all ${found.length}', onTap: () => setState(() => _all = true)),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// An addon in one of those lists: what it gives, and Install (Set up, for one that needs it
+/// first; Installed, once it is yours).
+class _ListedAddon extends StatelessWidget {
+  const _ListedAddon({required this.addon, required this.installed, required this.busy, required this.onInstall, this.error});
+  final Addon addon;
+  final bool installed;
+  final bool busy;
+  final String? error;
+  final VoidCallback onInstall;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = addon;
+    final phone = Layout.isPhone(context);
+    final logo = ClipRRect(
+      borderRadius: BorderRadius.circular(11),
+      child: SizedBox.square(
+        dimension: 42,
+        child: a.logo == null ? _Initial(a.name) : CachedNetworkImage(imageUrl: a.logo!, fit: BoxFit.cover, errorWidget: (_, _, _) => _Initial(a.name)),
+      ),
+    );
+    final Widget action = installed
+        ? const _Kind('Installed', Icons.check_rounded)
+        : busy
+        ? const SizedBox(width: 92, child: Center(child: SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))))
+        : a.needsSetup
+        ? _SmallButton(
+            label: 'Set up',
+            icon: Icons.tune_rounded,
+            onTap: () => launchUrl(Uri.parse(a.configureUrl ?? '${a.base}/configure'), mode: LaunchMode.externalApplication),
+          )
+        : _SmallButton(label: 'Install', icon: Icons.add_rounded, primary: true, onTap: onInstall);
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(a.name, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+            if (a.version.isNotEmpty) Text('v${a.version}', style: const TextStyle(fontSize: 12, color: VyseColors.textFaint)),
+            if (a.catalogs.isNotEmpty) const _Kind('Catalogs', Icons.view_carousel_outlined),
+            if (a.meta) const _Kind('Details', Icons.info_outline_rounded),
+            if (a.streams) const _Kind('Sources', Icons.play_circle_outline_rounded),
+            if (a.subtitles) const _Kind('Subtitles', Icons.closed_caption_outlined),
+          ],
+        ),
+        if (a.description.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text(a.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: VyseColors.textDim, height: 1.35)),
+        ],
+        if (error != null) ...[
+          const SizedBox(height: 6),
+          Text(error!, style: const TextStyle(fontSize: 12.5, color: _danger, height: 1.35)),
+        ],
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: phone
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [logo, const SizedBox(width: 14), Expanded(child: info)]),
+                const SizedBox(height: 10),
+                Align(alignment: Alignment.centerRight, child: action),
+              ],
+            )
+          : Row(children: [logo, const SizedBox(width: 16), Expanded(child: info), const SizedBox(width: 16), action]),
+    );
+  }
 }
 
 class _AddonRow extends StatelessWidget {
@@ -2602,6 +2913,8 @@ class _AddonRow extends StatelessWidget {
             Text(a.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: a.enabled ? VyseColors.text : VyseColors.textDim)),
             if (a.version.isNotEmpty) Text('v${a.version}', style: const TextStyle(fontSize: 12, color: VyseColors.textFaint)),
             if (a.builtIn) const _Kind('Built in', Icons.verified_outlined),
+            if (a.catalogs.isNotEmpty || a.manifestUrl == Addon.tmdb.manifestUrl) const _Kind('Catalogs', Icons.view_carousel_outlined),
+            if (a.meta) const _Kind('Details', Icons.info_outline_rounded),
             if (a.streams) const _Kind('Sources', Icons.play_circle_outline_rounded),
             if (a.subtitles) const _Kind('Subtitles', Icons.closed_caption_outlined),
           ],
@@ -2609,6 +2922,14 @@ class _AddonRow extends StatelessWidget {
         if (a.description.isNotEmpty) ...[
           const SizedBox(height: 5),
           Text(a.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: VyseColors.textDim, height: 1.35)),
+        ],
+        // TMDB off with nothing in its place: say what that leaves
+        if (a.manifestUrl == Addon.tmdb.manifestUrl && !a.enabled && Addons.catalogAddons.isEmpty) ...[
+          const SizedBox(height: 6),
+          const Text(
+            'With TMDB off and no metadata addon on, Home, Discover and search have nothing to show.',
+            style: TextStyle(fontSize: 12.5, color: _danger, height: 1.35),
+          ),
         ],
       ],
     );

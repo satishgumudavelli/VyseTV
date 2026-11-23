@@ -267,9 +267,40 @@ abstract final class Bed {
     await t.pump();
   }
 
-  /// The same for the two audio engines (music, and audiobooks on the second): each call starts
-  /// with its channel's last part ("mpv_audio_player_2 stop").
+  /// The same for mpv's video channel (a phone's or a desktop's player): a property mpv reports
+  /// ('secondary-sub-start', in seconds), under the number the player asked to hear of it by.
+  static Future<void> videoProperty(WidgetTester t, String name, Object? value) async {
+    final asked = videoCalls.lastWhere((c) => c.startsWith('observeProperty ') && c.contains('name: $name,'));
+    final id = int.parse(RegExp(r'id: (\d+)').firstMatch(asked)![1]!);
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      'vyse/mpv_player/events',
+      const StandardMethodCodec().encodeSuccessEnvelope(<Object?>[id, value]),
+      (_) {},
+    );
+    await t.pump();
+  }
+
+  /// What mpv's stand-in answers when the player reads a property, by its name
+  /// ('track-list/count': '2'). Anything not listed reads as nothing.
+  static final videoProperties = <String, String>{};
+
+  /// The same for the audio engines (music, audiobooks on the second, and the listener that
+  /// decodes a video's sound for subtitle sync): each call starts with its channel's last part
+  /// ("mpv_audio_player_2 stop").
   static final audioCalls = <String>[];
+
+  /// A property an audio engine reports ([core]: 'mpv_audio_listener'), under the number its
+  /// player asked to hear of it by.
+  static Future<void> audioProperty(WidgetTester t, String core, String name, Object? value) async {
+    final asked = audioCalls.lastWhere((c) => c.startsWith('$core observeProperty ') && c.contains('name: $name,'));
+    final id = int.parse(RegExp(r'id: (\d+)').firstMatch(asked)![1]!);
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      'vyse/$core/events',
+      const StandardMethodCodec().encodeSuccessEnvelope(<Object?>[id, value]),
+      (_) {},
+    );
+    await t.pump();
+  }
 
   /// The app's plugins (players, the window, notifications) have no native side in a test. Every
   /// call to one gets "done, nothing to say" instead of a missing-plugin error, and is noted in
@@ -302,9 +333,13 @@ abstract final class Bed {
           if (channel == 'vyse/mpv_player') videoCalls.add('${call.method} ${call.arguments ?? ''}'.trim());
           // (the Media3 engine's own channel: an Android TV's player, unless Settings says mpv)
           if (channel == 'vyse/exo_player') exoCalls.add('${call.method} ${call.arguments ?? ''}'.trim());
-          if (channel.startsWith('vyse/mpv_audio_player')) audioCalls.add('${channel.substring('vyse/'.length)} ${call.method} ${call.arguments ?? ''}'.trim());
+          if (channel.startsWith('vyse/mpv_audio')) audioCalls.add('${channel.substring('vyse/'.length)} ${call.method} ${call.arguments ?? ''}'.trim());
           if (call.method == 'initialize') return Future.value(methods.encodeSuccessEnvelope(true));
           if (channel == 'vyse/exo_player' && exoAnswers.containsKey(call.method)) return Future.value(methods.encodeSuccessEnvelope(exoAnswers[call.method]));
+          if (channel == 'vyse/mpv_player' && call.method == 'getProperty') {
+            final name = (call.arguments as Map?)?['name'];
+            if (videoProperties.containsKey(name)) return Future.value(methods.encodeSuccessEnvelope(videoProperties[name]));
+          }
         } catch (_) {}
       }
       if (channel == 'vyse/device' && message != null && deviceAnswers.isNotEmpty) {
@@ -525,13 +560,14 @@ abstract final class Bed {
     await settle(t);
   }
 
-  /// Opens the video player over the app, on a title of its own (see [freshTitle]). The video
+  /// Opens the video player over the app, on a title of its own (see [freshTitle]) or on
+  /// [media] (one with progress a test has saved for it, say). The video
   /// engine is a stand-in that answers "started" and plays nothing, so the page stays as it
   /// is while sources are looked for: every control and menu is there.
-  static Future<void> openPlayer(WidgetTester t, {bool series = false}) async {
+  static Future<void> openPlayer(WidgetTester t, {bool series = false, Media? media}) async {
     await pumpShell(t);
     unawaited(rootNavigatorKey.currentState!.push(MaterialPageRoute<void>(
-      builder: (_) => PlayerPage(media: freshTitle(series: series), episode: series ? const PlayerEpisode(season: 1, number: 1) : null),
+      builder: (_) => PlayerPage(media: media ?? freshTitle(series: series), episode: series ? const PlayerEpisode(season: 1, number: 1) : null),
     )));
     await settle(t, rounds: 6);
     expect(find.byType(PlayerPage), findsOneWidget);

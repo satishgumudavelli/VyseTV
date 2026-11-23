@@ -26,6 +26,8 @@ void MpvPlayerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef regis
 void MpvAudioPlayerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar);
 // VyseTV: second audio-only core (audiobooks), channel vyse/mpv_audio_player_2.
 void MpvAudio2PlayerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar);
+// VyseTV: the core that decodes a video's sound for subtitle sync by ear.
+void MpvAudioListenerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar);
 
 namespace mpv {
 

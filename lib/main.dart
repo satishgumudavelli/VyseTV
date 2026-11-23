@@ -40,6 +40,7 @@ import 'dpad/dpad_root.dart';
 import 'dpad/input_mode_tracker.dart';
 import 'core/platform/device_performance.dart';
 import 'core/platform/platform_detector.dart' show PlatformDetector, TvDetectionService;
+import 'screens/home/up_next.dart' show UpNext;
 import 'screens/shell/intro_screen.dart';
 import 'services/iptv/iptv_settings.dart';
 
@@ -85,6 +86,7 @@ Future<void> main() async {
   Addons.start();
   Badges.start();
   await WatchProgress.initialize();
+  await UpNext.initialize(); // Continue watching's next episodes, as last found
   await MyList.initialize();
   await MusicLibrary.initialize();
   await Debrid.initialize();

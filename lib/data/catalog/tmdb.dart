@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../sources/addons.dart' show Addons;
+import 'meta_addons.dart';
+
 // TMDB v3 key. Override at build time with --dart-define=TMDB_API_KEY=...
 const _apiKey = String.fromEnvironment(
   'TMDB_API_KEY',
@@ -27,6 +30,8 @@ class Media {
     this.voteCount = 0,
     this.date = '',
     this.anime = false,
+    this.addonId,
+    this.addonType,
   });
 
   /// [id] is TMDB's, or AniList's when [anime] is set.
@@ -49,6 +54,52 @@ class Media {
   /// and [posterPath] / [backdropPath] are full image addresses.
   final bool anime;
 
+  /// A title from a Stremio metadata addon: the id the addons know it by (`tt0944947`,
+  /// `kitsu:7442`). Its details, episodes and sources come from the addons, [posterPath] and
+  /// [backdropPath] are full image addresses, and [id] is TMDB's only once the title has been
+  /// matched to TMDB ([tmdbKnown]); until then it is a negative number of its own.
+  final String? addonId;
+
+  /// What the addons call its kind (movie, series, channel, tv…): what they are asked for it as.
+  final String? addonType;
+
+  bool get isAddon => addonId != null;
+
+  /// Whether [id] is TMDB's (always, for a TMDB title; an addon title once it has been matched).
+  bool get tmdbKnown => !isAddon || id > 0;
+
+  /// The same title under TMDB's id [tmdbId] (an addon title matched to TMDB): its key stays.
+  Media withTmdb(int tmdbId) => Media(
+    id: tmdbId,
+    title: title,
+    isTv: isTv,
+    overview: overview,
+    posterPath: posterPath,
+    backdropPath: backdropPath,
+    rating: rating,
+    year: year,
+    genreIds: genreIds,
+    popularity: popularity,
+    voteCount: voteCount,
+    date: date,
+    anime: anime,
+    addonId: addonId,
+    addonType: addonType,
+  );
+
+  /// The number an addon title goes by until it is matched to TMDB: its own, never a real id.
+  static int addonNumber(String addonId) {
+    var h = 0x811c9dc5;
+    for (final c in addonId.codeUnits) {
+      h = ((h ^ c) * 0x01000193) & 0x7fffffff;
+    }
+    return -(h == 0 ? 1 : h);
+  }
+
+  /// What the hand-written copies of a title (My List, progress, a party) add for an addon
+  /// title, so it comes back as one ([Media.fromJson] reads them).
+  Map<String, dynamic> get addonFields => {'sid': ?addonId, 'stype': ?addonType};
+
   factory Media.fromJson(Map<String, dynamic> j, {bool? tv}) {
     final isTv = tv ?? (j['media_type'] == 'tv' || j.containsKey('first_air_date'));
     final date = (j['release_date'] ?? j['first_air_date'] ?? '') as String;
@@ -66,18 +117,36 @@ class Media {
       voteCount: (j['vote_count'] as num?)?.toInt() ?? 0,
       date: date,
       anime: j['anime'] == true,
+      addonId: j['sid'] is String ? j['sid'] as String : null,
+      addonType: j['stype'] is String ? j['stype'] as String : null,
     );
   }
 
-  String get kind => anime ? 'Anime' : (isTv ? 'Series' : 'Movie');
+  String get kind => anime ? 'Anime' : (isAddon ? addonKind(addonType, isTv: isTv) : (isTv ? 'Series' : 'Movie'));
 
-  /// Stable identity across rows, lists and TMDB URLs, e.g. `tv/1399`.
-  String get key => anime ? 'anime/$id' : '${isTv ? 'tv' : 'movie'}/$id';
-  String get tmdbUrl => anime ? 'https://anilist.co/anime/$id' : 'https://www.themoviedb.org/$key';
+  /// Stable identity across rows, lists and TMDB URLs, e.g. `tv/1399` (an addon title:
+  /// `meta/tt0944947`, whichever addon it came from).
+  String get key => anime ? 'anime/$id' : (isAddon ? 'meta/$addonId' : '${isTv ? 'tv' : 'movie'}/$id');
+  String get tmdbUrl => anime
+      ? 'https://anilist.co/anime/$id'
+      : isAddon
+      ? (id > 0 ? 'https://www.themoviedb.org/${isTv ? 'tv' : 'movie'}/$id' : (addonId!.startsWith('tt') ? 'https://www.imdb.com/title/$addonId' : ''))
+      : 'https://www.themoviedb.org/$key';
   String? poster([String size = 'w342']) => _image(posterPath, size);
   String? backdrop([String size = 'w1280']) => _image(backdropPath, size);
   static String? _image(String? path, String size) => path == null ? null : (path.startsWith('http') ? path : '$_imageBase/$size$path');
 }
+
+/// What a kind of addon title is called (Movie, Series, Anime, Channel, TV…).
+String addonKind(String? type, {bool isTv = false}) => switch (type) {
+  'movie' => 'Movie',
+  'series' => 'Series',
+  'anime' => 'Anime',
+  'channel' => 'Channel',
+  'tv' => 'TV',
+  null || '' => isTv ? 'Series' : 'Movie',
+  final t => '${t[0].toUpperCase()}${t.substring(1)}',
+};
 
 /// "S2:E5", or "E5" for anime (numbered straight through, season 0).
 String episodeLabel(int? season, int episode, {String gap = ':'}) =>
@@ -285,9 +354,10 @@ class HomeFeed {
         return [...networks.nonNulls, ...companies.take(20)];
       });
 
-  Future<MediaDetails> details(Media m) => _memo('details/${m.key}', () => Tmdb.details(m));
+  // (an addon title's details are kept by MetaAddons, with the rest of what its addons said)
+  Future<MediaDetails> details(Media m) => m.isAddon ? MetaAddons.details(m) : _memo('details/${m.key}', () => Tmdb.details(m));
 
-  Future<List<Media>> because(Media m) => m.anime ? Future.value(const []) : _memo(
+  Future<List<Media>> because(Media m) => m.anime || m.isAddon ? Future.value(const []) : _memo(
       'rec${m.isTv}${m.id}', () => Tmdb.list('/${m.isTv ? 'tv' : 'movie'}/${m.id}/recommendations', tv: m.isTv));
 
   final _phoneArt = <String, Future<String?>>{};
@@ -295,6 +365,7 @@ class HomeFeed {
   /// Portrait art for the phone hero: a textless poster, or null to fall back to the backdrop.
   Future<String?> phoneArt(Media m) {
     final key = m.key;
+    if (m.isAddon) return Future.value();
     return _phoneArt[key] ??= Tmdb.textlessPoster(m).catchError((Object _) {
       _phoneArt.remove(key);
       return null;
@@ -304,6 +375,8 @@ class HomeFeed {
   final _logos = <String, Future<String?>>{};
   Future<String?> logo(Media m) {
     final key = m.key;
+    // (an addon title's: what its catalog or details said, asked each time, never kept as none)
+    if (m.isAddon) return MetaAddons.logo(m);
     return _logos[key] ??= Tmdb.logo(m).catchError((Object _) {
       _logos.remove(key);
       return null;
@@ -316,6 +389,8 @@ class HomeFeed {
       }));
 
   void warmUp() {
+    // (TMDB turned off in Settings > Addons: Home is made from your addons)
+    if (!Addons.tmdbOn) return;
     // Errors surface later in the rows themselves.
     for (final f in [hero(), topMoviesToday(), providers(), popularTv()]) {
       f.ignore();
@@ -412,6 +487,7 @@ class MediaDetails {
     this.seasons = const [],
     this.videos = const [],
     this.recommendations = const [],
+    this.parts = const [],
   });
 
   final Media media;
@@ -438,6 +514,10 @@ class MediaDetails {
   final List<Season> seasons;
   final List<Video> videos;
   final List<Media> recommendations;
+
+  /// A collection's films (from a metadata addon such as TMDB Collections), each a title of its
+  /// own. Empty for a film or a show.
+  final List<Media> parts;
 
   Video? get trailer => videos.firstOrNull;
 
@@ -566,6 +646,7 @@ class MyList {
       'vote_count': s.media.voteCount,
       'date': s.media.date.isNotEmpty ? s.media.date : (s.media.year ?? ''),
       if (s.media.anime) 'anime': true,
+      ...s.media.addonFields,
     },
     'a': s.added.millisecondsSinceEpoch,
   };

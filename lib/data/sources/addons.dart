@@ -11,13 +11,109 @@ import '../net.dart';
 import 'sources.dart' show StreamSource;
 import '../playback/stream_proxy.dart';
 import '../subtitles/subtitles.dart' show SubtitleTrack, subtitleTrack;
+import '../catalog/meta_addons.dart';
 import '../catalog/tmdb.dart';
 import 'torrents.dart';
 
 const _ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
 
-/// A Stremio addon you installed: a stream addon (finds videos), a subtitle addon, or both.
-/// Anything else an addon offers (catalogs, metadata) is left alone.
+/// One catalog a metadata addon offers: a list of titles to browse (a Home row, a Discover
+/// page), some of them searchable. From the manifest's `catalogs`.
+@immutable
+class AddonCatalog {
+  const AddonCatalog({
+    required this.type,
+    required this.id,
+    required this.name,
+    this.genres = const [],
+    this.genreRequired = false,
+    this.search = false,
+    this.searchOnly = false,
+    this.skip = false,
+    this.otherRequired = false,
+  });
+
+  /// What it lists (movie, series, anime, channel, tv…) and its id within the addon.
+  final String type;
+  final String id;
+  final String name;
+
+  /// The choices of its genre filter (some addons list years or services here).
+  final List<String> genres;
+
+  /// It only lists one genre at a time (Cinemeta's "New" lists one year).
+  final bool genreRequired;
+
+  /// It takes a search, or only answers one.
+  final bool search;
+  final bool searchOnly;
+
+  /// It comes a page at a time (`skip`).
+  final bool skip;
+
+  /// It needs something VyseTV can't give it (the ids of what you follow): never asked.
+  final bool otherRequired;
+
+  /// It can be a row on Home: it lists something without being asked for a genre or a search.
+  bool get board => !genreRequired && !searchOnly && !otherRequired;
+
+  /// It can be browsed on Discover (with a genre picked, when it needs one).
+  bool get browsable => !searchOnly && !otherRequired && (!genreRequired || genres.isNotEmpty);
+
+  /// From a manifest's catalog, written either way the protocol allows (`extra`, or the older
+  /// `extraSupported` / `extraRequired` / `genres`).
+  static AddonCatalog? fromManifest(Object? j) {
+    if (j is! Map || j['type'] == null || j['id'] == null) return null;
+    List<String> strings(Object? v) => [for (final x in (v is List ? v : const [])) '$x'];
+    final extra = [for (final e in (j['extra'] is List ? j['extra'] as List : const [])) if (e is Map && e['name'] != null) e];
+    final supported = {...strings(j['extraSupported']), for (final e in extra) '${e['name']}'};
+    final required = {...strings(j['extraRequired']), for (final e in extra) if (e['isRequired'] == true) '${e['name']}'};
+    final genre = extra.where((e) => e['name'] == 'genre').firstOrNull;
+    final genres = genre != null && genre['options'] is List ? strings(genre['options']) : strings(j['genres']);
+    final name = '${j['name'] ?? ''}'.trim();
+    return AddonCatalog(
+      type: '${j['type']}',
+      id: '${j['id']}',
+      name: name.isEmpty ? '${j['id']}' : name,
+      genres: genres,
+      genreRequired: required.contains('genre'),
+      search: supported.contains('search'),
+      searchOnly: required.contains('search'),
+      skip: supported.contains('skip'),
+      otherRequired: required.any((n) => n != 'genre' && n != 'search' && n != 'skip'),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    't': type,
+    'i': id,
+    'n': name,
+    if (genres.isNotEmpty) 'g': genres,
+    if (genreRequired) 'gr': true,
+    if (search) 's': true,
+    if (searchOnly) 'so': true,
+    if (skip) 'k': true,
+    if (otherRequired) 'x': true,
+  };
+
+  static AddonCatalog? fromJson(Object? j) {
+    if (j is! Map || j['t'] is! String || j['i'] is! String) return null;
+    return AddonCatalog(
+      type: j['t'] as String,
+      id: j['i'] as String,
+      name: '${j['n'] ?? j['i']}',
+      genres: [for (final g in (j['g'] is List ? j['g'] as List : const [])) '$g'],
+      genreRequired: j['gr'] == true,
+      search: j['s'] == true,
+      searchOnly: j['so'] == true,
+      skip: j['k'] == true,
+      otherRequired: j['x'] == true,
+    );
+  }
+}
+
+/// A Stremio addon you installed: a metadata addon (catalogs to browse, the details of titles),
+/// a stream addon (finds videos), a subtitle addon, or any mix of them.
 @immutable
 class Addon {
   const Addon({
@@ -35,6 +131,13 @@ class Addon {
     this.subtitleTypes = const [],
     this.subtitlePrefixes = const [],
     this.enabled = true,
+    this.catalogs = const [],
+    this.meta = false,
+    this.metaTypes = const [],
+    this.metaPrefixes = const [],
+    this.catalogsRead = true,
+    this.addonCatalogs = const [],
+    this.needsSetup = false,
   });
 
   /// Where its manifest is: `https://…/manifest.json`.
@@ -52,6 +155,34 @@ class Addon {
   final List<String> subtitleTypes;
   final List<String> subtitlePrefixes;
   final bool enabled;
+
+  /// Its catalogs (Home rows, Discover, search), in the manifest's order.
+  final List<AddonCatalog> catalogs;
+
+  /// It gives the details of titles (Stremio's `meta`): of the [metaTypes] (empty: any) whose
+  /// ids start with one of [metaPrefixes] (empty: any).
+  final bool meta;
+  final List<String> metaTypes;
+  final List<String> metaPrefixes;
+
+  /// Saved by a version that reads catalogs. One saved before then is read again once (an
+  /// addon installed for its streams may have had catalogs all along).
+  final bool catalogsRead;
+
+  /// Lists of other addons it offers (Stremio's `addon_catalog`: Cinemeta's Official and
+  /// Community lists), to install from.
+  final List<AddonCatalog> addonCatalogs;
+
+  /// It has to be set up on its own page before it can be installed
+  /// (`behaviorHints.configurationRequired`): seen in an addon list, never in yours.
+  final bool needsSetup;
+
+  /// It offers something to browse, or the details of titles.
+  bool get metadata => catalogs.isNotEmpty || meta;
+
+  /// Whether it gives the details of [id], a title of kind [type].
+  bool metaFor(String type, String id) =>
+      meta && (metaTypes.isEmpty || metaTypes.contains(type)) && (metaPrefixes.isEmpty || metaPrefixes.any(id.startsWith));
 
   String get base => manifestUrl.replaceFirst(RegExp(r'/manifest\.json$'), '');
   String? get configureUrl => configurable ? '$base/configure' : null;
@@ -71,8 +202,19 @@ class Addon {
     streamTypes: ['movie', 'series'],
   );
 
+  /// VyseTV's own catalog and details: Home, Discover, the details pages and search come from
+  /// TMDB while it is on. Turned off, they come only from your metadata addons.
+  static const tmdb = Addon(
+    manifestUrl: 'builtin:tmdb',
+    id: 'vyse.tmdb',
+    name: 'TMDB',
+    description: 'Built in. Home, Discover, details and search from The Movie Database. Turn it off to browse only your metadata addons.',
+    meta: true,
+    metaTypes: ['movie', 'series'],
+  );
+
   /// Every built-in addon, in the order a fresh install lists them (after your own).
-  static const builtIns = [knaben];
+  static const builtIns = [tmdb, knaben];
 
   Addon copyWith({bool? enabled}) => Addon(
     manifestUrl: manifestUrl,
@@ -89,6 +231,13 @@ class Addon {
     subtitleTypes: subtitleTypes,
     subtitlePrefixes: subtitlePrefixes,
     enabled: enabled ?? this.enabled,
+    catalogs: catalogs,
+    meta: meta,
+    metaTypes: metaTypes,
+    metaPrefixes: metaPrefixes,
+    catalogsRead: catalogsRead,
+    addonCatalogs: addonCatalogs,
+    needsSetup: needsSetup,
   );
 
   /// From a manifest (https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/manifest.md).
@@ -117,6 +266,12 @@ class Addon {
       streamPrefixes: prefixes('stream'),
       subtitleTypes: types('subtitles'),
       subtitlePrefixes: prefixes('subtitles'),
+      catalogs: [for (final c in (j['catalogs'] is List ? j['catalogs'] as List : const [])) ?AddonCatalog.fromManifest(c)],
+      meta: has('meta'),
+      metaTypes: types('meta'),
+      metaPrefixes: prefixes('meta'),
+      addonCatalogs: [for (final c in (j['addonCatalogs'] is List ? j['addonCatalogs'] as List : const [])) ?AddonCatalog.fromManifest(c)],
+      needsSetup: hints['configurationRequired'] == true,
     );
   }
 
@@ -135,6 +290,11 @@ class Addon {
     'ut': subtitleTypes,
     'up': subtitlePrefixes,
     'on': enabled,
+    'cat': [for (final c in catalogs) c.toJson()],
+    if (meta) 'meta': true,
+    if (metaTypes.isNotEmpty) 'mt': metaTypes,
+    if (metaPrefixes.isNotEmpty) 'mp': metaPrefixes,
+    if (addonCatalogs.isNotEmpty) 'ac': [for (final c in addonCatalogs) c.toJson()],
   };
 
   static Addon? fromJson(Map<String, dynamic> j) {
@@ -155,6 +315,12 @@ class Addon {
         subtitleTypes: l('ut'),
         subtitlePrefixes: l('up'),
         enabled: j['on'] != false,
+        catalogs: [for (final c in (j['cat'] is List ? j['cat'] as List : const [])) ?AddonCatalog.fromJson(c)],
+        meta: j['meta'] == true,
+        metaTypes: l('mt'),
+        metaPrefixes: l('mp'),
+        catalogsRead: j.containsKey('cat'),
+        addonCatalogs: [for (final c in (j['ac'] is List ? j['ac'] as List : const [])) ?AddonCatalog.fromJson(c)],
       );
     } catch (_) {
       return null;
@@ -162,11 +328,43 @@ class Addon {
   }
 }
 
+/// An episode of a title from a metadata addon, as the stream addons know it: the id its video
+/// goes by, and where IMDb counts it (when the addon says so, or its numbers are IMDb's own).
+@immutable
+class AddonVideoRef {
+  const AddonVideoRef({required this.season, required this.episode, required this.id, this.imdbSeason, this.imdbEpisode, this.inline = const []});
+  final int season;
+  final int episode;
+  final String id;
+  final int? imdbSeason;
+  final int? imdbEpisode;
+
+  /// The streams its addon put in the episode itself.
+  final List<Map<String, dynamic>> inline;
+}
+
 /// What to ask addons for: one film, or one episode, under every id we know for it.
 @immutable
 class AddonTarget {
-  const AddonTarget({required this.type, this.imdb, this.tmdb, this.kitsu, this.season, this.episode, this.anime = false, this.title, this.year});
-  final String type; // movie, series
+  const AddonTarget({
+    required this.type,
+    this.imdb,
+    this.tmdb,
+    this.kitsu,
+    this.season,
+    this.episode,
+    this.anime = false,
+    this.title,
+    this.year,
+    this.raw,
+    this.video,
+    this.imdbSeason,
+    this.imdbEpisode,
+    this.videos = const [],
+    this.inline = const [],
+    this.inlineFrom,
+  });
+  final String type; // movie, series (an addon title: whatever its addon calls it)
   final String? imdb;
   final int? tmdb;
   final int? kitsu;
@@ -179,11 +377,65 @@ class AddonTarget {
   final String? title;
   final int? year;
 
-  AddonTarget withEpisode(int? season, int? episode) =>
-      AddonTarget(type: type, imdb: imdb, tmdb: tmdb, kitsu: kitsu, season: season, episode: episode, anime: anime, title: title, year: year);
+  /// A title from a metadata addon: its own id (`tt0944947`, `kitsu:7442`, `yt_id:…`), and for an
+  /// episode the id its video goes by (`tt0944947:1:1`, `kitsu:7442:1`). An addon that takes
+  /// these ids is asked for them as they are, the way Stremio asks.
+  final String? raw;
+  final String? video;
+
+  /// Where IMDb counts the episode, for addons that only take IMDb's ids (null: unknown).
+  final int? imdbSeason;
+  final int? imdbEpisode;
+
+  /// Every episode of that addon title, to find another episode's ids by.
+  final List<AddonVideoRef> videos;
+
+  /// Streams its details carry for this film or episode themselves (a video's `streams`), and
+  /// the addon they came from: listed as that addon's own on the sources screen.
+  final List<Map<String, dynamic>> inline;
+  final Addon? inlineFrom;
+
+  AddonTarget withEpisode(int? season, int? episode) {
+    if (raw != null) {
+      final v = videos.where((v) => v.season == season && v.episode == episode).firstOrNull;
+      return AddonTarget(
+        type: type,
+        imdb: imdb,
+        tmdb: tmdb,
+        season: season,
+        episode: episode,
+        title: title,
+        year: year,
+        raw: raw,
+        video: v?.id,
+        imdbSeason: v?.imdbSeason,
+        imdbEpisode: v?.imdbEpisode,
+        videos: videos,
+        inline: v?.inline ?? const [],
+        inlineFrom: inlineFrom,
+      );
+    }
+    return AddonTarget(type: type, imdb: imdb, tmdb: tmdb, kitsu: kitsu, season: season, episode: episode, anime: anime, title: title, year: year);
+  }
 
   /// The id [prefixes] understands (an addon that names none takes IMDb ids), or null.
   String? idFor(List<String> prefixes) {
+    bool takes(String id) => prefixes.isEmpty ? id.startsWith('tt') : prefixes.any(id.startsWith);
+    if (raw != null) {
+      final episodeOf = video != null || (season != null && episode != null);
+      final own = video ?? (episodeOf ? '$raw:$season:$episode' : raw!);
+      if (takes(own)) return own;
+      // IMDb's and TMDB's ids, for an episode only where IMDb's numbers for it are known
+      final s = imdbSeason, e = imdbEpisode;
+      final known = !episodeOf || type == 'movie' || (s != null && e != null);
+      for (final id in [
+        if (imdb != null && known) episodeOf && type != 'movie' ? '$imdb:$s:$e' : imdb!,
+        if (tmdb != null && known) episodeOf && type != 'movie' ? 'tmdb:$tmdb:$s:$e' : 'tmdb:$tmdb',
+      ]) {
+        if (takes(id)) return id;
+      }
+      return null;
+    }
     final series = type == 'series';
     final tt = imdb == null ? null : (anime ? (series ? null : imdb) : (series ? '$imdb:$season:$episode' : imdb));
     final kt = kitsu == null ? null : (series ? 'kitsu:$kitsu:$episode' : 'kitsu:$kitsu');
@@ -214,9 +466,19 @@ class AddonStream {
     this.infoHash,
     this.fileIdx,
     this.trackers = const [],
+    this.external,
+    this.subtitles = const [],
   });
   final Addon addon;
   final String url; // empty for a torrent
+
+  /// Not a video VyseTV plays but a link that opens elsewhere: a web page (`externalUrl`), a
+  /// YouTube video (`ytId`, opened on YouTube), or a Stremio link (`stremio:///detail/…`, opened
+  /// in VyseTV). Listed after what plays; never picked by autoplay.
+  final String? external;
+
+  /// The stream's own subtitle files (Stremio's `subtitles` on a stream), offered with it.
+  final List<SubtitleTrack> subtitles;
   final String? infoHash; // a torrent, played peer to peer by our engine
   final int? fileIdx; // which file in the torrent (from 0)
   final List<String> trackers;
@@ -233,8 +495,13 @@ class AddonStream {
     final url = '${j['url'] ?? ''}';
     final hash = '${j['infoHash'] ?? ''}';
     final isTorrent = !url.startsWith('http') && RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(hash);
-    // links play directly; torrents through our engine where it runs; external pages never
-    if (!url.startsWith('http') && !(isTorrent && Torrents.supported)) return null;
+    final yt = '${j['ytId'] ?? ''}'.trim(), page = '${j['externalUrl'] ?? ''}'.trim();
+    final external = url.startsWith('http') || isTorrent
+        ? null
+        : (yt.isNotEmpty ? 'https://www.youtube.com/watch?v=${Uri.encodeComponent(yt)}' : (page.startsWith('http') || page.startsWith('stremio:') ? page : null));
+    // links play directly; torrents through our engine where it runs; a page or YouTube video
+    // opens where it lives; anything else (archives, Usenet) needs Stremio's own server
+    if (!url.startsWith('http') && !(isTorrent && Torrents.supported) && external == null) return null;
     final hints = j['behaviorHints'] is Map ? j['behaviorHints'] as Map : const {};
     final proxy = hints['proxyHeaders'] is Map ? hints['proxyHeaders'] as Map : const {};
     final request = proxy['request'] is Map ? proxy['request'] as Map : const {};
@@ -256,8 +523,23 @@ class AddonStream {
           for (final s in (j['sources'] as List?) ?? const [])
             if ('$s'.startsWith('tracker:')) '$s'.substring(8),
       ],
+      external: external,
+      subtitles: [
+        for (final (i, s) in (j['subtitles'] is List ? j['subtitles'] as List : const []).whereType<Map>().indexed)
+          if ('${s['url'] ?? ''}'.startsWith('http'))
+            subtitleTrack(
+              'stream-${addon.id}-${hash.isEmpty ? url.hashCode : hash}-$i',
+              addon.name,
+              '${s['lang'] ?? 'eng'}',
+              '${s['url']}',
+              format: RegExp(r'\.(vtt|ass|ssa)(\?|$)').firstMatch('${s['url']}')?.group(1) ?? 'srt',
+            ),
+      ],
     );
   }
+
+  /// It plays in VyseTV's player (a link or a torrent), rather than opening elsewhere.
+  bool get playable => external == null;
 
   // the description and the file name (which often says more), with dots as spaces
   late final String _raw = '$text\n${filename ?? ''}';
@@ -373,8 +655,9 @@ class AddonStream {
   /// How it ranks for "Play best": a cinema recording last whatever it claims, what plays right
   /// away (a link, or cached) first, then the picture (4K down), then the sound (7.1 over 5.1
   /// over stereo, and Atmos over Dolby Digital within each).
-  late final int rank =
-      (source == 'Cam' ? 0 : 10000000) + (cached || !torrent ? 1000000 : 0) + qualityRank * 100000 + channelRank * 1000 + audioRank * 10;
+  late final int rank = !playable
+      ? -1
+      : (source == 'Cam' ? 0 : 10000000) + (cached || !torrent ? 1000000 : 0) + qualityRank * 100000 + channelRank * 1000 + audioRank * 10;
 
   /// The languages it's in: its flags (🇯🇵 → Japanese), the badge template's language badges, and
   /// "Multi" when it says so.
@@ -499,6 +782,7 @@ class AutoplayOrder {
     final order = steps;
     final groups = [for (var i = 0; i <= order.length; i++) <(int, AddonStream)>[]];
     for (final (i, s) in streams.indexed) {
+      if (!s.playable) continue; // (a page or a YouTube video: opened by hand, never played by itself)
       final step = s.source == 'Cam' ? -1 : order.indexWhere((x) => x.matches(s));
       groups[step < 0 ? order.length : step].add((i, s));
     }
@@ -535,6 +819,28 @@ class Addons {
     _started = true;
     AppSettings.addons.addListener(_load);
     _load();
+    unawaited(refresh());
+  }
+
+  /// Reads every installed addon's manifest again, at most once a day unless [force]: an addon
+  /// that changed what it offers (a configured one's catalogs, a new version) is kept current, in
+  /// its place and on or off as you left it. One that doesn't answer stays as it was.
+  static Future<void> refresh({bool force = false}) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!force && now - AppSettings.addonsRefreshed.value < const Duration(days: 1).inMilliseconds) return;
+    AppSettings.addonsRefreshed.set(now);
+    final fresh = <String, Addon>{};
+    await Future.wait([
+      for (final a in list.value)
+        if (!a.builtIn)
+          () async {
+            try {
+              fresh[a.manifestUrl] = Addon.fromManifest(a.manifestUrl, await _manifest(a.manifestUrl));
+            } catch (_) {}
+          }(),
+    ]);
+    if (fresh.isEmpty) return;
+    _save([for (final a in list.value) fresh[a.manifestUrl]?.copyWith(enabled: a.enabled) ?? a]);
   }
 
   static void _load() {
@@ -547,6 +853,30 @@ class Addons {
       saved = const [];
     }
     list.value = withBuiltIns(saved);
+    for (final a in list.value) {
+      if (!a.builtIn && !a.catalogsRead && _reread.add(a.manifestUrl)) unawaited(_readAgain(a));
+    }
+  }
+
+  static final _reread = <String>{};
+
+  /// An addon saved before VyseTV read catalogs: its manifest once more, for what it offers to
+  /// browse. Kept as it was if that fails.
+  static Future<void> _readAgain(Addon old) async {
+    try {
+      final fresh = Addon.fromManifest(old.manifestUrl, await _manifest(old.manifestUrl));
+      final l = [...list.value];
+      final i = l.indexWhere((x) => x.manifestUrl == old.manifestUrl);
+      if (i < 0) return;
+      l[i] = fresh.copyWith(enabled: l[i].enabled);
+      _save(l);
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>> _manifest(String url) async {
+    final r = await netClient.get(Uri.parse(url), headers: {'User-Agent': _ua, 'Accept': 'application/json'}).timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) throw StateError('HTTP ${r.statusCode}');
+    return json.decode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
   }
 
   /// [saved] with the built-in addons in it: each stays where you put it and on or off as you
@@ -570,6 +900,18 @@ class Addons {
   static List<Addon> get streamAddons => [for (final a in list.value) if (a.enabled && a.streams) a];
   static List<Addon> get subtitleAddons => [for (final a in list.value) if (a.enabled && a.subtitles) a];
 
+  /// Whether TMDB, the built-in metadata addon, is on (it is, until you turn it off).
+  static bool get tmdbOn => list.value.where((a) => a.manifestUrl == Addon.tmdb.manifestUrl).firstOrNull?.enabled ?? true;
+
+  /// Your metadata addons that are on, in your order (TMDB not among them).
+  static List<Addon> get metaAddons => [for (final a in list.value) if (a.enabled && !a.builtIn && a.metadata) a];
+
+  /// Those of them with catalogs to browse.
+  static List<Addon> get catalogAddons => [for (final a in metaAddons) if (a.catalogs.isNotEmpty) a];
+
+  /// Home, Discover and search come only from your metadata addons: TMDB is off.
+  static bool get addonsOnly => !tmdbOn;
+
   /// `stremio://host/manifest.json`, a configure page's link, or the manifest's own address.
   static String normalize(String input) {
     var u = input.trim();
@@ -581,14 +923,13 @@ class Addons {
   }
 
   /// Reads the addon's manifest and adds it (or updates it, for a link you already have).
-  /// Throws a readable message when it isn't a stream or subtitle addon.
+  /// Throws a readable message when it offers nothing VyseTV uses. A new addon with catalogs goes
+  /// just above TMDB, so its rows lead on Home; any other goes at the end.
   static Future<Addon> install(String input) async {
     final url = normalize(input);
     final Map<String, dynamic> j;
     try {
-      final r = await netClient.get(Uri.parse(url), headers: {'User-Agent': _ua, 'Accept': 'application/json'}).timeout(const Duration(seconds: 20));
-      if (r.statusCode != 200) throw StateError('HTTP ${r.statusCode}');
-      j = json.decode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      j = await _manifest(url);
     } catch (_) {
       throw "Couldn't read that addon. Check the link (it ends in manifest.json).";
     }
@@ -596,11 +937,16 @@ class Addons {
     if ((j['behaviorHints'] is Map) && (j['behaviorHints'] as Map)['configurationRequired'] == true) {
       throw '${a.name} needs setting up first: open its configure page, then paste the link it gives you.';
     }
-    if (!a.streams && !a.subtitles) throw "${a.name} doesn't offer streams or subtitles, so it has nothing to add here.";
+    if (!a.streams && !a.subtitles && !a.metadata) {
+      throw "${a.name} doesn't offer catalogs, details, streams or subtitles, so it has nothing to add here.";
+    }
     final l = [...list.value];
     final i = l.indexWhere((x) => x.manifestUrl == url || x.id == a.id);
     if (i >= 0) {
       l[i] = a.copyWith(enabled: l[i].enabled);
+    } else if (a.catalogs.isNotEmpty) {
+      final t = l.indexWhere((x) => x.manifestUrl == Addon.tmdb.manifestUrl);
+      l.insert(t < 0 ? l.length : t, a);
     } else {
       l.add(a);
     }
@@ -625,8 +971,10 @@ class Addons {
 
   static final _imdb = <String, Future<String?>>{};
 
-  /// A film or an episode of a show from TMDB, or an anime from AniList.
+  /// A film or an episode of a show from TMDB, an anime from AniList, or a title from a metadata
+  /// addon (under its own ids: see [MetaAddons.target]).
   static Future<AddonTarget> target(Media m, {int? season, int? episode, Anime? anime}) async {
+    if (m.isAddon && anime == null) return MetaAddons.target(m, season: season, episode: episode);
     if (anime != null) {
       final x = await AnimeExtras.of(anime.id);
       return AddonTarget(type: anime.isMovie ? 'movie' : 'series', imdb: x.imdbId, kitsu: x.kitsuId, episode: episode, anime: true);
@@ -676,7 +1024,9 @@ class Addons {
     final series = t.type == 'series';
     if (t.anime || title == null || title.trim().isEmpty || !t.typeOk(a.streamTypes)) return null;
     if (series && (t.season == null || t.episode == null)) return null;
-    final hits = await Knaben.search(title: title, series: series, year: t.year, season: t.season, episode: t.episode);
+    // (an addon title's episode: where IMDb counts it, which release names go by, when known)
+    final season = t.imdbSeason ?? t.season, episode = t.imdbEpisode ?? t.episode;
+    final hits = await Knaben.search(title: title, series: series, year: t.year, season: season, episode: episode);
     if (!Torrents.supported) return (streams: const <AddonStream>[], torrents: hits.length);
     return (streams: [for (final h in hits) knabenStream(a, h)], torrents: 0);
   }
@@ -751,8 +1101,13 @@ class Addons {
     return AutoplayOrder.arrange(where == null ? all : all.where(where));
   }
 
-  /// Every subtitle addon's files for [t], together.
-  static Future<List<SubtitleTrack>> subtitles(AddonTarget t) async {
+  /// Every subtitle addon's files for [t], together. [filename] and [size]: the video's, when
+  /// the stream playing says (Stremio sends them so an addon can match the exact release).
+  static Future<List<SubtitleTrack>> subtitles(AddonTarget t, {String? filename, int? size}) async {
+    final extra = [
+      if (size != null && size > 0) 'videoSize=$size',
+      if (filename != null && filename.isNotEmpty) 'filename=${Uri.encodeComponent(filename)}',
+    ].join('&');
     final all = await Future.wait([
       for (final a in subtitleAddons)
         () async {
@@ -760,7 +1115,7 @@ class Addons {
           if (id == null || !t.typeOk(a.subtitleTypes)) return const <SubtitleTrack>[];
           try {
             final r = await netClient
-                .get(Uri.parse('${a.base}/subtitles/${t.type}/$id.json'), headers: {'User-Agent': _ua, 'Accept': 'application/json'})
+                .get(Uri.parse('${a.base}/subtitles/${t.type}/$id${extra.isEmpty ? '' : '/$extra'}.json'), headers: {'User-Agent': _ua, 'Accept': 'application/json'})
                 .timeout(const Duration(seconds: 15));
             if (r.statusCode != 200) return const <SubtitleTrack>[];
             final j = json.decode(utf8.decode(r.bodyBytes));
@@ -789,7 +1144,7 @@ class Addons {
   static Future<AddonPick?> follow(AddonPick p, int? season, int? episode) async {
     final t = p.target.withEpisode(season, episode);
     try {
-      final l = (await streams(p.stream.addon, t))?.streams;
+      final l = (await streams(p.stream.addon, t))?.streams.where((s) => s.playable).toList();
       if (l == null || l.isEmpty) return null;
       final was = p.stream;
       final same = was.bingeGroup == null ? null : l.where((s) => s.bingeGroup == was.bingeGroup).firstOrNull;

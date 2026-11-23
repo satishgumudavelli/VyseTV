@@ -22,6 +22,7 @@ Map<String, dynamic> _mediaJson(Media m) => {
   'genre_ids': m.genreIds,
   'date': m.date.isNotEmpty ? m.date : (m.year ?? ''),
   if (m.anime) 'anime': true,
+  ...m.addonFields,
 };
 
 Media _mediaFrom(Map<String, dynamic> m) {

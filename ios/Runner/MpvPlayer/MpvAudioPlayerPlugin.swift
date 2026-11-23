@@ -37,6 +37,12 @@ class MpvAudioPlayerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, MpvPl
     register(with: registrar, channel: "vyse/mpv_audio_player_2")
   }
 
+  /// VyseTV: a third audio-only core that plays nothing out loud: it decodes stretches of a
+  /// video's sound to a file (ao=pcm) for subtitle sync by ear.
+  static func registerListener(with registrar: FlutterPluginRegistrar) {
+    register(with: registrar, channel: "vyse/mpv_audio_listener")
+  }
+
   private static func register(with registrar: FlutterPluginRegistrar, channel: String) {
     #if os(macOS)
       let messenger = registrar.messenger

@@ -27,6 +27,14 @@ void MpvAudio2PlayerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef
       "vyse/mpv_audio_player_2", /*audio_only=*/true);
 }
 
+// VyseTV: a third audio-only core that plays nothing out loud: it decodes stretches of a
+// video's sound to a file (ao=pcm) for subtitle sync by ear.
+void MpvAudioListenerPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar) {
+  mpv::MpvPlayerPlugin::RegisterWithRegistrar(
+      flutter::PluginRegistrarManager::GetInstance()->GetRegistrar<flutter::PluginRegistrarWindows>(registrar),
+      "vyse/mpv_audio_listener", /*audio_only=*/true);
+}
+
 namespace mpv {
 
 namespace {
@@ -35,9 +43,11 @@ constexpr UINT kAudioPlatformTaskMessage = WM_APP + 0x04D1;
 // VyseTV: each plugin needs its own wake-up message; the window-proc delegate
 // that matches one consumes it, so two cores can't share an ID.
 constexpr UINT kAudio2PlatformTaskMessage = WM_APP + 0x04D2;
+constexpr UINT kAudioListenerPlatformTaskMessage = WM_APP + 0x04D3;
 
 UINT PlatformTaskMessageFor(const std::string& channel_name, bool audio_only) {
   if (!audio_only) return kPlatformTaskMessage;
+  if (channel_name == "vyse/mpv_audio_listener") return kAudioListenerPlatformTaskMessage;
   return channel_name == "vyse/mpv_audio_player_2" ? kAudio2PlatformTaskMessage : kAudioPlatformTaskMessage;
 }
 }  // namespace

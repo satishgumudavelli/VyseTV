@@ -27,6 +27,7 @@ const _phases = <(String, int)>[
   ('lib/widgets/section_chrome.dart', 2),
   ('lib/widgets/media_rows.dart', 2),
   ('lib/screens/home/continue_watching.dart', 2),
+  ('lib/screens/home/up_next.dart', 2), // (no controls: what Continue watching's Up next cards show)
   ('lib/widgets/hero_carousel.dart', 2),
   ('lib/widgets/music_widgets.dart', 2),
   ('lib/screens/live_tv/live_tv_widgets.dart', 2),
@@ -40,6 +41,7 @@ const _phases = <(String, int)>[
   ('lib/screens/shell/shell.dart', 3),
   ('lib/screens/shell/floating.dart', 3),
   ('lib/screens/home/home_page.dart', 3),
+  ('lib/screens/home/addon_home.dart', 3),
   ('lib/screens/discover/discover_page.dart', 3),
   ('lib/screens/library/my_list_page.dart', 3),
   ('lib/screens/library/history_page.dart', 3),
