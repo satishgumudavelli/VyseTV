@@ -214,7 +214,14 @@ class _SourcesPageState extends State<SourcesPage> {
       if (!a.streams) continue; // (there only for the streams its details carry)
       final own = a.manifestUrl == from?.manifestUrl ? inline : const <AddonStream>[];
       unawaited(
-        Addons.streams(a, t).then(
+        Addons.streams(
+          a,
+          t,
+          // a plugin repository's streams as each plugin finds them (it is still looking)
+          onSome: (l) {
+            if (mounted) setState(() => r.streams = [...own, ...l]);
+          },
+        ).then(
           (got) {
             // torrents among them: start the engine now, so peers are warm by the time one is picked
             if (got != null && got.streams.any((s) => s.torrent)) Torrents.warmUp();
@@ -297,7 +304,43 @@ class _SourcesPageState extends State<SourcesPage> {
 
   static int _best(AddonStream a, AddonStream b) => Addons.byBest(a, b);
 
+  /// The list's order, by [_key]: a stream on the list keeps its place as more come in (addons and
+  /// plugins answer one after another), so the one about to be picked never moves, nor does the
+  /// row a remote's ring is on; later ones go below, in the chosen order among themselves. Another
+  /// sort, filter or addon tab puts the whole list in that order afresh.
+  List<String> _order = const [];
+  Object? _orderFor;
+
+  static String _key(AddonStream s) => '${s.addon.manifestUrl}|${s.infoHash ?? ''}|${s.fileIdx ?? ''}|${s.url}|${s.name}|${s.description}';
+
   List<AddonStream> get _shown {
+    final view = (_sort, _addon, _quality, _language, _source, _size, _kind);
+    if (view != _orderFor) {
+      _orderFor = view;
+      _order = const [];
+    }
+    // (two streams alike in every way are told apart by their turn)
+    final seen = <String, int>{};
+    final keyed = <(String, AddonStream)>[
+      for (final st in _sorted)
+        () {
+          final k = _key(st);
+          final n = seen[k] = (seen[k] ?? 0) + 1;
+          return (n == 1 ? k : '$k#$n', st);
+        }(),
+    ];
+    final byKey = {for (final (k, st) in keyed) k: st};
+    final before = _order.toSet();
+    _order = [
+      for (final k in _order)
+        if (byKey.containsKey(k)) k,
+      for (final (k, _) in keyed)
+        if (!before.contains(k)) k,
+    ];
+    return [for (final k in _order) byKey[k]!];
+  }
+
+  List<AddonStream> get _sorted {
     final l = [
       for (final s in _fromAddon)
         if (_passes(s)) s,
@@ -619,6 +662,7 @@ class _SourcesPageState extends State<SourcesPage> {
     }
     final langList = langs.keys.toList()..sort((a, b) => langs[b]!.compareTo(langs[a]!));
     int count(bool Function(AddonStream) f) => all.where(f).length;
+    final kinds = all.any((s) => s.torrent) && all.any((s) => !s.torrent);
     final filters = <Widget>[
       _Dropdown<_Sort>(
         icon: Icons.swap_vert_rounded,
@@ -636,14 +680,6 @@ class _SourcesPageState extends State<SourcesPage> {
         options: [for (final q in _qualities) (q, q, count((s) => _bucket(s) == q))],
         onPick: (q) => setState(() => _quality = q),
       ),
-      if (langList.isNotEmpty)
-        _Dropdown<String>(
-          label: _language ?? 'Language',
-          active: _language != null,
-          value: _language,
-          options: [for (final l in langList) (l, l, langs[l])],
-          onPick: (l) => setState(() => _language = l),
-        ),
       _Dropdown<String>(
         label: _source ?? 'Source',
         active: _source != null,
@@ -661,13 +697,30 @@ class _SourcesPageState extends State<SourcesPage> {
         options: [for (final z in _Size.values) (z, z.label, count(z.has))],
         onPick: (z) => setState(() => _size = z),
       ),
-      if (all.any((s) => s.torrent) && all.any((s) => !s.torrent))
-        _Dropdown<_Kind>(
-          label: _kind?.label ?? 'Type',
-          active: _kind != null,
-          value: _kind,
-          options: [for (final k in _Kind.values) (k, k.label, count(k.has))],
-          onPick: (k) => setState(() => _kind = k),
+      // These two come with the streams (a language named, torrents and links both): at the end, with
+      // their room kept while there is nothing to pick, so the bar never grows and pushes the list
+      // down as streams come in. (A phone's bar is one row that scrolls: nothing to keep there.)
+      if (langList.isNotEmpty || !phone)
+        _Kept(
+          shown: langList.isNotEmpty,
+          child: _Dropdown<String>(
+            label: _language ?? 'Language',
+            active: _language != null,
+            value: _language,
+            options: [for (final l in langList) (l, l, langs[l])],
+            onPick: (l) => setState(() => _language = l),
+          ),
+        ),
+      if (kinds || !phone)
+        _Kept(
+          shown: kinds,
+          child: _Dropdown<_Kind>(
+            label: _kind?.label ?? 'Type',
+            active: _kind != null,
+            value: _kind,
+            options: [for (final k in _Kind.values) (k, k.label, count(k.has))],
+            onPick: (k) => setState(() => _kind = k),
+          ),
         ),
       if (_filtered) _ClearButton(onTap: _clear),
     ];
@@ -780,6 +833,23 @@ class _SourcesPageState extends State<SourcesPage> {
 }
 
 // ───────────────────────── pieces ─────────────────────────
+
+/// A filter that is there only once the streams give it something to pick: until then its room is
+/// kept, blank, and nothing can land on it.
+class _Kept extends StatelessWidget {
+  const _Kept({required this.shown, required this.child});
+  final bool shown;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Visibility(
+    visible: shown,
+    maintainSize: true,
+    maintainAnimation: true,
+    maintainState: true,
+    child: ExcludeFocus(excluding: !shown, child: child),
+  );
+}
 
 /// Over the player: the video, blurred and dimmed, behind the list.
 class _Backdrop extends StatelessWidget {

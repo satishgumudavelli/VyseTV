@@ -80,6 +80,8 @@ dependencies:
     path: packages/torrserver_flutter
   path_provider: ^2.1.6
   flutter_secure_storage: ^10.3.4
+  flutter_js: ^0.8.7
+  ffi: ^2.2.0
 
 dependency_overrides:
   # Only phones use brightness. This keeps the real Windows part, which talks to the monitor, out.
@@ -130,6 +132,7 @@ flutter:
     - assets/logos/
     - assets/avatars/
     - assets/sounds/
+    - assets/plugins/
     # upscaling shaders for the player (MIT: Anime4K by bloc97, ArtCNN, NVIDIA Image Scaling)
     - assets/shaders/anime4k/
     - assets/shaders/artcnn/

@@ -25,6 +25,7 @@ class WatchEntry {
     this.subtitle,
     this.subDelay = 0,
     this.marks = const {},
+    this.server,
   });
 
   final Media media;
@@ -55,6 +56,10 @@ class WatchEntry {
   /// came after an unwatched mark. An unwatched mark keeps an older watch on Trakt or Simkl, or
   /// on another device, from bringing the episode back.
   final Map<String, int> marks;
+
+  /// The VyseTV source it was last played from (a film source link's party key): asked first
+  /// when you carry on, and for the next episode.
+  final String? server;
 
   double get fraction => duration.inMilliseconds <= 0 ? 0 : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
   Duration get left => duration - position;
@@ -92,6 +97,7 @@ class WatchEntry {
     subtitle: subtitle,
     subDelay: subDelay,
     marks: marks ?? this.marks,
+    server: server,
   );
 
   Map<String, dynamic> toJson() => {
@@ -119,6 +125,7 @@ class WatchEntry {
     'sub': ?subtitle,
     if (subDelay != 0) 'sd': subDelay,
     if (marks.isNotEmpty) 'w': marks,
+    'srv': ?server,
   };
 
   static WatchEntry fromJson(Map<String, dynamic> j) {
@@ -138,6 +145,7 @@ class WatchEntry {
       subtitle: j['sub'] is Map ? Map<String, dynamic>.from(j['sub'] as Map) : null,
       subDelay: (j['sd'] as num?)?.toDouble() ?? 0,
       marks: {for (final e in ((j['w'] as Map?) ?? const {}).entries) '${e.key}': (e.value as num).toInt()},
+      server: j['srv'] as String?,
     );
   }
 }
@@ -195,6 +203,7 @@ class WatchProgress {
     String? episodeName,
     Map<String, dynamic>? subtitle,
     double subDelay = 0,
+    String? server,
   }) {
     if (duration < const Duration(minutes: 1) || position < const Duration(seconds: 3)) return;
     final old = find(media);
@@ -218,6 +227,7 @@ class WatchProgress {
         subtitle: subtitle,
         subDelay: subDelay,
         marks: marks,
+        server: server ?? old?.server,
       ),
       ...entries.value.where((e) => !_same(e.media, media)),
     ].take(_max).toList());
@@ -291,6 +301,7 @@ class WatchProgress {
         hidden: old?.hidden ?? false,
         episodes: episodes,
         marks: marks,
+        server: old?.server,
       ));
       return changed;
     }
@@ -383,6 +394,7 @@ class WatchProgress {
         subtitle: on?.subtitle,
         subDelay: on?.subDelay ?? 0,
         marks: marks,
+        server: old?.server,
       );
     }
     return old.copyWith(updated: updated, episodes: episodes, marks: marks);
@@ -431,6 +443,7 @@ class WatchProgress {
       subtitle: base.subtitle,
       subDelay: base.subDelay,
       marks: marks,
+      server: base.server,
     );
   }
 
@@ -488,6 +501,7 @@ class WatchProgress {
         subtitle: w.subtitle ?? (old != null && old.season == w.season && old.episode == w.episode ? old.subtitle : null),
         subDelay: w.subtitle != null ? w.subDelay : (old != null && old.season == w.season && old.episode == w.episode ? old.subDelay : 0),
         marks: marks,
+        server: w.server ?? old?.server,
       );
     }
     final list = byKey.values.toList()..sort((a, b) => b.updated.compareTo(a.updated));

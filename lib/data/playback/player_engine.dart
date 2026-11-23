@@ -37,6 +37,13 @@ abstract final class PlayerEngine {
 
   static void choose(String engine) => AppSettings.playerEngine.set(engine == mpv ? mpv : media3);
 
+  /// Whether Media3 hands a video it can't play to mpv, which carries on from the same spot. Off,
+  /// the video is said not to play, and you pick another source. (On unless turned off: a TV that
+  /// can't decode a stream's Dolby Vision plays it this way.)
+  static bool get handOver => AppSettings.mpvHandOver.value;
+
+  static void chooseHandOver(bool on) => AppSettings.mpvHandOver.set(on);
+
   /// Tells when the choice changes.
   static Listenable get changes => AppSettings.playerEngine;
 

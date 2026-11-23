@@ -43,6 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+# Kotlin's build sessions (Gradle makes it)
+/android/.kotlin/
 
 # Widget Preview related
 .widget_preview/
@@ -70,3 +72,6 @@ FRONTEND_PROMPT.md
 # This build's own server addresses. The copy in the repository is
 # lib/data/server_config.example.dart; the real one never leaves the build machine.
 /lib/data/server_config.dart
+
+# the Vega runtime build's packages
+/tool/vega_runtime/node_modules/

@@ -2,6 +2,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/account/account_sync.dart';
 import '../../data/sources/addons.dart';
+import '../../data/sources/plugins/js_plugins.dart' show PluginLog, PluginRepos;
+import 'plugin_index_page.dart';
+import '../../core/nav.dart' show ShellRoute;
 import '../../data/catalog/meta_addons.dart' show MetaAddons;
 import '../../data/sources/film_sources/film_sources.dart';
 import '../../data/sources/film_sources/source_settings.dart';
@@ -1471,18 +1474,29 @@ class _EngineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: PlayerEngine.changes,
-    builder: (context, _) => _Row(
-      title: 'Player engine',
-      subtitle: PlayerEngine.isMedia3
-          ? "Media3 is Android's own player. A video it can't play switches to mpv by itself. "
-                'Upscaling, ambient lighting, the 5.1 limit and some subtitle styling need mpv. Applies from the next video'
-          : 'mpv has upscaling, ambient lighting, the 5.1 limit and every subtitle style. Applies from the next video',
-      below: _Choice<String>(
-        value: PlayerEngine.current,
-        options: const [PlayerEngine.media3, PlayerEngine.mpv],
-        label: (v) => v == PlayerEngine.media3 ? 'Media3' : 'mpv',
-        onChanged: PlayerEngine.choose,
-      ),
+    builder: (context, _) => Column(
+      children: [
+        _Row(
+          title: 'Player engine',
+          subtitle: PlayerEngine.isMedia3
+              ? "Media3 is Android's own player. "
+                    'Upscaling, ambient lighting, the 5.1 limit and some subtitle styling need mpv. Applies from the next video'
+              : 'mpv has upscaling, ambient lighting, the 5.1 limit and every subtitle style. Applies from the next video',
+          below: _Choice<String>(
+            value: PlayerEngine.current,
+            options: const [PlayerEngine.media3, PlayerEngine.mpv],
+            label: (v) => v == PlayerEngine.media3 ? 'Media3' : 'mpv',
+            onChanged: PlayerEngine.choose,
+          ),
+        ),
+        // (only Media3 hands a video over)
+        if (PlayerEngine.isMedia3)
+          _Row(
+            title: "Switch to mpv when Media3 can't play",
+            subtitle: 'mpv carries on from the same spot. Off: the video is said not to play, and you pick another source',
+            trailing: _Toggle(AppSettings.mpvHandOver),
+          ),
+      ],
     ),
   );
 }
@@ -2566,7 +2580,9 @@ class _AddonsTabState extends State<_AddonsTab> {
       _failed = false;
       final gives = [if (a.catalogs.isNotEmpty) 'catalogs', if (a.meta) 'details', if (a.streams) 'sources', if (a.subtitles) 'subtitles'];
       final what = gives.length < 2 ? gives.join() : '${gives.take(gives.length - 1).join(', ')} and ${gives.last}';
-      _message = '${a.name} is installed ($what).${a.catalogs.isNotEmpty ? ' Its catalogs are on Home, Discover and search.' : ''}';
+      _message = a.plugins
+          ? '${a.name} is installed (${a.description}). Their sources show with your other addons.'
+          : '${a.name} is installed ($what).${a.catalogs.isNotEmpty ? ' Its catalogs are on Home, Discover and search.' : ''}';
     } catch (e) {
       _failed = true;
       _message = '$e';
@@ -2579,8 +2595,8 @@ class _AddonsTabState extends State<_AddonsTab> {
     children: [
       _Section(
         title: 'Add an addon',
-        subtitle: 'Paste a Stremio addon link. Metadata addons add their catalogs to Home, Discover and search; '
-            'stream addons fill the sources screen (Streaming mode off in Playback); subtitle addons add their files to every video.',
+        subtitle: 'Paste a Stremio addon link, or a plugin repository (a repo.json or a scraper list). Metadata addons add their catalogs to Home, Discover and search; '
+            'stream addons and plugins fill the sources screen (Streaming mode off in Playback); subtitle addons add their files to every video.',
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 18),
@@ -2596,7 +2612,7 @@ class _AddonsTabState extends State<_AddonsTab> {
                         onSubmitted: (_) => _install(),
                         style: const TextStyle(fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: 'https://…/manifest.json  or  stremio://…',
+                          hintText: 'https://…/manifest.json,  stremio://…  or a repo.json',
                           hintStyle: const TextStyle(color: VyseColors.textFaint),
                           isDense: true,
                           filled: true,
@@ -2618,6 +2634,17 @@ class _AddonsTabState extends State<_AddonsTab> {
                         : _SmallButton(label: 'Install', icon: Icons.add_rounded, primary: true, onTap: _install),
                   ],
                 ),
+                // a plugin repository's scripts coming down
+                if (_busy)
+                  ValueListenableBuilder(
+                    valueListenable: PluginRepos.installing,
+                    builder: (context, i, _) => i == null || i.total == 0
+                        ? const SizedBox.shrink()
+                        : Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text('Downloading its plugins: ${i.done} of ${i.total}', style: const TextStyle(fontSize: 13, color: VyseColors.textDim)),
+                          ),
+                  ),
                 if (_message != null) ...[
                   const SizedBox(height: 10),
                   Row(
@@ -2630,6 +2657,24 @@ class _AddonsTabState extends State<_AddonsTab> {
                   ),
                 ],
               ],
+            ),
+          ),
+        ],
+      ),
+      _Section(
+        title: 'Find plugins',
+        subtitle: 'Scraper repositories from the community, checked every day. Search them and add one with a press.',
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _SmallButton(
+                label: 'Browse plugins',
+                icon: Icons.travel_explore_rounded,
+                primary: true,
+                onTap: () => Navigator.of(context).push(ShellRoute<void>(child: const PluginIndexPage())),
+              ),
             ),
           ),
         ],
@@ -2866,6 +2911,42 @@ class _ListedAddon extends StatelessWidget {
   }
 }
 
+/// What the plugins said on their last runs, newest at the bottom: what they found, their own
+/// lines, what failed.
+Future<void> _showPluginLog(BuildContext context) => showDialog<void>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    backgroundColor: VyseColors.surface,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    title: const Text('Plugin log', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+    content: SizedBox(
+      width: double.maxFinite,
+      height: 360,
+      child: ValueListenableBuilder<List<String>>(
+        valueListenable: PluginLog.lines,
+        builder: (context, lines, _) => lines.isEmpty
+            ? const Center(
+                child: Text('Nothing yet. Plugins write here when they look for a title.', textAlign: TextAlign.center, style: TextStyle(color: VyseColors.textDim)),
+              )
+            : ListView(
+                reverse: true, // (opens on the newest)
+                children: [
+                  for (final l in lines.reversed)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(l, style: const TextStyle(fontSize: 12, height: 1.35, fontFamily: 'monospace', color: VyseColors.textDim)),
+                    ),
+                ],
+              ),
+      ),
+    ),
+    actions: [
+      _SmallButton(label: 'Clear', icon: Icons.delete_sweep_outlined, onTap: PluginLog.clear),
+      _SmallButton(label: 'Close', icon: Icons.close_rounded, primary: true, onTap: () => Navigator.pop(ctx)),
+    ],
+  ),
+);
+
 class _AddonRow extends StatelessWidget {
   const _AddonRow({required this.addon, required this.first, required this.last});
   final Addon addon;
@@ -2896,6 +2977,8 @@ class _AddonRow extends StatelessWidget {
             tooltip: 'Configure (then paste the new link above)',
             onTap: () => launchUrl(Uri.parse(a.configureUrl!), mode: LaunchMode.externalApplication),
           ),
+        // what its plugins said (a TV has no log of its own to read)
+        if (a.plugins) _IconAction(icon: Icons.receipt_long_rounded, tooltip: 'Plugin log', onTap: () => _showPluginLog(context)),
         // a built-in addon is part of the app: it is turned off, not removed
         if (!a.builtIn) _IconAction(icon: Icons.delete_outline_rounded, tooltip: 'Remove', danger: true, onTap: () => Addons.remove(a)),
         const SizedBox(width: 8),
@@ -2913,6 +2996,7 @@ class _AddonRow extends StatelessWidget {
             Text(a.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: a.enabled ? VyseColors.text : VyseColors.textDim)),
             if (a.version.isNotEmpty) Text('v${a.version}', style: const TextStyle(fontSize: 12, color: VyseColors.textFaint)),
             if (a.builtIn) const _Kind('Built in', Icons.verified_outlined),
+            if (a.plugins) const _Kind('Plugins', Icons.code_rounded),
             if (a.catalogs.isNotEmpty || a.manifestUrl == Addon.tmdb.manifestUrl) const _Kind('Catalogs', Icons.view_carousel_outlined),
             if (a.meta) const _Kind('Details', Icons.info_outline_rounded),
             if (a.streams) const _Kind('Sources', Icons.play_circle_outline_rounded),

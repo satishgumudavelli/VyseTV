@@ -1,0 +1,7 @@
+{
+  "name": "vega-runtime",
+  "private": true,
+  "description": "Builds assets/plugins/vega_runtime.js (polyfills + real axios + real cheerio + the Vega provider adapter) and assets/plugins/scraper_runtime.js (real crypto-js + the scraper-list adapter)",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": { "axios": "1.12.2", "cheerio": "1.0.0", "crypto-js": "4.2.0", "esbuild": "0.25.0" }
+}

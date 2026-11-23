@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 
 import '../anime/anilist.dart';
 import '../app_settings.dart';
 import 'badges.dart';
+import 'film_sources/common.dart' show getTmdbMetadata, fetchText, HttpError;
 import 'knaben.dart';
+import 'plugins/js_plugins.dart';
 import '../net.dart';
 import 'sources.dart' show StreamSource;
 import '../playback/stream_proxy.dart';
@@ -138,9 +141,10 @@ class Addon {
     this.catalogsRead = true,
     this.addonCatalogs = const [],
     this.needsSetup = false,
+    this.plugins = false,
   });
 
-  /// Where its manifest is: `https://…/manifest.json`.
+  /// Where its manifest is: `https://…/manifest.json` (a plugin repository: its `repo.json`).
   final String manifestUrl;
   final String id;
   final String name;
@@ -177,6 +181,10 @@ class Addon {
   /// (`behaviorHints.configurationRequired`): seen in an addon list, never in yours.
   final bool needsSetup;
 
+  /// A repository of scraper plugins (plugins/js_plugins.dart), not a Stremio addon: its
+  /// [manifestUrl] is the repository's file, and each plugin in it is asked for streams.
+  final bool plugins;
+
   /// It offers something to browse, or the details of titles.
   bool get metadata => catalogs.isNotEmpty || meta;
 
@@ -185,7 +193,7 @@ class Addon {
       meta && (metaTypes.isEmpty || metaTypes.contains(type)) && (metaPrefixes.isEmpty || metaPrefixes.any(id.startsWith));
 
   String get base => manifestUrl.replaceFirst(RegExp(r'/manifest\.json$'), '');
-  String? get configureUrl => configurable ? '$base/configure' : null;
+  String? get configureUrl => configurable && !plugins ? '$base/configure' : null;
 
   /// Part of VyseTV itself, not installed from a link: it can be turned off and moved in the
   /// list, but not removed. Its "manifest" is just a name (`builtin:…`).
@@ -238,7 +246,26 @@ class Addon {
     catalogsRead: catalogsRead,
     addonCatalogs: addonCatalogs,
     needsSetup: needsSetup,
+    plugins: plugins,
   );
+
+  /// A plugin repository as an addon: films and shows' streams, from its plugins.
+  factory Addon.ofPlugins(PluginRepoInfo r) => Addon(
+    manifestUrl: r.url,
+    id: 'plugins.${PluginRepos.repoKey(r.url)}',
+    name: r.name,
+    description: pluginsAbout(r.plugins),
+    streams: true,
+    streamTypes: const ['movie', 'series'],
+    plugins: true,
+  );
+
+  /// "12 plugins: A, B, C and 9 more".
+  static String pluginsAbout(List<PluginEntry> l) {
+    final names = l.map((p) => p.name).toList();
+    final shown = names.take(3).join(', ');
+    return '${l.length} plugin${l.length == 1 ? '' : 's'}: $shown${names.length > 3 ? ' and ${names.length - 3} more' : ''}';
+  }
 
   /// From a manifest (https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/manifest.md).
   factory Addon.fromManifest(String url, Map<String, dynamic> j) {
@@ -295,6 +322,7 @@ class Addon {
     if (metaTypes.isNotEmpty) 'mt': metaTypes,
     if (metaPrefixes.isNotEmpty) 'mp': metaPrefixes,
     if (addonCatalogs.isNotEmpty) 'ac': [for (final c in addonCatalogs) c.toJson()],
+    if (plugins) 'pl': true,
   };
 
   static Addon? fromJson(Map<String, dynamic> j) {
@@ -321,6 +349,7 @@ class Addon {
         metaPrefixes: l('mp'),
         catalogsRead: j.containsKey('cat'),
         addonCatalogs: [for (final c in (j['ac'] is List ? j['ac'] as List : const [])) ?AddonCatalog.fromJson(c)],
+        plugins: j['pl'] == true,
       );
     } catch (_) {
       return null;
@@ -468,8 +497,12 @@ class AddonStream {
     this.trackers = const [],
     this.external,
     this.subtitles = const [],
+    this.hls,
   });
   final Addon addon;
+
+  /// An HLS playlist, said by its source (a plugin's link need not end in .m3u8); null: by its link.
+  final bool? hls;
   final String url; // empty for a torrent
 
   /// Not a video VyseTV plays but a link that opens elsewhere: a web page (`externalUrl`), a
@@ -706,7 +739,7 @@ class AddonStream {
     referrer: headers['Referer'] ?? headers['referer'] ?? '',
     userAgent: headers['User-Agent'] ?? headers['user-agent'] ?? _ua,
     headers: headers,
-    hls: url.contains('.m3u8'),
+    hls: hls ?? url.contains('.m3u8'),
   );
 }
 
@@ -835,7 +868,8 @@ class Addons {
         if (!a.builtIn)
           () async {
             try {
-              fresh[a.manifestUrl] = Addon.fromManifest(a.manifestUrl, await _manifest(a.manifestUrl));
+              // a plugin repository: its plugins whose version changed are downloaded again
+              fresh[a.manifestUrl] = a.plugins ? Addon.ofPlugins(await PluginRepos.install(a.manifestUrl)) : Addon.fromManifest(a.manifestUrl, await _manifest(a.manifestUrl));
             } catch (_) {}
           }(),
     ]);
@@ -854,7 +888,7 @@ class Addons {
     }
     list.value = withBuiltIns(saved);
     for (final a in list.value) {
-      if (!a.builtIn && !a.catalogsRead && _reread.add(a.manifestUrl)) unawaited(_readAgain(a));
+      if (!a.builtIn && !a.plugins && !a.catalogsRead && _reread.add(a.manifestUrl)) unawaited(_readAgain(a));
     }
   }
 
@@ -924,8 +958,26 @@ class Addons {
 
   /// Reads the addon's manifest and adds it (or updates it, for a link you already have).
   /// Throws a readable message when it offers nothing VyseTV uses. A new addon with catalogs goes
-  /// just above TMDB, so its rows lead on Home; any other goes at the end.
+  /// just above TMDB, so its rows lead on Home; any other goes at the end. A plugin repository's
+  /// link (a `repo.json`, or a Vega `manifest.json`: a list) adds it as an addon of its own.
   static Future<Addon> install(String input) async {
+    final given = normalizeRepoUrl(input);
+    // a .json link is read as it is: a plugin repository, or a Stremio manifest
+    if (given.startsWith('http') && RegExp(r'\.json(\?|#|$)').hasMatch(given)) {
+      Object? j;
+      String? text;
+      try {
+        text = await fetchText(given, timeout: const Duration(seconds: 20));
+        j = json.decode(text);
+      } catch (e) {
+        if (!given.endsWith('/manifest.json')) {
+          throw e is HttpError && (e.status == 404 || e.status == 410)
+              ? "That link is gone (404): the file was deleted or moved."
+              : "Couldn't read that link. Check it (a repo.json, or an addon's manifest.json).";
+        }
+      }
+      if (isPluginRepo(j)) return _installPlugins(given, text!);
+    }
     final url = normalize(input);
     final Map<String, dynamic> j;
     try {
@@ -954,8 +1006,34 @@ class Addons {
     return a;
   }
 
-  /// (A built-in addon stays: it is turned off instead.)
-  static void remove(Addon a) => a.builtIn ? setEnabled(a, false) : _save([for (final x in list.value) if (x.manifestUrl != a.manifestUrl) x]);
+  /// A plugin repository's plugins downloaded to this device, and added (or updated) as an addon
+  /// at the end of the list.
+  static Future<Addon> _installPlugins(String url, String text) async {
+    final PluginRepoInfo info;
+    try {
+      info = await PluginRepos.install(url, text: text);
+    } on FormatException catch (e) {
+      throw e.message;
+    }
+    final a = Addon.ofPlugins(info);
+    final l = [...list.value];
+    final i = l.indexWhere((x) => x.manifestUrl == url);
+    if (i >= 0) {
+      l[i] = a.copyWith(enabled: l[i].enabled);
+    } else {
+      l.add(a);
+    }
+    _save(l);
+    return a;
+  }
+
+  /// (A built-in addon stays: it is turned off instead. A plugin repository's scripts leave this
+  /// device with it.)
+  static void remove(Addon a) {
+    if (a.builtIn) return setEnabled(a, false);
+    if (a.plugins) unawaited(PluginRepos.remove(a.manifestUrl));
+    _save([for (final x in list.value) if (x.manifestUrl != a.manifestUrl) x]);
+  }
   static void setEnabled(Addon a, bool on) => _save([for (final x in list.value) x.manifestUrl == a.manifestUrl ? x.copyWith(enabled: on) : x]);
 
   static void move(Addon a, int by) {
@@ -1000,7 +1078,10 @@ class Addons {
   /// [a]'s playable streams for [t], and how many torrents it offered that only a debrid
   /// service set up in the addon could turn into links. Null when it doesn't cover this kind of
   /// title; throws on failure.
-  static Future<({List<AddonStream> streams, int torrents})?> streams(Addon a, AddonTarget t) async {
+  /// [onSome]: a plugin repository's streams so far, each time one of its plugins finds some (it
+  /// asks many sites, some slow); other addons answer all at once.
+  static Future<({List<AddonStream> streams, int torrents})?> streams(Addon a, AddonTarget t, {void Function(List<AddonStream> soFar)? onSome}) async {
+    if (a.plugins) return _pluginStreams(a, t, onSome);
     if (a.builtIn) return _builtInStreams(a, t);
     final id = t.idFor(a.streamPrefixes);
     if (id == null || !t.typeOk(a.streamTypes)) return null;
@@ -1029,6 +1110,55 @@ class Addons {
     final hits = await Knaben.search(title: title, series: series, year: t.year, season: season, episode: episode);
     if (!Torrents.supported) return (streams: const <AddonStream>[], torrents: hits.length);
     return (streams: [for (final h in hits) knabenStream(a, h)], torrents: 0);
+  }
+
+  /// What a plugin repository's plugins found for [t]. They look titles up by name (and TMDB and
+  /// IMDb ids), so a title needs one; a show, a season and an episode. Null when not covered.
+  static Future<({List<AddonStream> streams, int torrents})?> _pluginStreams(Addon a, AddonTarget t, void Function(List<AddonStream>)? onSome) async {
+    final series = t.type == 'series';
+    if (!t.typeOk(a.streamTypes)) return null;
+    // (an addon title's episode: where IMDb counts it, which sites go by, when known)
+    final season = t.imdbSeason ?? t.season, episode = t.imdbEpisode ?? t.episode;
+    if (series && (season == null || episode == null)) return null;
+    final meta = t.tmdb == null ? null : await getTmdbMetadata('${t.tmdb}', series);
+    final title = meta != null && meta.title.isNotEmpty ? meta.title : t.title;
+    if (title == null || title.trim().isEmpty) return null;
+    // (the Linux build's mpv has no DASH: a manifest it can't open isn't offered)
+    List<AddonStream> streams(List<PluginHit> hits) => [
+      for (final h in hits)
+        if (!(h.stream.type == 'dash' && Platform.isLinux)) pluginStream(a, h),
+    ];
+    final hits = await PluginRepos.find(a.manifestUrl, onSome: onSome == null ? null : (l) => onSome(streams(l)), {
+      'tmdbId': t.tmdb,
+      'imdbId': meta?.imdbId ?? t.imdb,
+      'type': series ? 'tv' : 'movie',
+      'isTv': series,
+      'title': title,
+      'originalTitle': meta != null && meta.originalTitle.isNotEmpty ? meta.originalTitle : title,
+      'titles': meta != null && meta.titles.isNotEmpty ? meta.titles : [title],
+      'isAnime': meta?.isAnime ?? t.anime,
+      'year': meta?.year ?? t.year,
+      'season': series ? season : null,
+      'episode': series ? episode : null,
+    });
+    return (streams: streams(hits), torrents: 0);
+  }
+
+  /// A plugin's link as a stream: the plugin's name, then its quality, server and language.
+  @visibleForTesting
+  static AddonStream pluginStream(Addon a, PluginHit h) {
+    final s = h.stream;
+    final what = [if (s.quality != 'Auto') s.quality, if (s.server != 'Server') s.server, ?s.audio].join(' · ');
+    final description = [if (what.isNotEmpty) what, if (s.label case final l? when l.trim().isNotEmpty) l.trim()].join('\n');
+    return AddonStream(
+      addon: a,
+      url: s.url,
+      text: '${h.plugin.name}\n$description',
+      name: h.plugin.name,
+      description: description,
+      headers: s.headers,
+      hls: s.type == 'hls',
+    );
   }
 
   /// A Knaben result as a stream, written the way Torrentio writes its own (the release's name,
@@ -1085,7 +1215,12 @@ class Addons {
     for (final (i, a) in addons.indexed) {
       unawaited(() async {
         try {
-          got[i] = (await streams(a, t))?.streams ?? const [];
+          // (a plugin repository's streams count as they come: a slow plugin can't hold up autoplay)
+          got[i] = (await streams(a, t, onSome: (l) {
+                got[i] = l;
+                check();
+              }))?.streams ??
+              const [];
         } catch (_) {}
         left--;
         check();

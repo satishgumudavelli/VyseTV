@@ -451,6 +451,10 @@ class MpvPlayerCore private constructor(
 
   @Volatile private var videoZoomLog2: Float = 0f
 
+  /** VyseTV Resize > Stretch: the page sets `video-aspect-override` to the window's aspect.
+   * On the plane that means filling the whole container, whatever the video's shape. */
+  @Volatile private var videoStretch: Boolean = false
+
   private data class VideoRectUpdate(val epoch: Long, val rect: VideoRectPolicy.Rect)
 
   /** Latest main-thread layout request; queued writers discard superseded snapshots. */
@@ -2089,8 +2093,8 @@ class MpvPlayerCore private constructor(
       val size = VideoRectPolicy.sizeFor(
         containerWidth = container.width,
         containerHeight = container.height,
-        videoWidth = videoDisplayWidth,
-        videoHeight = videoDisplayHeight,
+        videoWidth = if (videoStretch) container.width else videoDisplayWidth,
+        videoHeight = if (videoStretch) container.height else videoDisplayHeight,
         panscan = videoPanscan,
         videoZoomLog2 = videoZoomLog2
       ) ?: return@runOnMain
@@ -2872,6 +2876,14 @@ class MpvPlayerCore private constructor(
       if (parsed != null) {
         if (name == "panscan") videoPanscan = parsed else videoZoomLog2 = parsed
         applyVideoRectLayout()
+      }
+    }
+
+    if (name == "video-aspect-override") {
+      val stretch = (value.toFloatOrNull() ?: -1f) > 0f
+      if (stretch != videoStretch) {
+        videoStretch = stretch
+        applyVideoRectLayout(force = true)
       }
     }
 

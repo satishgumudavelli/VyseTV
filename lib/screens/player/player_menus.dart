@@ -875,8 +875,11 @@ class _Dot extends StatelessWidget {
 
 /// One way to play from a film source: a Movy server, or one of a source's links.
 class MenuLink {
-  const MenuLink({required this.name, this.quality, this.format, this.audio, this.state, this.current = false, this.onTap});
+  const MenuLink({required this.name, this.quality, this.format, this.audio, this.state, this.current = false, this.unsupported = false, this.onTap});
   final String name;
+
+  /// This player can't play this kind of link (DASH in the Linux build): trying again won't help.
+  final bool unsupported;
   final String? quality; // '1080p', '4K'… when it's known
   final String? format; // 'HLS', 'MP4', 'MKV'…
   final String? audio; // dubbed into this language
@@ -1107,7 +1110,7 @@ class _FilmSourcesPaneState extends State<FilmSourcesPane> {
           : trying
           ? 'Checking it plays…'
           : dead
-          ? 'Didn’t play · try again'
+          ? (l.unsupported ? 'This player can’t play ${l.format ?? 'these'} links' : 'Didn’t play · try again')
           : null,
       value: l.quality ?? (l.format == 'HLS' ? 'Auto' : null),
       tags: [

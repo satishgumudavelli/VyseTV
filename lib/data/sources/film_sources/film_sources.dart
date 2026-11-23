@@ -96,7 +96,7 @@ class FilmSourceState {
 
 /// One title's lookups, source by source. Movy's details and seed are fetched once and shared.
 class FilmSession {
-  FilmSession({required int tmdbId, required bool isTv, int? season, int? episode, required List<FilmSource> order, this.onChange})
+  FilmSession({required int tmdbId, required bool isTv, int? season, int? episode, required List<FilmSource> order, this.onChange, this.dash = true})
     : movy = MovySession(tmdbId: tmdbId, isTv: isTv, season: season, episode: episode),
       _query = FilmQuery(tmdbId: tmdbId, isTv: isTv, season: isTv ? (season ?? 1) : null, episode: isTv ? (episode ?? 1) : null),
       sources = [
@@ -117,6 +117,10 @@ class FilmSession {
 
   /// Something's state changed: a lookup started or ended.
   final void Function()? onChange;
+
+  /// The player plays DASH manifests (Media3 does; the Linux build's mpv has no DASH). When it
+  /// doesn't, a DASH link counts as one that doesn't play, and the next one is tried.
+  final bool dash;
 
   final _scraping = <FilmSourceState, Future<void>>{};
   final _opening = <FilmLink, Future<StreamSource?>>{};
@@ -160,7 +164,11 @@ class FilmSession {
           got = await movy.fetch(m);
         } else if (f != null) {
           final h = _withAgent(f.headers);
-          if (f.type == 'hls' ? await _hlsAnswers(f.url, h) : await _answers(f.url, h)) got = _toSource(f, l.source.name);
+          if (f.type == 'dash' && !dash) {
+            // (nothing to check: it can't be played here)
+          } else if (f.type == 'hls' ? await _hlsAnswers(f.url, h) : f.type == 'dash' ? await _dashAnswers(f.url, h) : await _answers(f.url, h)) {
+            got = _toSource(f, l.source.name);
+          }
         }
       } catch (_) {}
       l.stream = got;
@@ -233,6 +241,13 @@ const _probeTimeout = Duration(seconds: 8);
 
 String? _firstUri(String playlist) =>
     const LineSplitter().convert(playlist).map((l) => l.trim()).where((l) => l.isNotEmpty && !l.startsWith('#')).firstOrNull;
+
+/// A DASH manifest: the answer is a real MPD, not a relay's error page (which mpv can't open: it
+/// would stop on "Loading…" with no audio list).
+Future<bool> _dashAnswers(String url, Map<String, String> h) async {
+  final r = await fetchRaw(url, headers: h, timeout: _probeTimeout);
+  return r.statusCode < 300 && r.body.contains('<MPD');
+}
 
 Future<bool> _hlsAnswers(String url, Map<String, String> h) async {
   var base = Uri.parse(url);

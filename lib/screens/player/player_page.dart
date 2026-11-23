@@ -778,6 +778,8 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
         ..add(_player.streams.fileLoaded.listen((_) => unawaited(_applySubtitleStyle())))
         ..add(_player.streams.playbackRestart.listen((_) => unawaited(_readVideoSize())))
         ..add(_player.streams.backendSwitched.listen((_) => _handedToMpv()));
+      // Settings > Playback: a video Media3 can't play goes to mpv, or is said not to play
+      unawaited(_player.setAllowMpvFallback(PlayerEngine.handOver));
     }
     // Buffer about three minutes ahead. 4K runs ~16 Mbps (~360 MB for 3 min); mpv keeps the
     // cache on disk, so the byte limits don't sit in RAM.
@@ -1727,6 +1729,7 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
       season: fs,
       episode: fe,
       order: _hostOrder ? theirs : activeFilmSources(),
+      dash: _media3 || !Platform.isLinux,
       onChange: () {
         if (mounted && id == _loadId) setState(() {});
       },
@@ -1735,7 +1738,8 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
     _wanted = null;
     // One source at a time: the first link that plays is used, and nothing else is asked
     // unless you pick another source from the menu.
-    final hit = await session.firstHit(first: host?.server, stop: () => !mounted || id != _loadId || _userPicked);
+    // (in a party the host's source; carrying on, the one it played from last time)
+    final hit = await session.firstHit(first: host?.server ?? saved?.server, stop: () => !mounted || id != _loadId || _userPicked);
     if (!mounted || id != _loadId) return;
     if (!_userPicked) {
       if (hit == null) {
@@ -2617,7 +2621,8 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
     _wanted = null;
     if (src == null) {
       final what = l.source.scraper == null ? l.name : '${l.name} on ${l.source.name}';
-      showToast(context, Text("$what isn't playing this one", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)), icon: Icons.error_outline_rounded);
+      final msg = l.format == 'DASH' && !session.dash ? "$what is DASH, which this player can't play" : "$what isn't playing this one";
+      showToast(context, Text(msg, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)), icon: Icons.error_outline_rounded);
       return;
     }
     await _playLink(l);
@@ -4055,6 +4060,7 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
       episodeName: ep?.name,
       subtitle: _subMemo,
       subDelay: _subMemo == null ? 0 : _subOffset,
+      server: _films ? _playingLink?.partyKey : null,
     );
     _savedAt = DateTime.now();
     // an anime episode (or film) watched to VyseTV's "finished" point: AniList
@@ -4791,6 +4797,7 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
                   audio: l.audio,
                   state: shown(l.state),
                   current: l == _playingLink,
+                  unsupported: l.format == 'DASH' && !(_session?.dash ?? true),
                   onTap: () => _tapLink(l),
                 ),
             ],

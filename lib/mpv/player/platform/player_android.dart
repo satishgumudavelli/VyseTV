@@ -164,6 +164,8 @@ class PlayerAndroid extends PlayerBase {
       if (result != true) {
         throw const PlayerInitializationException();
       }
+      // VyseTV: whether a video Media3 can't play may go to mpv (the plugin outlives a player)
+      await invoke('setAllowMpvFallback', {'allow': _allowMpvFallback});
 
       // Register property observers before flipping `initialized` so partial
       // failures don't leave us in a half-initialized state that the memoized
@@ -563,6 +565,17 @@ class PlayerAndroid extends PlayerBase {
   Future<void> setBoxFitMode(int mode) async {
     if (disposed || !initialized) return;
     await invoke('setBoxFitMode', {'mode': mode});
+  }
+
+  // VyseTV: whether a video Media3 can't play is handed to mpv (Settings > Playback). Told to the
+  // native side as it starts and whenever it changes.
+  bool _allowMpvFallback = true;
+
+  @override
+  Future<void> setAllowMpvFallback(bool allow) async {
+    _allowMpvFallback = allow;
+    if (disposed || !initialized) return;
+    await invoke('setAllowMpvFallback', {'allow': allow});
   }
 
   /// Apply custom zoom to the native ExoPlayer layer.

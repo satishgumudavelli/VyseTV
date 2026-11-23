@@ -350,6 +350,9 @@ abstract class Player {
   /// here and scale via `panscan`/`video-aspect-override` properties instead.
   Future<void> setBoxFitMode(int mode);
 
+  /// VyseTV: whether ExoPlayer may hand a video it can't play to mpv (Android only; the rest ignore it).
+  Future<void> setAllowMpvFallback(bool allow);
+
   /// Apply custom zoom to the native video layer.
   ///
   /// ExoPlayer scales its frame layout; iOS/tvOS/macOS scale the AVFoundation video

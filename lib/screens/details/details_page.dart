@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../anime/anime_page.dart';
 import '../party/watch_start.dart';
 import '../player/player_episodes.dart' show AnimeEpisodeStore, EpisodeStore;
+import '../home/up_next.dart';
 import '../player/player_page.dart';
 
 import '../../core/format.dart';
@@ -746,26 +747,45 @@ class _Actions extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        _Pill(
-          icon: Icons.play_arrow_rounded,
-          label: 'Play',
-          primary: true,
-          onTap: () {
-            // a collection: its first film not watched to the end
+        ListenableBuilder(
+          listenable: Listenable.merge([WatchProgress.entries, UpNext.answered]),
+          builder: (context, _) {
             final films = details?.parts ?? const <Media>[];
-            if (films.isNotEmpty) {
-              openPlayer(context, films.where((p) => !(WatchProgress.find(p)?.finished ?? false)).firstOrNull ?? films.first);
-              return;
+            // carrying on (from any of your devices): the film or the episode you left; an episode
+            // watched to the end gives way to the one after it, once that one is out
+            final saved = films.isEmpty ? WatchProgress.find(media) : null;
+            PlayerEpisode? at;
+            var resume = false;
+            if (saved != null && !saved.blank) {
+              if (!media.isTv) {
+                resume = !saved.finished && saved.position > Duration.zero;
+              } else if (saved.season != null && saved.episode != null) {
+                resume = !saved.finished;
+                at = resume ? PlayerEpisode(season: saved.season!, number: saved.episode!, name: saved.episodeName) : UpNext.of(saved);
+              }
             }
-            // Shows start at episode 1 of the first real season (season 0 is usually specials;
-            // an addon's run with no seasons is season 0).
-            final first = details?.seasons.where((s) => s.number > 0 && s.episodes > 0).firstOrNull ??
-                (media.isAddon ? details?.seasons.where((s) => s.episodes > 0).firstOrNull : null);
-            openPlayer(
-              context,
-              media,
-              episode: media.isTv ? PlayerEpisode(season: first?.number ?? 1, number: 1) : null,
-              runtime: details?.runtime,
+            final which = at == null ? '' : ' S${at.season}:E${at.number}';
+            return _Pill(
+              icon: Icons.play_arrow_rounded,
+              label: '${resume ? 'Resume' : 'Play'}$which',
+              primary: true,
+              onTap: () {
+                // a collection: its first film not watched to the end
+                if (films.isNotEmpty) {
+                  openPlayer(context, films.where((p) => !(WatchProgress.find(p)?.finished ?? false)).firstOrNull ?? films.first);
+                  return;
+                }
+                // Shows otherwise start at episode 1 of the first real season (season 0 is usually
+                // specials; an addon's run with no seasons is season 0).
+                final first = details?.seasons.where((s) => s.number > 0 && s.episodes > 0).firstOrNull ??
+                    (media.isAddon ? details?.seasons.where((s) => s.episodes > 0).firstOrNull : null);
+                openPlayer(
+                  context,
+                  media,
+                  episode: media.isTv ? at ?? PlayerEpisode(season: first?.number ?? 1, number: 1) : null,
+                  runtime: details?.runtime,
+                );
+              },
             );
           },
         ),

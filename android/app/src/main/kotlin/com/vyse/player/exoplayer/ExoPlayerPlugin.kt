@@ -47,6 +47,10 @@ class ExoPlayerPlugin :
   private var coreInstanceId: Long? = null
   private var mpvCore: MpvPlayerCore? = null // MPV fallback player
   private var usingMpvFallback: Boolean = false
+
+  /** VyseTV: may a video ExoPlayer can't play be handed to MPV? Said by Flutter after each initialize. */
+  @Volatile
+  private var allowMpvFallback: Boolean = true
   private var fallbackInProgress: Boolean = false
   private var backendSwitchPending: Boolean = false
   private var activity: Activity? = null
@@ -264,6 +268,10 @@ class ExoPlayerPlugin :
       )
       "getStats" -> handleGetStats(result)
       "getPlayerType" -> result.success(if (usingMpvFallback) "mpv" else "exoplayer")
+      "setAllowMpvFallback" -> {
+        allowMpvFallback = call.argument<Boolean>("allow") ?: true
+        result.success(null)
+      }
       "setSubtitleStyle" -> handleSetSubtitleStyle(call, result)
       "setBoxFitMode" -> handleSetBoxFitMode(call, result)
       "setVideoZoom" -> handleSetVideoZoom(call, result)
@@ -1467,6 +1475,11 @@ class ExoPlayerPlugin :
     if (usingMpvFallback || fallbackInProgress) {
       Log.w(TAG, "Fallback already active/in-progress, coalescing duplicate request")
       return true
+    }
+    if (!allowMpvFallback) {
+      // VyseTV: the hand-over to MPV is switched off: say it did not play (false), the player reports the error
+      Log.i(TAG, "ExoPlayer cannot play this and the hand-over to MPV is off: $errorMessage")
+      return false
     }
 
     val currentActivity = activity ?: return false

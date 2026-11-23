@@ -113,6 +113,7 @@ The video is a native mpv surface that sits behind the Flutter interface, not a 
 
 - **Built-in sources.** The app works the moment it is installed. In Settings you choose the order sources are asked in and switch off the ones you don't want.
 - **Stremio addons.** Paste an addon's link and its streams show up next to everything else. Stream addons and subtitle addons are used; catalogue and metadata addons are left alone, because the catalogue is already there.
+- **Scraper plugins.** JavaScript plugins from a repository you choose. Paste its link (a `repo.json`) where Stremio addons go, and its plugins' streams show with your other addons. They run in a sandbox and can't reach your own network, but they are code from someone else, so only add repositories you trust. How to write one: [lib/data/sources/plugins/README.md](lib/data/sources/plugins/README.md).
 - **P2P streaming.** Torrents play while they download. The engine (TorrServer) is inside the app and runs next to it. It fetches pieces in the order the player reads them, and when a torrent holds many files it picks the right one by name or asks you. The app asks before the first torrent plays, because P2P shows your address to the other peers.
 - **Debrid.** Real-Debrid, AllDebrid, Premiumize, Debrid-Link and TorBox, for instant links instead of P2P.
 - **Links and magnets.** Anything you paste into search: a direct video link, an HLS playlist or a magnet.

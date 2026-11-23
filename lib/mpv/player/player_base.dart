@@ -1332,6 +1332,10 @@ abstract class PlayerBase with PlayerStreamControllersMixin, VyseExtrasMixin imp
   Future<void> setBoxFitMode(int mode) async {}
 
   @override
+  // ignore: no-empty-block - only the ExoPlayer backend has a hand-over to switch off
+  Future<void> setAllowMpvFallback(bool allow) async {}
+
+  @override
   // ignore: no-empty-block - base no-op, non-Apple mpv zooms via the video-zoom property
   Future<void> setVideoZoom(double scale) async {}
 

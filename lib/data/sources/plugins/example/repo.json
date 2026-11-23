@@ -1,0 +1,7 @@
+{
+  "name": "Example repository",
+  "plugins": [
+    { "id": "example", "name": "Example", "version": "1", "note": "Shows the plugin contract",
+      "types": ["movie", "tv"], "url": "demo.js" }
+  ]
+}
