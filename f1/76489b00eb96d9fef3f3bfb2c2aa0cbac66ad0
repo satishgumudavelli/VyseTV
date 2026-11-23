@@ -1,0 +1,109 @@
+test/net_isolate_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-37
+test/network_test_support.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-123
+test/open_files_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-42
+lib/data/app_settings.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 153-162,210
+scripts/build_byedpi.sh
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-59
+.gitignore
+  s_6b5edf213815c6::t_d9b54f5802ad0f 78-83
+specs/001-warp-doh-anti-dpi/contracts/settings-ui.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-31
+test/network_route_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-94
+test/network_settings_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-38
+lib/screens/profile/profile_page.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-2,14-17,58-59,69,127,2368-2374
+  s_6b5edf213815c6::t_19b9713bd051d6 2375
+lib/data/network/network_channel.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-123
+specs/001-warp-doh-anti-dpi/plan.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-137
+lib/screens/player/player_page.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 18-19,1162-1165,1176-1183
+  s_6b5edf213815c6::t_508f0e88c0111b 1184-1185
+specs/001-warp-doh-anti-dpi/contracts/local-gateway.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-23
+lib/data/network/dns_providers.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-158
+lib/data/network/network_modes.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-376
+specs/001-warp-doh-anti-dpi/tasks.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-209
+test/network_modes_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-328
+lib/data/sources/plugins/js_plugins.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 28,706-711
+lib/data/network/net_state.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-19
+specs/001-warp-doh-anti-dpi/spec.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-177
+scripts/install_linux_local.sh
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-63
+lib/data/network/desktop_network_platform.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-347
+specs/001-warp-doh-anti-dpi/contracts/native-channel.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-32
+specs/001-warp-doh-anti-dpi/data-model.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-63
+test/anti_dpi_presets_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-43
+linux/CMakeLists.txt
+  s_6b5edf213815c6::t_d9b54f5802ad0f 111-118
+lib/data/network/local_gateway.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-277
+lib/data/net.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 7-10,16-19,24,28-34,41,44-51,59,75-76,89-99,101-102,119,144-145,147-150
+scripts/build_usque.sh
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-77
+specs/001-warp-doh-anti-dpi/checklists/requirements.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-36
+specs/001-warp-doh-anti-dpi/research.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-117
+lib/screens/profile/network_section.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-331
+android/app/src/main/kotlin/com/vyse/player/exoplayer/ExoPlayerCore.kt
+  s_6b5edf213815c6::t_d9b54f5802ad0f 800-801
+lib/main.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 2,5,23-24,56,87-89
+android/app/src/main/kotlin/com/vyse/vyse_tv/MainActivity.kt
+  s_6b5edf213815c6::t_d9b54f5802ad0f 266-267
+README.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 203-206,466
+lib/data/network/anti_dpi_presets.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-43
+lib/core/platform/open_files.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-33
+lib/data/network/network_route.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-260
+specs/001-warp-doh-anti-dpi/quickstart.md
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-47
+test/desktop_network_platform_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-181
+test/dns_providers_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-116
+android/app/src/main/kotlin/com/vyse/vyse_tv/network/NetworkModesPlugin.kt
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-401
+test/local_gateway_test.dart
+  s_6b5edf213815c6::t_d9b54f5802ad0f 1-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f176489b00eb96d9fef3f3bfb2c2aa0cbac66ad0",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
