@@ -1,0 +1,23 @@
+test/local_gateway_test.dart
+  s_6b5edf213815c6::t_db6bbe272472fb 37
+  s_6b5edf213815c6::t_2db35701e6e22c 40,100,106-120,123-140
+lib/data/network/local_gateway.dart
+  s_6b5edf213815c6::t_de8564f5fedd44 2,19-21,29-30,32,37,49-62,64-81,86-90
+  s_6b5edf213815c6::t_2db35701e6e22c 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f5efe7ee0122e84def89480163679750e37be7f6",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
