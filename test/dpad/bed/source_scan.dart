@@ -69,6 +69,8 @@ const _phases = <(String, int)>[
   ('lib/screens/manga/', 7),
   ('lib/screens/audiobooks/', 7),
   ('lib/screens/profile/profile_page.dart', 8),
+  ('lib/screens/profile/network_section.dart', 8),
+  ('lib/screens/profile/plugin_index_page.dart', 8),
   ('lib/screens/profile/avatar_picker.dart', 8),
   ('lib/screens/profile/phone_edit_dialog.dart', 8),
   ('lib/widgets/trackers/', 8),
