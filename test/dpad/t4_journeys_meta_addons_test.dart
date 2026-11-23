@@ -23,7 +23,8 @@ import 'package:vyse_tv/screens/player/player_page.dart';
 import 'package:vyse_tv/screens/player/sources_page.dart';
 import 'package:vyse_tv/screens/profile/profile_page.dart';
 import 'package:vyse_tv/screens/search/search_page.dart';
-import 'package:vyse_tv/core/nav.dart' show openStremioLink;
+import 'package:vyse_tv/core/nav.dart' show openStremioLink, rootNavigatorKey;
+import 'package:vyse_tv/screens/shell/shell.dart' show BottomBar, SideRail;
 import 'package:vyse_tv/dpad/dpad_reveal.dart' show DpadRevealBlock;
 import 'package:vyse_tv/widgets/common.dart';
 import 'package:vyse_tv/widgets/media_rows.dart';
@@ -135,8 +136,10 @@ void main() {
       return isSwitch && inTmdbRow;
     }
 
+    // (down the page past Install and Browse plugins, then along each addon's row)
     for (var i = 0; i < 24 && !onTmdbSwitch(); i++) {
-      await (Bed.focused().contains('_Switch') || Bed.focused().contains("'Install'") ? Bed.down(t) : Bed.right(t));
+      final at = Bed.focused();
+      await (at.contains('_Switch') || at.contains("'Install'") || at.contains("'Browse plugins'") ? Bed.down(t) : Bed.right(t));
     }
     expect(onTmdbSwitch(), isTrue, reason: "the arrows reach TMDB's switch (${Bed.focused()})");
     await Bed.ok(t);
@@ -190,6 +193,49 @@ void main() {
     expect(find.byType(DiscoverPage), findsOneWidget);
     expect(['list3', 'year'], contains(t.widget<DiscoverPage>(find.byType(DiscoverPage)).catalog?.catalog.id), reason: 'the card\'s own catalog');
     await Bed.picture(t, 'meta_addons/collection_discover');
+    await Bed.back(t);
+    expect(find.byType(DiscoverPage), findsNothing);
+    await done(t);
+  }, variant: screen);
+
+  // The user (2026-11-23), with a plugin repository whose providers list two dozen catalogs each:
+  // all of them were cards on Home. Home shows two rows of them, as many as TMDB's genre cards;
+  // every catalog stays on Discover.
+  testWidgets('an addon with many catalogs: two rows of its cards on Home; the rest are on Discover', (t) async {
+    const atlasUrl = 'https://atlas.test/manifest.json';
+    final atlas = Addon.fromManifest(atlasUrl, {
+      'id': 'test.atlas',
+      'name': 'Atlas',
+      'version': '1.0.0',
+      'description': 'Made up for the tests: one provider with two dozen catalogs.',
+      'resources': ['catalog'],
+      'types': ['movie'],
+      'catalogs': [for (var i = 1; i <= 24; i++) {'type': 'movie', 'id': 'atlas$i', 'name': 'Atlas $i'}],
+    });
+    await start(t, addons: [atlas], tmdb: false);
+    final route = Bed.http.route;
+    Bed.http.route = (method, uri) => uri.host == 'atlas.test' ? FakeReply.json({'metas': [for (var i = 0; i < 8; i++) lanternFilm(300 + i)]}) : route(method, uri);
+    addTearDown(() => Bed.http.route = route);
+    await Bed.pumpShell(t);
+    await Bed.dpadMode(t);
+
+    final grid = find.ancestor(of: find.text('More from Atlas'), matching: find.byType(FanGrid));
+    expect(grid, findsOneWidget);
+    final cols = FanGrid.columns(t.element(grid));
+    final tiles = find.descendant(of: grid, matching: find.byType(CollectionTile));
+    expect(tiles, findsNWidgets(cols * 2), reason: 'two rows of $cols cards, as the genre cards');
+    expect([for (final e in tiles.evaluate()) (e.widget as CollectionTile).ref.catalog.id], [for (var i = 6; i < 6 + cols * 2; i++) 'atlas$i'],
+        reason: 'the catalogs after the five rows, in order');
+    final last = MetaAddons.catalogTitle(atlas.catalogs.last);
+    expect(find.text(last), findsNothing, reason: 'the rest are not on Home');
+
+    await seek(t, 'More from Atlas', key: Bed.down, max: 30);
+    await Bed.picture(t, 'meta_addons/many_catalogs_home');
+    await Bed.ok(t);
+    await Bed.settle(t, rounds: 4);
+    expect(find.byType(DiscoverPage), findsOneWidget);
+    expect(find.text(last), findsOneWidget, reason: "Discover's list of catalogs has the last one too");
+    await Bed.picture(t, 'meta_addons/many_catalogs_discover');
     await Bed.back(t);
     expect(find.byType(DiscoverPage), findsNothing);
     await done(t);
@@ -455,11 +501,21 @@ void main() {
       expect(rows.first, contains('Made-up stream'));
       await Bed.picture(t, 'meta_addons/sources_links');
 
-      // OK on the link: the collection's page, in VyseTV
+      // OK on the link: the collection's page, in VyseTV, in the tab beside the rail like any
+      // page (the sources screen, which covers the tabs, closes for it)
       await Bed.focus(t, control('Opens in VyseTV'));
       await Bed.ok(t);
-      expect(t.widget<DetailsPage>(find.byType(DetailsPage).last).media.key, 'meta/col.1');
+      expect(find.byType(SourcesPage), findsNothing);
+      final page = find.byType(DetailsPage).last;
+      expect(t.widget<DetailsPage>(page).media.key, 'meta/col.1');
+      expect(Navigator.of(t.element(page)), isNot(same(rootNavigatorKey.currentState)), reason: "in the tab's own navigator, not over the shell");
+      expect(find.byType(OnScreens.current == Screens.phone ? BottomBar : SideRail), findsOneWidget, reason: 'with the navbar');
       await Bed.back(t);
+      expect(t.widget<DetailsPage>(find.byType(DetailsPage).last).media.key, film.key, reason: "Back: the film's page it came from");
+      // and its sources again
+      if (!Bed.focused().contains("'Play'")) await Bed.down(t);
+      await Bed.ok(t);
+      expect(find.byType(SourcesPage), findsOneWidget);
 
       // VyseTV servers: matched to TMDB by its name and year (a phone has it under the list)
       if (OnScreens.current == Screens.phone) {

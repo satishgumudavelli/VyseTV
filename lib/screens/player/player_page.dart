@@ -1857,6 +1857,8 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
   /// so guests look for their own. Null while it's still loading.
   Map<String, dynamic>? get _shareLink {
     if (widget.server != null) return const {'own': true};
+    // a plugin's link is often only good for whoever asked: guests run the plugin themselves
+    if (_pick?.stream.plugin != null) return const {'own': true};
     if (_loadingSources) return null;
     if (_torrent != null) return const {'own': true};
     if (_sources.isEmpty || _source >= _sources.length) return _error != null ? const {'own': true} : null;
@@ -2133,6 +2135,8 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
   bool _bestPicked = false; // what's playing was chosen for you (by Next), not picked by hand
   List<AddonPick> _bestRest = const []; // the next best ones, should it not play
   int _bestTries = 0;
+  List<AddonPick> _againRest = const []; // a party guest's: the host's plugin's next closest links here
+  int _againTries = 0;
 
   /// Next was pressed for the episode about to load. [_loadAndPlay] takes it and clears it.
   bool _nextPressed = false;
@@ -2184,7 +2188,21 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
 
   /// The best source didn't play: the next one down your order, a few times over.
   bool _nextBest(int id) {
-    if (!mounted || id != _loadId || !_autoBest || _bestRest.isEmpty || _bestTries >= 4) return false;
+    if (!mounted || id != _loadId) return false;
+    // a party guest's link from the host's plugin: the next most like the host's
+    if (_follower && _againRest.isNotEmpty && _againTries < 3 && _pick?.stream.plugin != null) {
+      _againTries++;
+      _pick = _againRest.first;
+      _againRest = _againRest.sublist(1);
+      setState(() {
+        _error = null;
+        _loadingSources = true;
+        _loadNote = "That one didn't play. Trying the next closest…";
+      });
+      unawaited(_loadPicked(id));
+      return true;
+    }
+    if (!_autoBest || _bestRest.isEmpty || _bestTries >= 4) return false;
     _bestTries++;
     _pick = _bestRest.first;
     _bestRest = _bestRest.sublist(1);
@@ -2252,6 +2270,26 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
       }
       if (next == null) return _toSources(ep);
       pick = _pick = next;
+    }
+    // a watch party's guest: the host's plugin runs here and finds this device's own link,
+    // the one most like the host's (theirs is often only good for them)
+    if (pick.stream.findHere) {
+      final ref = pick.stream.plugin!;
+      _againRest = const [];
+      setState(() => _loadNote = "Finding the host's stream with ${ref.name}…");
+      final found = await Addons.pluginAgain(pick);
+      if (!mounted || id != _loadId) return;
+      if (found.isEmpty) {
+        setState(() {
+          _loadNote = null;
+          _loadingSources = false;
+          _error = "${ref.name} found nothing for this on your device. Ask the host to pick another source.";
+        });
+        return;
+      }
+      pick = _pick = found.first;
+      _againRest = found.sublist(1);
+      _againTries = 0;
     }
     // a torrent from the last episode stops downloading
     final was = _torrent;
@@ -3915,8 +3953,7 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
     if (s.source != null || _pick != null) {
       final shared = WatchParty.sourcePick(s);
       if (s.source != null && shared == null) return; // theirs for this episode isn't ready yet
-      String? key(AddonPick? p) => p == null ? null : (p.stream.torrent ? '${p.stream.infoHash}:${p.stream.fileIdx}' : p.stream.url);
-      if (key(shared) != key(_pick)) {
+      if (shared?.stream.partyKey != _pick?.stream.partyKey) {
         _pick = shared;
         _resumeOverride = Duration(milliseconds: (s.now * 1000).round());
         _switch('Switching source', () {});

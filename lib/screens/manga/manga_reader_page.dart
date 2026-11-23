@@ -13,6 +13,7 @@ import '../../core/layout.dart';
 import '../../core/nav.dart';
 import '../../core/theme.dart';
 import '../../data/manga/manga_library.dart';
+import '../../data/manga/plugin_comics.dart';
 import '../../models/manga/manga.dart';
 import '../../models/manga/manga_chapter.dart';
 import '../../dpad/dpad_navigator.dart' show DpadKeyExtension;
@@ -52,7 +53,7 @@ Future<void> openReader(
 Future<void> resumeReading(BuildContext context, MangaProgress p) async {
   showToast(context, Text('Opening ${p.chapterLabel ?? 'Chapter ${p.chapterIndex + 1}'}…'), icon: Icons.auto_stories_rounded);
   try {
-    final order = readingOrder(await mangaService.getChapters(p.manga.id));
+    final order = readingOrder(await chaptersOf(p.manga));
     if (!context.mounted || order.isEmpty) return;
     await openReader(context, manga: p.manga, chapters: order, index: p.chapterIndex.clamp(0, order.length - 1), startPage: p.page);
   } catch (_) {
@@ -298,7 +299,7 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
     _ratio.clear();
     _broken.clear();
     _placed = false;
-    final pages = await (MangaReaderPage.debugPages?.call(_chapter) ?? mangaService.getChapterImages(_chapter.id));
+    final pages = await (MangaReaderPage.debugPages?.call(_chapter) ?? pagesOf(_chapter));
     _count = pages.length;
     _page = _start.clamp(0, math.max(0, pages.length - 1));
     _pager?.dispose();
@@ -679,7 +680,8 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
   /// A page's picture, decoded no larger than [width] × [height] device pixels (it keeps its
   /// shape, and a smaller picture stays its own size).
   static ImageProvider _sized(String url, {required double width, double? height}) => ResizeImage(
-        CachedNetworkImageProvider(url),
+        // (a plugin's pages may need their site's headers)
+        CachedNetworkImageProvider(url, headers: PluginComics.headersFor(url)),
         width: math.max(1, width.round()),
         height: height == null ? null : math.max(1, height.round()),
         policy: ResizeImagePolicy.fit,

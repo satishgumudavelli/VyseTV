@@ -4,15 +4,18 @@ import '../../core/theme.dart';
 import '../../data/account/account.dart';
 import '../../data/party/dms.dart';
 import '../../data/party/friends.dart';
+import '../../data/party/lounges.dart';
 import '../../data/party/party.dart';
 import '../../dpad/dpad_traversal.dart';
 import '../../widgets/common.dart';
 import 'dm_page.dart';
+import 'lounges_view.dart';
 import 'party_widgets.dart';
 
-enum _Tab { messages, online, all, pending, blocked, add }
+enum _Tab { lounges, messages, online, all, pending, blocked, add }
 
-/// Friends, requests and blocks, with "Add friend" (by username, or [findPeople]).
+/// Lounges first, then friends, requests and blocks, with "Add friend" (by username, or
+/// [findPeople]).
 class PartyFriendsArea extends StatefulWidget {
   const PartyFriendsArea({super.key, required this.findPeople});
   final Widget findPeople;
@@ -22,21 +25,18 @@ class PartyFriendsArea extends StatefulWidget {
 }
 
 class _PartyFriendsAreaState extends State<PartyFriendsArea> {
-  _Tab? _tab; // null until the lists arrive: then Pending if someone's waiting, else Online
+  _Tab? _tab; // until you pick one: Lounges, or Messages when one is unread (requests show their count on Pending)
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([Friends.lists, Dms.threads]),
+    listenable: Listenable.merge([Friends.lists, Dms.threads, Lounges.mine]),
     builder: (context, _) {
       final l = Friends.lists.value;
       final threads = Dms.threads.value;
       final unread = threads.fold<int>(0, (n, t) => n + t.unread);
+      final seats = Lounges.mine.value;
       final online = l.friends.where((f) => f.presence != 'offline').toList();
-      final tab =
-          _tab ??
-          (unread > 0
-              ? _Tab.messages
-              : (l.incoming.isNotEmpty ? _Tab.pending : (threads.isNotEmpty ? _Tab.messages : (l.friends.isEmpty ? _Tab.add : _Tab.online))));
+      final tab = _tab ?? (unread > 0 ? _Tab.messages : _Tab.lounges);
       List<Widget> friendButtons(PartyProfile p) => [
         _RoundButton(icon: Icons.chat_bubble_outline_rounded, tooltip: 'Message', onTap: () => openDm(Navigator.of(context), p)),
         const SizedBox(width: 4),
@@ -45,13 +45,20 @@ class _PartyFriendsAreaState extends State<PartyFriendsArea> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Friends & messages', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -.4)),
+          const Text('Lounges, friends & messages', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -.4)),
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             // the tabs: one row to a D-pad, entered on the tab that is showing
             child: DpadRail(child: Row(
               children: [
+                _TabPill(
+                  label: 'Lounges',
+                  count: seats.length,
+                  badge: seats.fold<int>(0, (n, s) => n + s.replies),
+                  selected: tab == _Tab.lounges,
+                  onTap: () => setState(() => _tab = _Tab.lounges),
+                ),
                 _TabPill(
                   label: 'Messages',
                   count: threads.length,
@@ -79,6 +86,7 @@ class _PartyFriendsAreaState extends State<PartyFriendsArea> {
             child: KeyedSubtree(
               key: ValueKey(tab),
               child: switch (tab) {
+                _Tab.lounges => const PartyLoungesTab(),
                 _Tab.messages => _Threads(threads: threads),
                 _Tab.online => _List(
                   people: online,

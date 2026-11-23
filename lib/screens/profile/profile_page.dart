@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/account/account_sync.dart';
 import '../../data/sources/addons.dart';
-import '../../data/sources/plugins/js_plugins.dart' show PluginLog, PluginRepos;
+import '../../data/sources/plugins/js_plugins.dart' show PluginEntry, PluginLog, PluginRepoInfo, PluginRepos;
+import '../../data/sources/plugins/plugin_catalogs.dart' show PluginCatalogs;
 import 'plugin_index_page.dart';
 import '../../core/nav.dart' show ShellRoute;
 import '../../data/catalog/meta_addons.dart' show MetaAddons;
@@ -474,6 +477,72 @@ class _DangerPill extends StatelessWidget {
         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.black : _danger),
       ),
     ),
+  );
+}
+
+/// Settings > Addons: sources come from your addons and plugins only with Streaming mode off. Says
+/// which way it is, with the switch right there (the button stays put either way, so a remote's
+/// focus does too).
+class _StreamingModeNote extends StatelessWidget {
+  const _StreamingModeNote();
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: AppSettings.streamingMode,
+    builder: (context, on, _) {
+      final text = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(on ? 'Streaming mode is on' : 'Streaming mode is off', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(
+            on
+                ? "Videos play from VyseTV's own sources, so your addons and plugins aren't used for sources. To use them, turn Streaming mode off."
+                : 'When you play something, you pick a source from your addons and plugins.',
+            style: const TextStyle(fontSize: 13, color: VyseColors.textDim, height: 1.35),
+          ),
+        ],
+      );
+      final button = _SmallButton(
+        label: on ? 'Turn off Streaming mode' : 'Turn Streaming mode back on',
+        icon: on ? Icons.toggle_off_outlined : Icons.toggle_on_outlined,
+        primary: on,
+        onTap: () => AppSettings.streamingMode.set(!on),
+      );
+      final icon = Icon(on ? Icons.info_outline_rounded : Icons.check_circle_outline_rounded, size: 20, color: on ? VyseColors.accent : VyseColors.textDim);
+      return Container(
+        margin: const EdgeInsets.only(bottom: 30),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: on ? VyseColors.accent.withValues(alpha: .1) : Colors.white.withValues(alpha: .03),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: on ? VyseColors.accent.withValues(alpha: .45) : VyseColors.stroke),
+        ),
+        child: LayoutBuilder(
+          builder: (context, c) => c.maxWidth >= 560
+              ? Row(
+                  children: [
+                    icon,
+                    const SizedBox(width: 14),
+                    Expanded(child: text),
+                    const SizedBox(width: 16),
+                    button,
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [icon, const SizedBox(width: 12), Expanded(child: text)],
+                    ),
+                    const SizedBox(height: 14),
+                    button,
+                  ],
+                ),
+        ),
+      );
+    },
   );
 }
 
@@ -2593,10 +2662,11 @@ class _AddonsTabState extends State<_AddonsTab> {
   @override
   Widget build(BuildContext context) => Column(
     children: [
+      const _StreamingModeNote(),
       _Section(
         title: 'Add an addon',
         subtitle: 'Paste a Stremio addon link, or a plugin repository (a repo.json or a scraper list). Metadata addons add their catalogs to Home, Discover and search; '
-            'stream addons and plugins fill the sources screen (Streaming mode off in Playback); subtitle addons add their files to every video.',
+            'stream addons and plugins fill the sources screen (with Streaming mode off); subtitle addons add their files to every video.',
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 18),
@@ -2947,6 +3017,167 @@ Future<void> _showPluginLog(BuildContext context) => showDialog<void>(
   ),
 );
 
+/// A plugin repository's plugins that list titles to browse, each on or off: those on put their
+/// catalogs on Home, Discover and search, and their titles' pages come from them.
+Future<void> _showPluginCatalogs(BuildContext context, Addon a) => showDialog<void>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    backgroundColor: VyseColors.surface,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    title: const Text('Catalogs to browse', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+    content: SizedBox(width: double.maxFinite, height: 420, child: _PluginCatalogList(addon: a)),
+    actions: [_SmallButton(label: 'Done', icon: Icons.check_rounded, primary: true, onTap: () => Navigator.pop(ctx))],
+  ),
+);
+
+class _PluginCatalogList extends StatefulWidget {
+  const _PluginCatalogList({required this.addon});
+  final Addon addon;
+
+  @override
+  State<_PluginCatalogList> createState() => _PluginCatalogListState();
+}
+
+class _PluginCatalogListState extends State<_PluginCatalogList> {
+  late final Future<PluginRepoInfo> _info = _read();
+  late final Set<String> _on = {...?widget.addon.browse};
+
+  /// Its comic plugins turned off (the others' catalogs are in Manga).
+  late final Set<String> _comicsOff = {...widget.addon.comicsOff};
+
+  /// The repository as this device has it; read again when the copy here predates its plugins'
+  /// catalogs (a Vega provider's come down again with them).
+  Future<PluginRepoInfo> _read() async {
+    final url = widget.addon.manifestUrl;
+    var info = await PluginRepos.local(url) ?? await PluginRepos.install(url);
+    final stale = info.plugins.any((p) => p.stale);
+    if (stale) info = await PluginRepos.install(url);
+    // none picked yet (added before catalogs were read): a scraper list's that list titles are on
+    final unpicked = widget.addon.browse == null;
+    if (unpicked) _on.addAll([for (final p in info.plugins) if (!p.vega && !p.comic && p.catalogs.isNotEmpty) p.id]);
+    if (stale || unpicked) await Addons.setBrowse(widget.addon, [..._on]);
+    return info;
+  }
+
+  bool _isOn(PluginEntry p) => p.comic ? !_comicsOff.contains(p.id) : _on.contains(p.id);
+
+  void _flip(PluginEntry p) {
+    setState(() {
+      final set = p.comic ? _comicsOff : _on;
+      set.contains(p.id) ? set.remove(p.id) : set.add(p.id);
+    });
+    unawaited(Addons.setBrowse(widget.addon, [..._on], comicsOff: [..._comicsOff]));
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<PluginRepoInfo>(
+    future: _info,
+    builder: (context, snap) {
+      if (snap.hasError) {
+        return Center(
+          child: Text("Couldn't read its plugins: ${snap.error}", textAlign: TextAlign.center, style: const TextStyle(color: VyseColors.textDim)),
+        );
+      }
+      final info = snap.data;
+      if (info == null) {
+        return Center(
+          child: ValueListenableBuilder(
+            valueListenable: PluginRepos.installing,
+            builder: (context, i, _) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(height: 14),
+                Text(
+                  i == null || i.total == 0 ? 'Reading its plugins…' : 'Reading its plugins: ${i.done} of ${i.total}',
+                  style: const TextStyle(fontSize: 13, color: VyseColors.textDim),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      final listing = [for (final p in info.plugins) if (p.catalogs.isNotEmpty) p];
+      if (listing.isEmpty) {
+        return const Center(
+          child: Text(
+            "None of its plugins lists titles to browse. They still find sources for what you play.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: VyseColors.textDim, height: 1.35),
+          ),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Turned on, a plugin's catalogs show on Home, Discover and search, and its titles open on their own pages. A comic plugin's show in Manga.",
+            style: TextStyle(fontSize: 13, color: VyseColors.textDim, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView(
+              children: [
+                for (final (i, p) in listing.indexed)
+                  _PluginBrowseRow(plugin: p, on: _isOn(p), first: i == 0, onTap: () => _flip(p)),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// One plugin in [_PluginCatalogList]: its name, its catalogs, and whether they show. The whole
+/// row is the switch (one stop for a remote).
+class _PluginBrowseRow extends StatelessWidget {
+  const _PluginBrowseRow({required this.plugin, required this.on, required this.first, required this.onTap});
+  final PluginEntry plugin;
+  final bool on;
+  final bool first;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final names = [for (final c in plugin.catalogs) if (!c.searchOnly) c.name];
+    final what = [
+      if (plugin.comic) 'In Manga',
+      if (names.isNotEmpty) '${names.length} catalog${names.length == 1 ? '' : 's'}: ${names.take(4).join(', ')}${names.length > 4 ? '…' : ''}',
+      if (plugin.catalogs.any((c) => c.search)) 'search',
+    ].join(' · ');
+    return Pressable(
+      onTap: onTap,
+      autofocus: first,
+      builder: (context, hovered, _) => AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: Colors.white.withValues(alpha: hovered ? .08 : .04)),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(PluginCatalogs.plainName(plugin.name), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                  if (what.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(what, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: VyseColors.textDim, height: 1.3)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // (the row is what a press or OK turns: this only shows it)
+            ExcludeFocus(child: IgnorePointer(child: _Switch(value: on, onChanged: (_) {}))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AddonRow extends StatelessWidget {
   const _AddonRow({required this.addon, required this.first, required this.last});
   final Addon addon;
@@ -2977,7 +3208,9 @@ class _AddonRow extends StatelessWidget {
             tooltip: 'Configure (then paste the new link above)',
             onTap: () => launchUrl(Uri.parse(a.configureUrl!), mode: LaunchMode.externalApplication),
           ),
-        // what its plugins said (a TV has no log of its own to read)
+        // which of its plugins' catalogs to browse, and what its plugins said (a TV has no log of
+        // its own to read)
+        if (a.plugins) _IconAction(icon: Icons.view_carousel_outlined, tooltip: 'Catalogs to browse', onTap: () => _showPluginCatalogs(context, a)),
         if (a.plugins) _IconAction(icon: Icons.receipt_long_rounded, tooltip: 'Plugin log', onTap: () => _showPluginLog(context)),
         // a built-in addon is part of the app: it is turned off, not removed
         if (!a.builtIn) _IconAction(icon: Icons.delete_outline_rounded, tooltip: 'Remove', danger: true, onTap: () => Addons.remove(a)),

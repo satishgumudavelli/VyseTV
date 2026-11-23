@@ -1,11 +1,13 @@
-// Lounges on a desktop: a wide window (the lounges in the side panel, who's in a lounge beside its
-// chat), a laptop and a narrow window. Pictures to docs/dpad/pictures/lounges; no layout may
+// Lounges on a desktop: a wide window (the Lounges tab beside Messages, who's in a lounge beside
+// its chat), a laptop and a narrow window. Pictures to docs/dpad/pictures/lounges; no layout may
 // overflow at any of the sizes.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vyse_tv/data/party/lounges.dart';
+import 'package:vyse_tv/screens/party/friends_view.dart';
 import 'package:vyse_tv/screens/party/lounge_page.dart';
 import 'package:vyse_tv/screens/party/lounges_view.dart';
+import 'package:vyse_tv/widgets/common.dart';
 
 import 'bed/fake_lounges.dart';
 import 'bed/phase9_pages.dart';
@@ -26,6 +28,12 @@ void main() {
       await Bed.pumpShell(t);
       await Bed.openSection(t, 'party');
       await Bed.settle(t, rounds: 5);
+      // the bed's account has an unread message, so Party opens on Messages: Lounges is the tab before it
+      final tab = find.ancestor(of: find.descendant(of: find.byType(PartyFriendsArea), matching: find.text('Lounges')), matching: find.byType(Pressable)).first;
+      await t.ensureVisible(tab);
+      await Bed.settle(t, rounds: 2);
+      await t.tap(tab);
+      await Bed.settle(t, rounds: 3);
       expect(find.widgetWithText(LoungeRow, 'General'), findsOneWidget);
       await Bed.picture(t, 'lounges/w1-party');
 

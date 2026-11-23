@@ -45,6 +45,72 @@ const _downloadsAtOnce = 8;
 
 // ── repositories ──
 
+/// A list of titles a plugin offers to browse (a Home row, a catalog on Discover, a search), as its
+/// repository says (a scraper list's `catalogs`) or its script does (a Vega provider's catalog module).
+@immutable
+class PluginCatalog {
+  const PluginCatalog({
+    required this.id,
+    required this.name,
+    this.type = 'movie',
+    this.filter,
+    this.genres = const [],
+    this.search = false,
+    this.searchOnly = false,
+    this.genreRequired = false,
+  });
+
+  /// Its id in the plugin (a Vega provider's: its place in the provider's list).
+  final String id;
+  final String name;
+
+  /// What it lists, in the plugin's own word (a scraper list's "tv" means shows), as the plugin is
+  /// asked for it.
+  final String type;
+
+  /// A Vega provider's: what its posts are asked for.
+  final String? filter;
+
+  /// The choices of its genre filter; [genreRequired]: it lists one genre at a time.
+  final List<String> genres;
+  final bool genreRequired;
+
+  /// It takes a search ([searchOnly]: it answers only one).
+  final bool search, searchOnly;
+
+  /// What it lists in VyseTV's words: movie, series, or the plugin's own word for anything else.
+  String get kind => type == 'tv' || type == 'series' || type == 'show' ? 'series' : type;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type,
+    'filter': ?filter,
+    if (genres.isNotEmpty) 'genres': genres,
+    if (search) 'search': true,
+    if (searchOnly) 'searchOnly': true,
+    if (genreRequired) 'genreRequired': true,
+  };
+
+  static PluginCatalog? fromJson(Object? j) {
+    if (j is! Map || j['id'] is! String || (j['id'] as String).isEmpty) return null;
+    return PluginCatalog(
+      id: j['id'] as String,
+      name: '${j['name'] ?? j['id']}',
+      type: '${j['type'] ?? 'movie'}',
+      filter: j['filter'] is String ? j['filter'] as String : null,
+      genres: [for (final g in j['genres'] is List ? j['genres'] as List : const []) '$g'],
+      search: j['search'] == true,
+      searchOnly: j['searchOnly'] == true,
+      genreRequired: j['genreRequired'] == true,
+    );
+  }
+}
+
+/// How a Vega provider's script is put together now (with its catalog module), and a scraper
+/// list's entry kept (with its catalogs): one from before is downloaded again.
+const _catalogFormat = 2;
+
 /// A plugin as its repository lists it.
 @immutable
 class PluginEntry {
@@ -57,6 +123,10 @@ class PluginEntry {
     this.types = const ['movie', 'tv'],
     this.vega = false,
     this.scraper = false,
+    this.catalogs = const [],
+    this.details = false,
+    this.format = 1,
+    this.comic = false,
   });
 
   /// Its own id in the repository (also its script's file name).
@@ -76,7 +146,52 @@ class PluginEntry {
   /// A scraper from a scraper list, run on the scraper-list adapter (assets/plugins/scraper_runtime.js).
   final bool scraper;
 
-  Map<String, Object?> toJson() => {'id': id, 'name': name, 'url': url, 'version': version, 'note': note, 'types': types, if (vega) 'vega': true, if (scraper) 'scraper': true};
+  /// The lists of titles it offers to browse (plugin_catalogs.dart), and whether it gives a
+  /// title's details itself (else they come from TMDB, or the catalog's own copy).
+  final List<PluginCatalog> catalogs;
+  final bool details;
+
+  /// How its script was put together and its entry kept ([_catalogFormat] for a Vega provider's
+  /// and a scraper list's).
+  final int format;
+
+  /// It lists comics (manga), not videos: a Vega provider of type "comic", a scraper that says
+  /// "manga". Its catalogs go to the Manga section, read there a chapter at a time; it is never
+  /// asked for a video's streams.
+  final bool comic;
+
+  /// Kept before its catalogs were read (an update downloads it again).
+  bool get stale => (vega || scraper) && format < _catalogFormat;
+
+  PluginEntry withCatalogs(List<PluginCatalog> catalogs, {required bool details}) => PluginEntry(
+    id: id,
+    name: name,
+    url: url,
+    version: version,
+    note: note,
+    types: types,
+    vega: vega,
+    scraper: scraper,
+    catalogs: catalogs,
+    details: details,
+    format: format,
+    comic: comic,
+  );
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'url': url,
+    'version': version,
+    'note': note,
+    'types': types,
+    if (vega) 'vega': true,
+    if (scraper) 'scraper': true,
+    if (catalogs.isNotEmpty) 'catalogs': [for (final c in catalogs) c.toJson()],
+    if (details) 'details': true,
+    if (format != 1) 'format': format,
+    if (comic) 'comic': true,
+  };
 
   static PluginEntry? fromJson(Object? j) {
     if (j is! Map || j['id'] is! String || j['name'] is! String || j['url'] is! String) return null;
@@ -89,6 +204,10 @@ class PluginEntry {
       types: _types(j['types']),
       vega: j['vega'] == true,
       scraper: j['scraper'] == true,
+      catalogs: [for (final c in j['catalogs'] is List ? j['catalogs'] as List : const []) ?PluginCatalog.fromJson(c)],
+      details: j['details'] == true,
+      format: j['format'] is int ? j['format'] as int : 1,
+      comic: j['comic'] == true || (j['vega'] == true && (j['note'] == 'comic' || j['note'] == 'manga')),
     );
   }
 }
@@ -155,6 +274,7 @@ const scraperMarker = '// @scraper ';
     final id = '${p['id'] ?? ''}'.trim();
     if (!RegExp(r'^[A-Za-z0-9_.-]{1,64}$').hasMatch(id) || !seen.add(id)) continue;
     final langs = [for (final l in p['contentLanguage'] is List ? p['contentLanguage'] as List : const []) '$l'.toUpperCase()];
+    final resources = [for (final r in p['resources'] is List ? p['resources'] as List : const []) r is Map ? '${r['name']}' : '$r'];
     out.add(PluginEntry(
       id: id,
       name: '${p['name'] ?? id}',
@@ -163,10 +283,46 @@ const scraperMarker = '// @scraper ';
       note: langs.join(' · '),
       types: _types(p['supportedTypes'] ?? p['types']),
       scraper: true,
+      catalogs: _scraperCatalogs(p['catalogs']),
+      details: resources.contains('meta'),
+      format: _catalogFormat,
+      comic: [
+        for (final k in const ['supportedTypes', 'types'])
+          if (p[k] is List)
+            for (final t in p[k] as List) '$t'.toLowerCase(),
+      ].any((t) => t == 'manga' || t == 'comic'),
     ));
     if (out.length >= _maxPlugins) break;
   }
   return (name: '${j['name'] ?? ''}'.trim(), plugins: out);
+}
+
+/// A scraper list entry's `catalogs`, written Stremio's way (`extra`: search, genre with its
+/// options) or the paged way (`supportsPagination`). 40 at most.
+List<PluginCatalog> _scraperCatalogs(Object? v) {
+  final out = <PluginCatalog>[];
+  final seen = <String>{};
+  for (final c in v is List ? v : const []) {
+    if (c is! Map) continue;
+    final id = '${c['id'] ?? ''}'.trim();
+    if (id.isEmpty || id.length > 120 || !seen.add(id)) continue;
+    final extra = [for (final e in c['extra'] is List ? c['extra'] as List : const []) if (e is Map && e['name'] != null) e];
+    bool has(String n) => extra.any((e) => e['name'] == n);
+    bool required(String n) => extra.any((e) => e['name'] == n && e['isRequired'] == true);
+    final genre = extra.where((e) => e['name'] == 'genre').firstOrNull;
+    final name = '${c['name'] ?? ''}'.trim();
+    out.add(PluginCatalog(
+      id: id,
+      name: name.isEmpty ? id : name,
+      type: '${c['type'] ?? 'movie'}'.trim(),
+      genres: genre != null && genre['options'] is List ? [for (final o in genre['options'] as List) '$o'] : const [],
+      search: has('search'),
+      searchOnly: required('search'),
+      genreRequired: required('genre'),
+    ));
+    if (out.length >= 40) break;
+  }
+  return out;
 }
 
 /// A scraper's [code] as a plugin script: run in a function of its own by the scraper-list adapter,
@@ -201,24 +357,25 @@ const vegaMarker = '// @vega-provider ';
     final id = 'vega-$value';
     if (!seen.add(id)) continue;
     final kind = '${p['type'] ?? ''}';
-    out.add(PluginEntry(id: id, name: '${p['display_name'] ?? value}', url: '$base/dist/$value', version: '${p['version'] ?? ''}', note: kind, vega: true));
+    out.add(PluginEntry(id: id, name: '${p['display_name'] ?? value}', url: '$base/dist/$value', version: '${p['version'] ?? ''}', note: kind, vega: true, format: _catalogFormat, comic: kind == 'comic' || kind == 'manga'));
     if (out.length >= _maxPlugins) break;
   }
   return (name: 'Vega providers', plugins: out);
 }
 
 /// The script of the Vega provider whose built modules are at [distUrl] (`…/dist/<value>`):
-/// posts, meta and stream are needed, episodes is optional. [fetch] downloads one file.
+/// posts, meta and stream are needed; episodes and catalog (its lists to browse) are optional.
+/// [fetch] downloads one file.
 Future<String> composeVegaPlugin(String distUrl, String version, Future<String> Function(String url) fetch) async {
   final value = distUrl.substring(distUrl.lastIndexOf('/') + 1);
   final base = distUrl.substring(0, distUrl.length - '/dist/$value'.length);
   final b = StringBuffer('$vegaMarker$value\n// @vega-version $version\n__vega.source(${jsonEncode(base)}, ${jsonEncode(value)});\n');
-  const modules = ['posts', 'meta', 'stream', 'episodes'];
-  // (all four at once; episodes may be missing)
+  const modules = ['posts', 'meta', 'stream', 'episodes', 'catalog'];
+  // (all at once; episodes and catalog may be missing)
   final codes = await Future.wait([
     for (final m in modules)
       fetch('$distUrl/$m.js').then<String?>((c) => c, onError: (Object e) {
-        if (m == 'episodes' && e is HttpError && e.status == 404) return null;
+        if ((m == 'episodes' || m == 'catalog') && e is HttpError && e.status == 404) return null;
         throw e;
       }),
   ]);
@@ -289,9 +446,116 @@ class _Run {
 /// A stream a plugin found.
 @immutable
 class PluginHit {
-  const PluginHit(this.plugin, this.stream);
+  const PluginHit(this.plugin, this.stream, [this.index = 0]);
   final PluginEntry plugin;
   final FoundStream stream;
+
+  /// Its place among what its plugin found (from 0).
+  final int index;
+}
+
+/// Which plugin found a stream, and which of its links it was: how a watch party's guest finds
+/// the same one on their own device. The host's link is never shared: a plugin's links are often
+/// only good for whoever asked, so each guest runs the host's plugin and plays their own.
+@immutable
+class PluginRef {
+  const PluginRef({
+    required this.repo,
+    required this.id,
+    required this.name,
+    this.server = '',
+    this.quality = '',
+    this.label = '',
+    this.audio = '',
+    this.type = '',
+    this.host = '',
+    this.index = 0,
+  });
+
+  factory PluginRef.of(String repo, PluginHit h) {
+    final s = h.stream, label = s.label?.trim() ?? '';
+    return PluginRef(
+      repo: repo,
+      id: h.plugin.id,
+      name: h.plugin.name,
+      server: s.server,
+      quality: s.quality,
+      // (as it travels: the host's and a guest's are the same)
+      label: label.length > 200 ? label.substring(0, 200) : label,
+      audio: s.audio ?? '',
+      type: s.type,
+      host: Uri.tryParse(s.url)?.host ?? '',
+      index: h.index,
+    );
+  }
+
+  /// The repository's link, the plugin's id in it, and its name.
+  final String repo, id, name;
+
+  /// What the plugin said of the link: its server, quality, label, language and kind (hls, dash,
+  /// mp4), and the site it was on.
+  final String server, quality, label, audio, type, host;
+
+  /// Its place among what the plugin found.
+  final int index;
+
+  /// The same link of the same plugin, whichever device found it.
+  String get key => '$repo#$id#$index|$server|$quality|$label|$audio';
+
+  Map<String, Object?> toJson() => {
+    'repo': repo,
+    'id': id,
+    'name': name,
+    'server': server,
+    'quality': quality,
+    'label': label.length > 200 ? label.substring(0, 200) : label,
+    'audio': audio,
+    'type': type,
+    'host': host,
+    'index': index,
+  };
+
+  /// Null unless it names a repository (a web link) and a plugin.
+  static PluginRef? fromJson(Object? j) {
+    if (j is! Map || j['repo'] is! String || j['id'] is! String) return null;
+    final repo = j['repo'] as String, u = Uri.tryParse(repo);
+    if (u == null || !(u.scheme == 'https' || u.scheme == 'http') || u.host.isEmpty) return null;
+    String s(String k) => j[k] is String ? j[k] as String : '';
+    final name = s('name').trim().isEmpty ? j['id'] as String : s('name').trim();
+    return PluginRef(
+      repo: repo,
+      id: j['id'] as String,
+      name: name.length > 60 ? '${name.substring(0, 60)}…' : name,
+      server: s('server'),
+      quality: s('quality'),
+      label: s('label'),
+      audio: s('audio'),
+      type: s('type'),
+      host: s('host'),
+      index: j['index'] is num ? (j['index'] as num).toInt() : 0,
+    );
+  }
+}
+
+/// [hits] (found on this device) ordered by how alike each is to [ref]'s link: the same plugin,
+/// then the same language, label, server, quality, kind and site, as many as can be; then the
+/// nearest place in the plugin's list.
+List<PluginHit> closestHits(PluginRef ref, List<PluginHit> hits) {
+  String n(String? s) => (s ?? '').trim().toLowerCase();
+  int score(PluginHit h) {
+    final s = h.stream;
+    return (h.plugin.id == ref.id ? 64 : 0) +
+        (n(s.audio) == n(ref.audio) ? 32 : 0) +
+        (n(s.label) == n(ref.label) ? 16 : 0) +
+        (n(s.server) == n(ref.server) ? 8 : 0) +
+        (n(s.quality) == n(ref.quality) ? 4 : 0) +
+        (s.type == ref.type ? 2 : 0) +
+        (ref.host.isNotEmpty && Uri.tryParse(s.url)?.host == ref.host ? 1 : 0);
+  }
+
+  final scored = [for (final h in hits) (h: h, score: score(h), gap: (h.index - ref.index).abs())];
+  scored.sort((a, b) => a.score != b.score ? b.score - a.score : a.gap - b.gap);
+  return [for (final x in scored) x.h];
 }
 
 /// The repositories on this device: their lists and scripts, in files of their own.
@@ -307,12 +571,17 @@ abstract final class PluginRepos {
     _scripts.clear();
     _found.clear();
     _failures.clear();
+    _listed.clear();
     PluginLog.clear();
   }
 
   static final _info = <String, PluginRepoInfo?>{};
   static final _scripts = <String, String>{};
   static final _busy = <String, Future<PluginRepoInfo>>{};
+
+  /// Repositories read for a watch party's host's plugin that aren't installed here: their lists,
+  /// kept in memory only (never added to your addons, nothing saved).
+  static final _listed = <String, Future<PluginRepoInfo>>{};
 
   static Future<Directory> _dir(String url) async {
     final root = debugDir ?? Directory('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}plugins');
@@ -352,8 +621,9 @@ abstract final class PluginRepos {
     final keep = <String>[], fetch = <String>[];
     for (final e in listed) {
       final h = have[e.id];
-      // (a plugin with no version can't be told from its update: it is always downloaded again)
-      if (h != null && e.version.isNotEmpty && h.version == e.version && h.url == e.url) {
+      // (a plugin with no version can't be told from its update: it is always downloaded again; nor
+      // can one whose script was put together an older way)
+      if (h != null && e.version.isNotEmpty && h.version == e.version && h.url == e.url && h.format == e.format) {
         keep.add(e.id);
       } else {
         fetch.add(e.id);
@@ -396,8 +666,13 @@ abstract final class PluginRepos {
     dir.createSync(recursive: true);
     File file(PluginEntry e) => File('${dir.path}${Platform.pathSeparator}${e.id}.js');
     final entries = parsed.plugins;
-    // the ones still at the same version are kept; the rest are downloaded, several at once
-    final got = <PluginEntry?>[for (final e in entries) plan.keep.contains(e.id) && file(e).existsSync() ? e : null];
+    final had = {for (final p in old?.plugins ?? const <PluginEntry>[]) p.id: p};
+    // the ones still at the same version are kept (a Vega provider with the catalogs read when it
+    // came down); the rest are downloaded, several at once
+    final got = <PluginEntry?>[
+      for (final e in entries)
+        if (plan.keep.contains(e.id) && file(e).existsSync()) e.vega && had[e.id] != null ? e.withCatalogs(had[e.id]!.catalogs, details: had[e.id]!.details) : e else null,
+    ];
     final todo = [for (var i = 0; i < entries.length; i++) if (got[i] == null) i];
     var next = 0, done = 0;
     installing.value = (url: url, done: 0, total: todo.length);
@@ -406,15 +681,11 @@ abstract final class PluginRepos {
         final i = todo[next++];
         final e = entries[i];
         try {
-          final code = e.vega
-              ? await composeVegaPlugin(e.url, e.version, (u) => fetchText(u, timeout: const Duration(seconds: 20)))
-              : e.scraper
-              ? composeScraperPlugin(e.id, e.version, await fetchText(e.url, timeout: const Duration(seconds: 20)))
-              : await fetchText(e.url, timeout: const Duration(seconds: 20));
+          final code = await _download(e);
           if (code.length <= _maxScript) {
             await file(e).writeAsString(code);
             _scripts.remove('$url#${e.id}');
-            got[i] = e;
+            got[i] = e.vega ? await _describeVega(e, code) : e;
           }
         } catch (_) {
           // a script that can't be downloaded now keeps the copy this device has
@@ -444,6 +715,7 @@ abstract final class PluginRepos {
       'plugins': [for (final p in kept) p.toJson()],
     }));
     _info[url] = info;
+    _listed.remove(url);
     _found.removeWhere((k, _) => k.startsWith('$url|'));
     return info;
   }
@@ -459,16 +731,90 @@ abstract final class PluginRepos {
     } catch (_) {}
   }
 
-  static Future<String?> _script(String url, PluginEntry p) async {
+  /// A plugin's script: from memory, else its file. [fetch]: one this device doesn't have is
+  /// downloaded and kept in memory only (a watch party's host's plugin, see [findFor]).
+  static Future<String?> _script(String url, PluginEntry p, {bool fetch = false}) async {
     final key = '$url#${p.id}';
     if (_scripts[key] case final s?) return s;
     try {
       final f = File('${(await _dir(url)).path}${Platform.pathSeparator}${p.id}.js');
-      if (!f.existsSync()) return null;
-      return _scripts[key] = await f.readAsString();
+      if (f.existsSync()) return _scripts[key] = await f.readAsString();
+      if (!fetch || _plainlyLocal(Uri.parse(p.url))) return null;
+      final code = await _download(p);
+      return code.length <= _maxScript ? _scripts[key] = code : null;
     } catch (_) {
       return null;
     }
+  }
+
+  /// Plugin [id] of the repository at [url] asked [entry] ([args]: a page of one of its catalogs, a
+  /// title's details): its answer. The repository is downloaded first when this device doesn't
+  /// have it (an addon synced from another device). Throws when it fails.
+  static Future<Object?> ask(String url, String id, String entry, Map<String, Object?> args) async {
+    var info = await local(url) ?? await install(url);
+    var p = info.plugins.where((x) => x.id == id).firstOrNull;
+    if (p == null) {
+      // (the repository may have it since the copy here was read)
+      info = await install(url);
+      p = info.plugins.where((x) => x.id == id).firstOrNull;
+    }
+    if (p == null) throw StateError('the repository no longer has that plugin');
+    final code = await _script(url, p, fetch: true);
+    if (code == null) throw StateError("the plugin's script isn't on this device");
+    return callPlugin(code, entry, args, name: p.name);
+  }
+
+  /// A Vega provider's lists to browse, read from its catalog module ([code]: its script) in an
+  /// engine of its own, without the runtime (its catalog module is plain data).
+  static Future<PluginEntry> _describeVega(PluginEntry e, String code) async {
+    try {
+      final r = await callPlugin('$_describeStub\n$code', '__vyseDescribe', const {}, name: e.name, bare: true);
+      if (r is! Map) return e;
+      List<({String title, String filter})> list(Object? v) => [
+        for (final x in v is List ? v : const [])
+          if (x is Map && x['title'] is String && (x['title'] as String).trim().isNotEmpty) (title: (x['title'] as String).trim(), filter: '${x['filter'] ?? ''}'),
+      ];
+      final cats = list(r['catalogs']), genres = list(r['genres']);
+      String kind(String title) {
+        final t = title.toLowerCase();
+        if (RegExp(r'\b(movies?|films?)\b').hasMatch(t)) return 'movie';
+        if (RegExp(r'\b(series|shows?|tv|seasons?|dramas?|anime|web)\b').hasMatch(t)) return 'series';
+        return 'movie';
+      }
+
+      // (a comic provider's lists are comics, whatever they are called)
+      return e.withCatalogs([
+        for (final (i, c) in cats.take(30).indexed) PluginCatalog(id: 'c$i', name: c.title, type: e.comic ? 'comic' : kind(c.title), filter: c.filter),
+        if (genres.isNotEmpty) PluginCatalog(id: 'genre', name: 'Genres', type: e.comic ? 'comic' : 'movie', genres: [for (final g in genres.take(60)) g.title], genreRequired: true),
+        if (r['search'] == true) PluginCatalog(id: 'search', name: 'Search', type: e.comic ? 'comic' : 'movie', search: true, searchOnly: true),
+      ], details: r['meta'] == true);
+    } catch (_) {
+      return e; // (it still finds streams)
+    }
+  }
+
+  /// A plugin's script, from where its repository says.
+  static Future<String> _download(PluginEntry e) async => e.vega
+      ? await composeVegaPlugin(e.url, e.version, (u) => fetchText(u, timeout: const Duration(seconds: 20)))
+      : e.scraper
+      ? composeScraperPlugin(e.id, e.version, await fetchText(e.url, timeout: const Duration(seconds: 20)))
+      : await fetchText(e.url, timeout: const Duration(seconds: 20));
+
+  /// The repository at [url] as its file lists it today, read once and kept in memory: one that
+  /// isn't installed here, or whose copy here lacks a plugin.
+  static Future<PluginRepoInfo> _listing(String url) {
+    final f = _listed[url] ??= () async {
+      final uri = Uri.tryParse(url);
+      // (a link someone else sent, the host of a watch party: never this device's own network)
+      if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http') || _plainlyLocal(uri)) throw const FormatException('Not a web link.');
+      final parsed = parseRepoFile(await fetchText(url, timeout: const Duration(seconds: 20)), url);
+      return PluginRepoInfo(url: url, name: parsed.name.isEmpty ? uri.host : parsed.name, plugins: parsed.plugins);
+    }();
+    // (one that couldn't be read is read again next time)
+    unawaited(f.then<void>((_) {}, onError: (Object _) {
+      if (_listed[url] == f) _listed.remove(url);
+    }));
+    return f;
   }
 
   /// What each plugin found for a title, kept a few minutes (the sources screen opened again,
@@ -484,15 +830,27 @@ abstract final class PluginRepos {
   /// what has been found so far each time a plugin finds something, so a slow one holds nothing
   /// up. Downloads the repository first when this device doesn't have it (an addon synced from
   /// another device).
-  static Future<List<PluginHit>> find(String url, Map<String, Object?> query, {void Function(List<PluginHit> soFar)? onSome}) async {
-    final key = '$url|${jsonEncode(query)}';
+  static Future<List<PluginHit>> find(String url, Map<String, Object?> query, {void Function(List<PluginHit> soFar)? onSome}) =>
+      _cached('$url|${jsonEncode(query)}', (soFar) => _find(url, query, soFar), onSome);
+
+  /// A watch party's guest: the host's plugin [only] of the repository at [url] asked for [query]
+  /// on this device; or, with [except], the repository's other plugins, a few at a time until one
+  /// finds something. The repository needn't be one of your addons: its list and the scripts
+  /// asked for are fetched and kept in memory, never installed.
+  static Future<List<PluginHit>> findFor(String url, Map<String, Object?> query, {String? only, String? except}) => _cached(
+    '$url|${only ?? ''}|${except ?? ''}|${jsonEncode(query)}',
+    (soFar) => _find(url, query, soFar, only: only, except: except, borrow: true, untilFound: except != null),
+    null,
+  );
+
+  static Future<List<PluginHit>> _cached(String key, Future<List<PluginHit>> Function(ValueNotifier<List<PluginHit>> soFar) start, void Function(List<PluginHit> soFar)? onSome) async {
     final had = _found[key];
     final _Run run;
     if (had != null && DateTime.now().difference(had.at) < const Duration(minutes: 10)) {
       run = had;
     } else {
       run = _found[key] = _Run();
-      run.done = _find(url, query, run.hits);
+      run.done = start(run.hits);
       // (nothing found, or it failed: asked again next time)
       unawaited(run.done.then((l) {
         if (l.isEmpty && _found[key] == run) _found.remove(key);
@@ -511,22 +869,41 @@ abstract final class PluginRepos {
     }
   }
 
-  static Future<List<PluginHit>> _find(String url, Map<String, Object?> query, ValueNotifier<List<PluginHit>> soFar) async {
-    final info = await local(url) ?? await install(url);
+  /// [borrow]: a repository (or a plugin) this device doesn't have is read and run from memory
+  /// rather than installed. [untilFound]: no more plugins are started once one has found something.
+  static Future<List<PluginHit>> _find(
+    String url,
+    Map<String, Object?> query,
+    ValueNotifier<List<PluginHit>> soFar, {
+    String? only,
+    String? except,
+    bool borrow = false,
+    bool untilFound = false,
+  }) async {
+    var info = await local(url);
+    if (borrow && (info == null || (only != null && !info.plugins.any((p) => p.id == only)))) {
+      info = await _listing(url);
+    }
+    info ??= await install(url);
     final tv = query['isTv'] == true;
-    final plugins = [for (final p in info.plugins) if (p.types.contains(tv ? 'tv' : 'movie')) p];
+    // (a comic's plugin is never asked for a video: its "streams" are a chapter's pages; it is
+    // asked only by name, for its own chapter)
+    final plugins = [
+      for (final p in info.plugins)
+        if ((!p.comic || only != null) && p.types.contains(tv ? 'tv' : 'movie') && (only == null || p.id == only) && p.id != except) p,
+    ];
     int fails(int i) => _failures['$url#${plugins[i].id}'] ?? 0;
     final order = [for (var i = 0; i < plugins.length; i++) i]..sort((a, b) => fails(a) != fails(b) ? fails(a) - fails(b) : a - b);
     final found = List<List<PluginHit>>.filled(plugins.length, const []);
     var next = 0;
     Future<void> worker() async {
-      while (next < order.length) {
+      while (next < order.length && !(untilFound && soFar.value.isNotEmpty)) {
         final i = order[next++];
         final p = plugins[i];
-        final code = await _script(url, p);
+        final code = await _script(url, p, fetch: borrow);
         if (code == null) continue;
         try {
-          found[i] = [for (final s in await runPlugin(code, query, name: p.name)) PluginHit(p, s)];
+          found[i] = [for (final (n, s) in (await runPlugin(code, query, name: p.name)).indexed) PluginHit(p, s, n)];
           _failures.remove('$url#${p.id}');
         } catch (_) {
           _failures['$url#${p.id}'] = fails(i) + 1; // (what went wrong is in the plugin log)
@@ -599,6 +976,16 @@ function __run(q) {
       function (e) { sendMessage('done', JSON.stringify({ ok: false, error: String((e && e.message) || e) })); });
   } catch (e) { sendMessage('done', JSON.stringify({ ok: false, error: String((e && e.message) || e) })); }
 }
+// another of the plugin's functions (a catalog page, a title's details), by its global name
+function __call(name, q) {
+  try {
+    var f = globalThis[name];
+    if (typeof f !== 'function') { sendMessage('done', JSON.stringify({ ok: false, error: 'no ' + name + ' function' })); return; }
+    Promise.resolve(f(q)).then(
+      function (r) { sendMessage('done', JSON.stringify({ ok: true, value: r === undefined ? null : r })); },
+      function (e) { sendMessage('done', JSON.stringify({ ok: false, error: String((e && e.message) || e) })); });
+  } catch (e) { sendMessage('done', JSON.stringify({ ok: false, error: String((e && e.message) || e) })); }
+}
 // console.log / info / warn / error: kept in the plugin log (a TV has no readable logcat)
 console.log = console.info = console.warn = console.error = function () {
   var a = [];
@@ -611,6 +998,34 @@ console.log = console.info = console.warn = console.error = function () {
 /// the real one's library isn't there.
 @visibleForTesting
 Future<Map<String, Object?>> Function(String code, Map<String, Object?> query)? debugPluginEngine;
+
+/// The same for a plugin's other functions ([callPlugin]: [entry], its [args]): {value, log, error?}.
+@visibleForTesting
+Future<Map<String, Object?>> Function(String code, String entry, Map<String, Object?> args)? debugPluginCall;
+
+/// [_describeStub], for the engine's tests.
+@visibleForTesting
+String get vegaDescribeStub => _describeStub;
+
+/// What reads a Vega provider's lists to browse at install: its modules kept, not run, and the
+/// catalog module (plain data: `exports.catalog`, `exports.genres`) run alone.
+const _describeStub = r'''
+var __vegaMods = {};
+var __vega = { source: function () {}, module: function (n, f) { __vegaMods[n] = f; } };
+function __vyseDescribe() {
+  var ex = {};
+  if (__vegaMods.catalog) {
+    var m = { exports: ex };
+    try { __vegaMods.catalog(m.exports, m, function () { return {}; }, function () { return Promise.resolve(); }, {}); ex = m.exports || {}; }
+    catch (e) { console.log('catalog: ' + ((e && e.message) || e)); }
+  }
+  function list(v) {
+    return Array.isArray(v) ? v.filter(function (x) { return x && typeof x.title === 'string'; })
+      .map(function (x) { return { title: x.title, filter: x.filter == null ? '' : String(x.filter) }; }) : [];
+  }
+  return { catalogs: list(ex.catalog), genres: list(ex.genres), search: !!__vegaMods.posts, meta: !!__vegaMods.meta };
+}
+''';
 
 JavascriptRuntime _newRuntime() {
   // a script that never ends is stopped by the engine after 20 s; one that eats memory, at the
@@ -695,12 +1110,7 @@ Future<List<FoundStream>> runPlugin(String code, Map<String, Object?> query, {St
     // it runs in an isolate of its own, never the screen's
     _loadQuickJsDeepBound();
     final helpers = await _helpers();
-    if (code.startsWith(vegaMarker)) {
-      code = '${await _vegaRuntime()}\n$code';
-    } else if (code.startsWith(scraperMarker)) {
-      code = '${await _vegaRuntime()}\n${await _scraperRuntime()}\n$code';
-    }
-    final script = code;
+    final script = await _withRuntime(code);
     try {
       res = await Isolate.run(() => _execute(script, query, helpers)).timeout(_runTimeout + const Duration(seconds: 5));
     } on TimeoutException {
@@ -718,17 +1128,54 @@ Future<List<FoundStream>> runPlugin(String code, Map<String, Object?> query, {St
   return streams;
 }
 
+/// [code] after the runtime its kind runs on (a Vega provider's, a scraper list's).
+Future<String> _withRuntime(String code) async {
+  if (code.startsWith(vegaMarker)) return '${await _vegaRuntime()}\n$code';
+  if (code.startsWith(scraperMarker)) return '${await _vegaRuntime()}\n${await _scraperRuntime()}\n$code';
+  return code;
+}
+
+/// Runs another of a plugin's functions than getStreams ([entry], by its global name: a catalog
+/// page, a title's details) with [args], and returns its answer (plain JSON). Throws when it
+/// failed (said in the plugin log, with its own lines). [bare]: without the runtime and the
+/// helpers (a Vega provider's catalog module read at install).
+Future<Object?> callPlugin(String code, String entry, Map<String, Object?> args, {String name = '', bool bare = false}) async {
+  final Map<String, Object?> res;
+  final hook = debugPluginCall;
+  if (hook != null) {
+    res = await hook(code, entry, args);
+  } else {
+    _loadQuickJsDeepBound();
+    final helpers = bare ? '' : await _helpers();
+    final script = bare ? code : await _withRuntime(code);
+    try {
+      res = await Isolate.run(() => _execute(script, args, helpers, entry: entry)).timeout(_runTimeout + const Duration(seconds: 5));
+    } on TimeoutException {
+      PluginLog.add(name, ['$entry stopped: no answer in ${(_runTimeout + const Duration(seconds: 5)).inSeconds} s']);
+      rethrow;
+    }
+  }
+  final error = res['error'] as String?;
+  PluginLog.add(name, [
+    ...((res['log'] as List?) ?? const []).map((l) => '$l'),
+    if (error != null) '$entry ERROR: $error',
+  ]);
+  if (error != null) throw StateError(error);
+  return res['value'];
+}
+
 /// [_execute] for tests that have the real engine: runs [code] (after [helpers]) and returns
-/// {streams, log, error?}.
+/// {streams, log, error?}; with [entry], that function's answer: {value, log, error?}.
 @visibleForTesting
-Future<Map<String, Object?>> executeScriptForTest(String code, Map<String, Object?> query, String helpers) {
+Future<Map<String, Object?>> executeScriptForTest(String code, Map<String, Object?> query, String helpers, {String? entry}) {
   _loadQuickJsDeepBound();
-  return _execute(code, query, helpers);
+  return _execute(code, query, helpers, entry: entry);
 }
 
 /// Runs the script in a fresh engine. Returns {streams, log, error?}: what it answered, the lines
-/// it logged (kept even when it fails or runs out of time), and the reason when it failed.
-Future<Map<String, Object?>> _execute(String code, Map<String, Object?> query, String helpers) async {
+/// it logged (kept even when it fails or runs out of time), and the reason when it failed. With
+/// [entry], that function is asked instead of getStreams: {value, log, error?}.
+Future<Map<String, Object?>> _execute(String code, Map<String, Object?> query, String helpers, {String? entry}) async {
   final logs = <String>[];
   final rt = _newRuntime();
   final done = Completer<Map<String, dynamic>>();
@@ -773,15 +1220,18 @@ Future<Map<String, Object?>> _execute(String code, Map<String, Object?> query, S
     final loaded = rt.evaluate(code, sourceUrl: 'plugin.js');
     if (loaded.isError) throw StateError('script: ${loaded.stringResult}');
     final started = rt.evaluate(
-      'typeof getStreams === "function" ? __run(${jsonEncode(query)}) : sendMessage("done", JSON.stringify({ok:false,error:"no getStreams function"}))',
+      entry != null
+          ? '__call(${jsonEncode(entry)}, ${jsonEncode(query)})'
+          : 'typeof getStreams === "function" ? __run(${jsonEncode(query)}) : sendMessage("done", JSON.stringify({ok:false,error:"no getStreams function"}))',
     );
     if (started.isError) throw StateError('script: ${started.stringResult}');
     rt.executePendingJob();
     final r = await done.future.timeout(_runTimeout);
     if (r['ok'] != true) throw StateError('${r['error']}');
+    if (entry != null) return {'value': r['value'], 'log': logs};
     return {'streams': r['streams'] is List ? r['streams'] as List : const [], 'log': logs};
   } catch (e) {
-    return {'streams': const [], 'log': logs, 'error': e.toString().split('\n').first};
+    return {if (entry == null) 'streams': const [], 'log': logs, 'error': e.toString().split('\n').first};
   } finally {
     closed = true;
     pump.cancel();
@@ -840,13 +1290,20 @@ bool isPrivateAddress(InternetAddress a) {
 
 Future<void> _checkHost(Uri u) async {
   if (u.scheme != 'http' && u.scheme != 'https') throw StateError('only http and https links');
+  if (_plainlyLocal(u)) throw StateError("this device's network is off limits");
   final host = u.host.toLowerCase();
-  if (host.isEmpty || host == 'localhost' || host.endsWith('.local') || host.endsWith('.localhost') || host.endsWith('.internal')) {
-    throw StateError("this device's network is off limits");
-  }
   final literal = InternetAddress.tryParse(host);
   final addrs = literal != null ? [literal] : await InternetAddress.lookup(host);
   if (addrs.isEmpty || addrs.any(isPrivateAddress)) throw StateError("this device's network is off limits");
+}
+
+/// Whether [u] plainly points at this device or its network: by its name, or an address
+/// written in it (no lookup).
+bool _plainlyLocal(Uri u) {
+  final host = u.host.toLowerCase();
+  if (host.isEmpty || host == 'localhost' || host.endsWith('.local') || host.endsWith('.localhost') || host.endsWith('.internal')) return true;
+  final literal = InternetAddress.tryParse(host);
+  return literal != null && isPrivateAddress(literal);
 }
 
 Future<Map<String, Object?>> _request(String url, Map<String, dynamic> opts) async {

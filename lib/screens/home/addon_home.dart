@@ -23,15 +23,15 @@ bool afterBuild(VoidCallback then) {
   return true;
 }
 
-/// Your metadata addons on Home: each addon's first catalogs as rows and the rest as collection
-/// cards (the genre cards' look), in your order in Settings > Addons. With TMDB off, the hero and
-/// the genre cards come from them too.
+/// Your metadata addons on Home: each addon's first catalogs as rows and the next ones as
+/// collection cards (the genre cards' look, two rows of them), in your order in Settings > Addons.
+/// With TMDB off, the hero and the genre cards come from them too.
 abstract final class AddonHome {
   /// How many of an addon's catalogs are rows; the rest are collection cards.
   static const rows = 5;
 
-  /// [a]'s catalogs that are rows on Home, and those that are cards (a catalog that needs a
-  /// genre picked is a card: it opens on its first genre).
+  /// [a]'s catalogs that are rows on Home, and the rest, of which the first two rows are cards (a
+  /// catalog that needs a genre picked is a card: it opens on its first genre).
   static (List<CatalogRef>, List<CatalogRef>) split(Addon a) {
     final board = [for (final c in a.catalogs) if (c.board) CatalogRef(a, c)];
     final more = [for (final c in a.catalogs) if (!c.board && c.browsable) CatalogRef(a, c)];
@@ -157,7 +157,8 @@ class _SeeAllCard extends StatelessWidget {
   );
 }
 
-/// One metadata addon on Home: its first catalogs as rows, the rest as collection cards.
+/// One metadata addon on Home: its first catalogs as rows, then two rows of collection cards (as
+/// many as TMDB's genre cards). Every catalog is on Discover, in its list of catalogs.
 class AddonSection extends StatelessWidget {
   const AddonSection({super.key, required this.addon, required this.posterWidth});
   final Addon addon;
@@ -165,7 +166,8 @@ class AddonSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (rows, cards) = AddonHome.split(addon);
+    final (rows, more) = AddonHome.split(addon);
+    final cards = more.take(FanGrid.columns(context) * 2);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

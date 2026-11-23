@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 /// Local HLS relay on 127.0.0.1, modelled on the London relay's stream-proxy + nginx pipes.
 ///
@@ -309,6 +310,9 @@ class StreamProxy {
 
   Future<void> _segment(HttpRequest req, String target) async {
     final range = req.headers.value(HttpHeaders.rangeHeader);
+    final hidden = _hidden[target];
+    // a part of a piece hidden in a picture: the same part of the video inside it
+    if (range != null && hidden != null) return _hiddenPart(req, target, range, hidden);
     // a cold CDN edge can stall or fail the first ask for a piece while it pulls it in (ReCloud's
     // does); a second ask usually gets it, so the player never sees that first failure
     HttpClientResponse? up;
@@ -324,17 +328,148 @@ class StreamProxy {
         if (i > 0) rethrow;
       }
     }
-    final res = req.response..statusCode = up.statusCode;
-    res.headers.contentType = _segmentType(up.headers.contentType, target);
     final zipped = _gzipped(up);
+    final body = StreamIterator<List<int>>(zipped ? up.cast<List<int>>().transform(gzip.decoder) : up);
+    // the first bytes say whether the piece is video dressed up as a PNG picture
+    final head = BytesBuilder(copy: false);
+    ({int start, int? length})? inside;
+    while (up.statusCode < 300 && await body.moveNext()) {
+      head.add(body.current);
+      final bytes = head.toBytes();
+      if (!_png(bytes)) break;
+      inside = hiddenVideo(bytes);
+      if (inside != null || bytes.length >= 65536) break;
+    }
+    final res = req.response;
+    if (inside != null) {
+      final total = zipped ? -1 : up.contentLength;
+      final length = inside.length ?? (total >= 0 ? total - inside.start : null);
+      if (length != null) _hidden[target] = (start: inside.start, length: length);
+      if (range != null && length != null) {
+        // asked for a part before the relay knew: ask again for that part of the video
+        await body.cancel();
+        return _hiddenPart(req, target, range, (start: inside.start, length: length));
+      }
+      res
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType('video', 'mp2t');
+      if (length != null) res.headers.contentLength = length;
+      res.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+      if (req.method != 'HEAD') await res.addStream(_window(head.toBytes(), body, inside.start, length));
+      await body.cancel();
+      return res.close();
+    }
+    res.statusCode = up.statusCode;
+    res.headers.contentType = _segmentType(up.headers.contentType, target);
     if (up.contentLength >= 0 && !zipped) res.headers.contentLength = up.contentLength;
     final cr = up.headers.value(HttpHeaders.contentRangeHeader);
     if (cr != null) res.headers.set(HttpHeaders.contentRangeHeader, cr);
     res.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
     if (req.method == 'HEAD') {
+      await body.cancel();
+    } else {
+      await res.addStream(() async* {
+        if (head.isNotEmpty) yield head.takeBytes();
+        while (await body.moveNext()) {
+          yield body.current;
+        }
+      }());
+    }
+    await res.close();
+  }
+
+  final _hidden = <String, ({int start, int length})>{}; // pieces hidden in a picture: where their video sits
+
+  /// Some hosts dress MPEG-TS pieces up as PNG pictures (Cinejoy's Polaris, on TikTok's picture
+  /// CDN: a 1x1 picture with the video in a chunk of its own; others put it after the picture's
+  /// end). mpv opens such a piece as a picture, so the relay hands over the video alone. Where
+  /// the video sits in [head] (the piece's first bytes), or null when it isn't one of those (or
+  /// [head] is too short to tell).
+  static ({int start, int? length})? hiddenVideo(List<int> head) {
+    if (!_png(head)) return null;
+    var at = 8;
+    while (at + 8 <= head.length) {
+      final size = (head[at] << 24) | (head[at + 1] << 16) | (head[at + 2] << 8) | head[at + 3];
+      final type = String.fromCharCodes(head.sublist(at + 4, at + 8));
+      final data = at + 8;
+      if (type == 'IEND') {
+        final after = data + size + 4;
+        return after < head.length && head[after] == 0x47 ? (start: after, length: null) : null;
+      }
+      // MPEG-TS: packets of 188 bytes, each starting with 0x47
+      if (data < head.length && head[data] == 0x47 && size >= 188 && (data + 188 >= head.length || head[data + 188] == 0x47)) {
+        return (start: data, length: size);
+      }
+      at = data + size + 4;
+    }
+    return null;
+  }
+
+  static bool _png(List<int> b) =>
+      b.length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A;
+
+  /// [length] bytes from [start] of what [head] and then [rest] carry.
+  static Stream<List<int>> _window(Uint8List head, StreamIterator<List<int>> rest, int start, int? length) async* {
+    var skip = start, left = length ?? -1;
+    Stream<List<int>> all() async* {
+      yield head;
+      while (await rest.moveNext()) {
+        yield rest.current;
+      }
+    }
+
+    await for (var c in all()) {
+      if (skip >= c.length) {
+        skip -= c.length;
+        continue;
+      }
+      if (skip > 0) {
+        c = c.sublist(skip);
+        skip = 0;
+      }
+      if (left < 0) {
+        yield c;
+        continue;
+      }
+      if (c.length >= left) {
+        if (left > 0) yield c.sublist(0, left);
+        return;
+      }
+      left -= c.length;
+      yield c;
+    }
+  }
+
+  /// The part [range] asks for of the video hidden in a piece, fetched as that part of the piece.
+  Future<void> _hiddenPart(HttpRequest req, String target, String range, ({int start, int length}) inside) async {
+    final res = req.response;
+    final m = RegExp(r'^bytes=(\d*)-(\d*)$').firstMatch(range.trim());
+    final a = int.tryParse(m?[1] ?? ''), b = int.tryParse(m?[2] ?? '');
+    final from = a ?? (b == null ? 0 : (inside.length - b).clamp(0, inside.length));
+    final to = a == null ? inside.length - 1 : ((b == null || b >= inside.length) ? inside.length - 1 : b);
+    if (m == null || from > to) {
+      res
+        ..statusCode = HttpStatus.requestedRangeNotSatisfiable
+        ..headers.set(HttpHeaders.contentRangeHeader, 'bytes */${inside.length}');
+      return res.close();
+    }
+    final up = await _get(target, range: 'bytes=${inside.start + from}-${inside.start + to}');
+    if (up.statusCode != HttpStatus.partialContent) {
+      await up.drain<void>();
+      res.statusCode = HttpStatus.badGateway;
+      return res.close();
+    }
+    res
+      ..statusCode = HttpStatus.partialContent
+      ..headers.contentType = ContentType('video', 'mp2t')
+      ..headers.contentLength = to - from + 1;
+    res.headers
+      ..set(HttpHeaders.contentRangeHeader, 'bytes $from-$to/${inside.length}')
+      ..set(HttpHeaders.acceptRangesHeader, 'bytes');
+    if (req.method == 'HEAD') {
       await up.drain<void>();
     } else {
-      await res.addStream(zipped ? up.cast<List<int>>().transform(gzip.decoder) : up);
+      await res.addStream(up);
     }
     await res.close();
   }
@@ -352,9 +487,21 @@ class StreamProxy {
       res.statusCode = HttpStatus.notFound;
       return res.close();
     }
-    final length = await file.length();
+    var length = await file.length();
     final name = path.last.toLowerCase();
-    res.headers.contentType = name.endsWith('.m3u8')
+    // a piece saved as it came: video hidden in a picture (see hiddenVideo) is served without it
+    var base = 0;
+    if (!name.endsWith('.m3u8') && !name.endsWith('.vtt') && !name.endsWith('.webvtt') && length > 8) {
+      final head = await file.openRead(0, length < 65536 ? length : 65536).fold(BytesBuilder(copy: false), (b, c) => b..add(c));
+      final inside = hiddenVideo(head.toBytes());
+      if (inside != null) {
+        base = inside.start;
+        length = inside.length ?? length - base;
+      }
+    }
+    res.headers.contentType = base > 0
+        ? ContentType('video', 'mp2t')
+        : name.endsWith('.m3u8')
         ? ContentType('application', 'vnd.apple.mpegurl', charset: 'utf-8')
         : name.endsWith('.ts')
         ? ContentType('video', 'mp2t')
@@ -383,7 +530,7 @@ class StreamProxy {
       res.headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-$end/$length');
     }
     res.headers.contentLength = length == 0 ? 0 : end - start + 1;
-    if (req.method != 'HEAD' && length > 0) await res.addStream(file.openRead(start, end + 1));
+    if (req.method != 'HEAD' && length > 0) await res.addStream(file.openRead(base + start, base + end + 1));
     await res.close();
   }
 

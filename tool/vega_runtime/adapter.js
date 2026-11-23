@@ -199,12 +199,216 @@ function __vegaType(t, link) {
   return 'mp4';
 }
 
+function __vegaErr(e) { return String((e && e.message) || e).slice(0, 160); }
+
+// Each link of the page turned into video files, in parallel: DRM ones dropped, 12 at most.
+async function __vegaResolve(links, tv) {
+  var V = __vega.V, ctx = __vega.ctx, streamMod = __vega.load('stream'), signal = new AbortController().signal;
+  var got = await Promise.all(links.map(function (l) {
+    return (async function () {
+      try { return { l: l, s: (await streamMod.getStream({ link: l.link, type: tv ? 'series' : 'movie', signal: signal, providerContext: ctx, isDownload: false })) || [] }; }
+      catch (e) { console.log('stream ' + l.link + ': ' + __vegaErr(e)); return { l: l, s: [] }; }
+    })();
+  }));
+  var out = [], have = {};
+  got.forEach(function (g) {
+    g.s.forEach(function (s) {
+      if (!s || !s.link || s.drm || !/^https?:/i.test(s.link) || have[s.link]) return;
+      // a comic's pages are pictures, not a video
+      if (String(s.type || '').toLowerCase() === 'image' || /\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(s.link)) return;
+      have[s.link] = true;
+      var ql = s.quality ? (/^\d+$/.test(String(s.quality)) ? s.quality + 'p' : String(s.quality)) : (g.l.quality ? g.l.quality + 'p' : '');
+      out.push({ url: s.link, type: __vegaType(s.type, s.link), quality: ql, server: s.server || V.value, label: s.tag || undefined, headers: s.headers || undefined });
+    });
+  });
+  return out.slice(0, 12);
+}
+
+// ── browsing the provider, the way VyseTV browses a Stremio addon ──
+// Its catalogs and genres are read when it is installed (from its catalog module, by the app); these
+// answer for one page of a catalog or a search, a title's details, and its own titles' streams. A
+// title goes by its page's link; an episode by `<link>|<season>|<episode>`.
+
+// "Download Oppenheimer (2023) Dual Audio {Hindi-English} 480p [450MB]" -> "Oppenheimer";
+// "Tulsa King (Season 2 – 4) English (DD5.1)" -> "Tulsa King"
+function __vegaName(t) {
+  t = String(t || '').replace(/^\s*(?:download|watch|stream)\s+/i, '');
+  var y = /^(.*?)[\s([{-]*\b(19\d\d|20\d\d)\b/.exec(t);
+  if (y && y[1].trim().length > 1) t = y[1];
+  t = t.split(/\s*(?:[[{|]|\((?=\s*(?:season|s\d|\d))|\b(?:season\s*\d|s\d{1,2}\b|480p|720p|1080p|2160p|4k|hdrip|web-?dl|webrip|bluray|dual audio)\b)/i)[0];
+  return t.replace(/[\s:,(\-$|+–—]+$/, '').trim();
+}
+function __vegaYear(t) { var m = /\b(19\d\d|20\d\d)\b/.exec(String(t || '')); return m ? m[1] : undefined; }
+// A listing is a show when its title or its link says so (seasons, episodes, "web series"); else
+// what its catalog lists.
+function __vegaKind(t, link, fallback) {
+  var re = /(?:^|[\s\-_/(])(?:seasons?[\s\-_]*\d|s\d{1,2}(?:\s*e\d{1,3})?|episodes?[\s\-_]*\d|ep\s?\d+|web[\s-]?series|tv[\s-]?series|series)(?=$|[\s\-_/)\d])/i;
+  return re.test(String(t || '')) || re.test(String(link || '')) ? 'series' : (fallback || 'movie');
+}
+
+async function __vegaCatalog(q) {
+  var V = __vega.V, ctx = __vega.ctx, posts = __vega.load('posts'), signal = new AbortController().signal;
+  if (!posts) return { metas: [] };
+  var page = q.page || 1, items = [], filter = String(q.filter || '');
+  if (q.genre) {
+    var cat = __vega.load('catalog') || {};
+    var g = (cat.genres || []).filter(function (x) { return x && x.title === q.genre; })[0];
+    if (g) filter = String(g.filter || '');
+  }
+  if (q.search) {
+    if (!posts.getSearchPosts) return { metas: [] };
+    items = await posts.getSearchPosts({ searchQuery: String(q.search), page: page, providerValue: V.value, signal: signal, providerContext: ctx });
+  } else {
+    if (!posts.getPosts) return { metas: [] };
+    items = await posts.getPosts({ filter: filter, page: page, providerValue: V.value, signal: signal, providerContext: ctx });
+  }
+  var seen = {};
+  return {
+    metas: (Array.isArray(items) ? items : []).filter(function (p) {
+      if (!p || !p.link || !p.title || seen[p.link]) return false;
+      return (seen[p.link] = true);
+    }).map(function (p) {
+      // (a comic's title is its own: no film formats to cut)
+      var name = q.comic ? String(p.title).trim() : (__vegaName(p.title) || String(p.title).trim());
+      return { id: String(p.link), type: q.comic ? 'comic' : __vegaKind(p.title, p.link, q.type), name: name, poster: p.image || undefined, releaseInfo: q.comic ? undefined : __vegaYear(p.title) };
+    })
+  };
+}
+
+// ── a comic provider (its manifest entry's type "comic"): a series' chapters and a chapter's pages ──
+
+// A series: its details, and its chapters from its page (each entry's direct links, or its
+// chapters list through getEpisodes), each once.
+async function __vegaComic(q) {
+  var V = __vega.V, ctx = __vega.ctx, metaMod = __vega.load('meta'), epMod = __vega.load('episodes') || {}, signal = new AbortController().signal;
+  if (!metaMod || !metaMod.getMeta) return { meta: null, chapters: [] };
+  var info = await metaMod.getMeta({ link: q.link, provider: V.value, providerContext: ctx, signal: signal });
+  if (!info) return { meta: null, chapters: [] };
+  var chapters = [], seen = {};
+  function add(c) {
+    if (!c || !c.link || seen[c.link]) return;
+    seen[c.link] = true;
+    var n = typeof c.chapterNumber === 'number' ? c.chapterNumber : (c.chapterNumber != null && !isNaN(parseFloat(c.chapterNumber)) ? parseFloat(c.chapterNumber) : null);
+    chapters.push({ link: String(c.link), title: String(c.title || '').trim(), number: n, volume: c.volume != null ? c.volume : undefined, language: c.language || undefined });
+  }
+  var list = info.linkList || [];
+  for (var i = 0; i < list.length && __vega.left() > 1500; i++) {
+    var e = list[i];
+    (e.directLinks || []).forEach(add);
+    if (e.episodesLink && epMod.getEpisodes) {
+      try { ((await epMod.getEpisodes({ url: e.episodesLink, providerContext: ctx, signal: signal })) || []).forEach(add); }
+      catch (err) { console.log('chapters: ' + __vegaErr(err)); }
+    }
+  }
+  return {
+    meta: {
+      title: String(info.title || '').trim(), image: info.image || info.cover || info.poster || undefined,
+      synopsis: info.synopsis || undefined, tags: Array.isArray(info.tags) ? info.tags : undefined,
+      author: Array.isArray(info.cast) && info.cast.length ? String(info.cast[0]) : (info.author || undefined),
+      status: info.status || undefined
+    },
+    chapters: chapters
+  };
+}
+
+// A chapter's pages, in order: each picture's link, with the headers its site wants.
+async function __vegaPages(q) {
+  var V = __vega.V, ctx = __vega.ctx, streamMod = __vega.load('stream') || {}, signal = new AbortController().signal;
+  var get = streamMod.getPages || streamMod.getStream;
+  if (!get) return { pages: [] };
+  var list = (await get({ link: q.link, type: 'comic', signal: signal, providerContext: ctx, isDownload: false })) || [];
+  var pages = list.map(function (p, i) {
+    var url = typeof p === 'string' ? p : (p && (p.imageUrl || p.link || p.url));
+    return url && /^https?:/i.test(url) ? { index: p && typeof p.index === 'number' ? p.index : i, url: url, headers: (p && p.headers) || undefined } : null;
+  }).filter(Boolean);
+  pages.sort(function (a, b) { return a.index - b.index; });
+  return { pages: pages.map(function (p) { return { url: p.url, headers: p.headers }; }) };
+}
+
+function __vegaSeasonOf(e) { return __vegaNum(/\b(?:season|s)\s*0*(\d{1,2})\b/i, e && e.title); }
+function __vegaEpisodeOf(t) {
+  var n = __vegaNum(/\b(?:episode|ep|e)\s*0*(\d{1,4})\b/i, t);
+  if (n == null) n = __vegaNum(/^\s*0*(\d{1,4})\s*$/, t);
+  if (n == null) n = __vegaNum(/^\s*0*(\d{1,4})\b/, t);
+  return n;
+}
+
+async function __vegaMeta(q) {
+  var V = __vega.V, ctx = __vega.ctx, metaMod = __vega.load('meta'), epMod = __vega.load('episodes') || {}, signal = new AbortController().signal;
+  if (!metaMod || !metaMod.getMeta) return { meta: null };
+  var info = await metaMod.getMeta({ link: q.link, provider: V.value, providerContext: ctx, signal: signal });
+  if (!info) return { meta: null };
+  var list = info.linkList || [];
+  var numbered = list.some(function (e) { return __vegaSeasonOf(e) != null; });
+  var series = String(info.type || '').toLowerCase() === 'series' || numbered || list.some(function (e) { return e && e.episodesLink; });
+  var videos = [];
+  if (series) {
+    // each season once (its best quality): its episodes, numbered as the site names them
+    var bySeason = {};
+    list.forEach(function (e) {
+      var s = __vegaSeasonOf(e);
+      if (s == null) { if (numbered) return; s = 1; }
+      (bySeason[s] = bySeason[s] || []).push(e);
+    });
+    var seasons = Object.keys(bySeason).map(Number).sort(function (a, b) { return a - b; }).slice(0, 40);
+    var lists = await Promise.all(seasons.map(function (s) {
+      return (async function () {
+        var entries = bySeason[s].slice().sort(function (a, b) { return __vegaRank(__vegaQ(a.quality) || __vegaQ(a.title)) - __vegaRank(__vegaQ(b.quality) || __vegaQ(b.title)); });
+        for (var i = 0; i < Math.min(entries.length, 2) && __vega.left() > 1500; i++) {
+          var e = entries[i], eps = e.directLinks || [];
+          if (!eps.length && e.episodesLink && epMod.getEpisodes) {
+            try { eps = (await epMod.getEpisodes({ url: e.episodesLink, providerContext: ctx, signal: signal })) || []; }
+            catch (err) { console.log('episodes: ' + __vegaErr(err)); eps = []; }
+          }
+          if (eps.length) return { s: s, eps: eps };
+        }
+        return { s: s, eps: [] };
+      })();
+    }));
+    lists.forEach(function (x) {
+      var used = {};
+      x.eps.forEach(function (ep, i) {
+        var n = __vegaEpisodeOf(ep && ep.title);
+        if (n == null || used[n]) n = i + 1;
+        if (used[n]) return;
+        used[n] = true;
+        videos.push({ id: q.link + '|' + x.s + '|' + n, season: x.s, episode: n, title: String((ep && ep.title) || ('Episode ' + n)).trim() });
+      });
+    });
+  }
+  return {
+    meta: {
+      id: q.link, type: series ? 'series' : 'movie', name: __vegaName(info.title) || String(info.title || '').trim(),
+      description: info.synopsis || undefined, poster: info.image || undefined, background: info.image || undefined,
+      imdb_id: /^tt\d+$/.test(String(info.imdbId || '')) ? info.imdbId : undefined,
+      genres: Array.isArray(info.tags) ? info.tags : undefined, cast: Array.isArray(info.cast) ? info.cast : undefined,
+      imdbRating: info.rating || undefined, releaseInfo: __vegaYear(info.title), videos: videos
+    }
+  };
+}
+
+// One of the provider's own titles (`ownId`: its page's link, and for an episode `|season|episode`).
+async function __vegaOwnStreams(q) {
+  var V = __vega.V, ctx = __vega.ctx, metaMod = __vega.load('meta'), epMod = __vega.load('episodes') || {};
+  var m = /^(.*)\|(\d+)\|(\d+)$/.exec(String(q.ownId));
+  var link = m ? m[1] : String(q.ownId), tv = !!m;
+  var info;
+  try { info = await metaMod.getMeta({ link: link, provider: V.value, providerContext: ctx, signal: new AbortController().signal }); }
+  catch (e) { console.log('page ' + link + ': ' + __vegaErr(e)); return []; }
+  if (!info) return [];
+  var links = tv ? await __vegaEpisodeLinks(info, { season: +m[2], episode: +m[3] }, epMod, ctx) : __vegaMovieLinks(info);
+  if (!links.length) { console.log('no ' + (tv ? 'episode S' + m[2] + 'E' + m[3] : 'movie link') + ' on ' + link); return []; }
+  return __vegaResolve(links, tv);
+}
+
 async function getStreams(q) {
   var V = __vega.V, ctx = __vega.ctx;
   var posts = __vega.load('posts'), metaMod = __vega.load('meta'), streamMod = __vega.load('stream'), epMod = __vega.load('episodes') || {};
-  if (!posts || !posts.getSearchPosts || !metaMod || !metaMod.getMeta || !streamMod || !streamMod.getStream) { console.log('this provider lacks posts/meta/stream'); return []; }
+  if (!metaMod || !metaMod.getMeta || !streamMod || !streamMod.getStream) { console.log('this provider lacks meta/stream'); return []; }
+  if (q.ownId) return __vegaOwnStreams(q);
+  if (!posts || !posts.getSearchPosts) { console.log('this provider has no search'); return []; }
   var signal = new AbortController().signal;
-  var ign = function (e) { return String((e && e.message) || e).slice(0, 160); };
+  var ign = __vegaErr;
 
   // 1. find the title on the site
   var cands = [], qs = searchQueries(q), seen = {};
@@ -227,22 +431,8 @@ async function getStreams(q) {
     if (!links.length) { console.log('no ' + (q.isTv ? 'episode S' + q.season + 'E' + q.episode : 'movie link') + ' on ' + cands[c].link); continue; }
 
     // 3. turn each link into video files (in parallel)
-    var got = await Promise.all(links.map(function (l) {
-      return (async function () {
-        try { return { l: l, s: (await streamMod.getStream({ link: l.link, type: q.isTv ? 'series' : 'movie', signal: signal, providerContext: ctx, isDownload: false })) || [] }; }
-        catch (e) { console.log('stream ' + l.link + ': ' + ign(e)); return { l: l, s: [] }; }
-      })();
-    }));
-    var out = [], have = {};
-    got.forEach(function (g) {
-      g.s.forEach(function (s) {
-        if (!s || !s.link || s.drm || !/^https?:/i.test(s.link) || have[s.link]) return;
-        have[s.link] = true;
-        var ql = s.quality ? (/^\d+$/.test(String(s.quality)) ? s.quality + 'p' : String(s.quality)) : (g.l.quality ? g.l.quality + 'p' : '');
-        out.push({ url: s.link, type: __vegaType(s.type, s.link), quality: ql, server: s.server || V.value, label: s.tag || undefined, headers: s.headers || undefined });
-      });
-    });
-    if (out.length) return out.slice(0, 12);
+    var out = await __vegaResolve(links, q.isTv);
+    if (out.length) return out;
   }
   return [];
 }

@@ -9,6 +9,7 @@ import '../../core/nav.dart';
 import '../../core/theme.dart';
 import '../../core/lean.dart';
 import '../../data/manga/manga_library.dart';
+import '../../data/manga/plugin_comics.dart';
 import '../../models/manga/manga.dart';
 import '../../models/manga/manga_chapter.dart';
 import '../../widgets/common.dart';
@@ -32,17 +33,24 @@ class MangaDetailsPage extends StatefulWidget {
 
 class _MangaDetailsPageState extends State<MangaDetailsPage> {
   final _scroll = ScrollController();
-  late Future<List<MangaChapter>> _chapters = mangaService.getChapters(widget.manga.id);
+  late Future<List<MangaChapter>> _chapters = chaptersOf(widget.manga);
   late Future<MangaProgress?> _progress = MangaHistory.forManga(widget.manga);
   bool _newestFirst = true;
   bool _synopsisOpen = false;
 
-  Manga get m => widget.manga;
+  /// The series: as it was opened, then (a plugin's) with its details once they come.
+  late Manga _m = widget.manga;
+  Manga get m => _m;
 
   @override
   void initState() {
     super.initState();
     MangaHistory.revision.addListener(_refreshProgress);
+    if (PluginComics.isPlugin(widget.manga.id)) {
+      PluginComics.series(widget.manga).then((x) {
+        if (mounted) setState(() => _m = x.manga);
+      }, onError: (Object _) {});
+    }
   }
 
   @override
@@ -227,7 +235,7 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
                 title: "Couldn't load chapters",
                 body: 'Check your connection and try again.',
                 action: ('Retry', () => setState(() {
-                      _chapters = mangaService.getChapters(m.id);
+                      _chapters = chaptersOf(widget.manga);
                     })),
               ),
             );
