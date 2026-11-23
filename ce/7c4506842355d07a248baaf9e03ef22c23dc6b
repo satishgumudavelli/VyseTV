@@ -1,0 +1,314 @@
+lib/data/subtitles/mkv_subtitle_index.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-370
+lib/screens/player/player_menus.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 880-882,1113,1389-1402,1412-1417,1488-1493,1651-1659,1702,1706,1710-1712,1851
+test/dpad/t4_journeys_plugins_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-381
+lib/screens/library/my_list_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 158
+lib/screens/shell/shell.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 20,51,117,280-283,290-310,347
+lib/screens/party/room_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 14,32,131-132,135-136,178-179,279,285,288,304,306-308,495-509,1302-1304,1306,1313-1325,1336,1338-1346
+test/dpad/bed/fake_net.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 14,21-24,156-164
+lib/data/trackers/outbox.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 14-17,98-103,115-132
+lib/data/sources/plugins/example/demo.js
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-7
+windows/runner/mpv/mpv_plugin.h
+  s_6b5edf213815c6::t_6379dbf55d1fb3 29-30
+lib/dpad/dpad_root.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 37,95-113,138,140-147,485-501,512-514,520-529
+lib/data/party/alerts.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 15,72,162-176
+  s_6b5edf213815c6::t_4e8910d230983d 177
+README.md
+  s_6b5edf213815c6::t_6379dbf55d1fb3 116
+lib/widgets/audiobook_widgets.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 101-102,143-156
+lib/data/subtitles/sound_listener.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-104
+lib/data/party/chat_quote.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-21
+lib/main.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 17,46,95,104,117
+lib/screens/profile/plugin_index_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-641
+macos/Runner/MpvPlayer/MpvAudioPlayerPlugin.swift
+  s_6b5edf213815c6::t_6379dbf55d1fb3 40-45
+tool/vega_runtime/scrapers.js
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-65
+test/dpad/t4_journeys_lounges_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-200
+test/dpad/t4_journeys_plugin_index_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-219
+test/dpad/harness.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 270-289,292-304,336,339-342,563-564,567,570
+lib/data/party/rooms.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 7,90,97,108,218-220
+lib/data/catalog/discover.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 6,291-292,294,301-317,332,362-393
+lib/screens/home/up_next.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-263
+lib/data/catalog/tmdb.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 7-9,33-34,57-102,120-121,125,127-134,140-150,357-358,360,368,378-379,392-393,490,518-521,649
+lib/data/party/lounges.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-461
+test/dpad/t4_journeys_meta_addons_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-557
+test/dpad/guard_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 81-84,86,119-120,141
+lib/mpv/player/player_native.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 49-52,54
+lib/data/sources/addons.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 3,10,12,17,23-119,137-144,147,163-194,196,213-223,225,242-249,252-269,296-301,320-325,346-352,360-374,378-396,409-448,452-467,498-500,503-505,507-514,531-537,559-570,574-576,691-693,742,818,855-877,890-913,937-948,960-962,964-980,984,992-994,999-1001,1009-1036,1052-1053,1055,1081-1084,1108-1110,1115-1163,1218-1223,1239-1245,1253,1282
+lib/widgets/media_rows.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 19,31,34-37,71-80,96-97,543-576,581,590,600,605,607,622-630,633,636-637,641,643,700-702
+test/dpad/look_lounges_windows_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-49
+lib/data/audiobooks/audiobook_player.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 92-95,112,122,139,216,285
+test/dpad/t4_journeys_plugin_index_tv_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-114
+lib/data/sources/plugins/js_plugins.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-13,19,37-46,49,51-52,59-60,63,67,74-78,81-93,98,101-102,106,108-109,111,114,133-145,147-158,168-186,189,192,196,205,211-212,217-220,225-227,232-234,242,245,259-261,273-276,280-281,283-287,290-296,298-302,304-311,314-327,329,332-345,348-349,351,356,367-381,384-390,394-401,403-424,426-435,437-439,441,447-449,452-460,463-471,475-497,503-512,515-517,519-541,557-575,603,611-615,617-618,620,625-646,651-654,666,671-674,687-689,691-705,712-714,720,727-728,735-736,829,851,855
+  s_6b5edf213815c6::t_8d22f954fb99d6 80,159-167,221-224,253,364,402,442-446,498-502,518
+  s_6b5edf213815c6::t_50fdbe3231eeb5 710
+lib/mpv/player/vyse_extras.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 3,5-10,18,23,38-42,44-45,50-51,75-91,105
+ios/Runner/AppDelegate.swift
+  s_6b5edf213815c6::t_6379dbf55d1fb3 36-38
+lib/data/sources/film_sources/film_sources.dart
+  s_6b5edf213815c6::t_cebddc59a80eb4 40
+  s_6b5edf213815c6::t_6379dbf55d1fb3 121-122,168,245-250
+  s_6b5edf213815c6::t_5113ccf9cbc866 251
+lib/data/party/watch_party.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 25
+.gitignore
+  s_6b5edf213815c6::t_6379dbf55d1fb3 46-47
+lib/data/subtitles/subtitle_match.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-44
+lib/mpv/player/platform/player_android.dart
+  s_6b5edf213815c6::t_cebddc59a80eb4 528
+  s_6b5edf213815c6::t_6379dbf55d1fb3 167-168,180-184,570-571
+lib/screens/home/addon_home.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-268
+lib/screens/library/history_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 119-121
+ios/Runner/MpvPlayer/MpvAudioPlayerPlugin.swift
+  s_6b5edf213815c6::t_6379dbf55d1fb3 40-45
+lib/data/trackers/watched_sync.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-123
+lib/screens/player/player_episodes.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 9,11,13,41,59-62,145-149,216,276-301,406-424,480-491,495-499,521-522,594,609-619,631-634,645,671-676
+  s_6b5edf213815c6::t_7bdc008e31f148 677-678
+lib/screens/player/player_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 48-51,53,55,107-130,209-213,416-427,432-433,444-450,583-584,637-654,663-667,684,732-734,750-752,774,783-784,815,827,869,885,891-892,1673-1678,1681,1706-1709,1719-1729,1732,1744-1745,1756,1824-1827,1842,1846,1851-1854,1856-1859,1864-1867,1931-1933,1935-1937,1940,1942,1946-1948,1950-1955,1957,2066,2358,2692-2693,2747-2749,2759,2775,2779,2785,2796,2817,2822,2825-2826,2833,2985-3239,3532-3533,3573-3577,3582,3586-3589,3591-3599,3697,3945-3989,3998-4010,4126-4200,4346-4349,4360-4369,4589-4591,4702,4709-4713,4715,4815,4968-4970,5132-5175,5803-5804,5817,5828-5834
+  s_6b5edf213815c6::t_429ceb9ad4a7d5 1161
+  s_6b5edf213815c6::t_41790fac321e40 5835
+test/subtitle_match_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-98
+lib/screens/details/details_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 10-11,23,32,176-189,198,541,559,562-563,578-579,613,615-628,642-666,741-744,750-767,770,773-781,785,793-801,995-996,1243-1262
+assets/plugins/vega_runtime.js
+  s_6b5edf213815c6::t_6379dbf55d1fb3 195
+test/account_sync_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 87-130
+lib/screens/party/dm_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 12,19,183,280,284,303-312,512,518-523,525-527,540-544,658,660,670,701-703,705-719
+lib/data/catalog/meta_addons.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-861
+lib/screens/party/party_widgets.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 58-63,99
+test/dpad/t2_controls_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 312,320-322,331-335,338
+test/dpad/t4_journeys_up_next_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-271
+windows/runner/flutter_window.cpp
+  s_6b5edf213815c6::t_6379dbf55d1fb3 116-117
+lib/dpad/dpad_traversal.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 22,540-563,683-693,738,764-769,824-831
+lib/mpv/player/player.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 401,488-491,493
+test/dpad/t4_journeys_player_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 196-197
+lib/screens/details/anime_details_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 93-94,211,612-619
+lib/data/playback/watch_progress.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 2,9-12,27,53-61,67-70,73-87,89-91,96,99,115,127-128,147,212-216,229,236-466,485,488-489,503,515-517,519,523,529-534
+  s_6b5edf213815c6::t_e3e60904ac5849 535
+lib/data/sources/plugins/README.md
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-164
+pubspec.yaml
+  s_6b5edf213815c6::t_6379dbf55d1fb3 19
+test/dpad/look_meta_addons_windows_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-90
+test/dpad/t4_journeys_phone_gestures_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-130
+tool/vega_runtime/README.md
+  s_6b5edf213815c6::t_6379dbf55d1fb3 3,21-27,30-31,34-35
+lib/data/sources/film_sources/source_settings.dart
+  s_6b5edf213815c6::t_ffc1dc7891d6f0 8,13-16,36
+lib/data/sources/plugins/example/repo.json
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-7
+lib/screens/player/player_chrome.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 10,564-569,584-585
+linux/runner/mpv/mpv_plugin.h
+  s_6b5edf213815c6::t_6379dbf55d1fb3 38-39
+lib/screens/party/lounge_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-954
+lib/screens/home/home_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 11,13,22,41-58,68,74,191-201,291-292,299-302,339-363,409-410,426-428,501
+test/dpad/bed/source_scan.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 30,40,44
+lib/data/playback/player_engine.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 40-43,45
+  s_6b5edf213815c6::t_9c9b96077c2626 38
+lib/screens/home/continue_watching.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 14-15,17-18,29-42,45,60-114,117,121-124,136-138,140,144-146,159-160,167-215,220-223,225,227-228,231-232,321,327,337,341,351-355,366,368,387-410
+  s_6b5edf213815c6::t_9b2b5c0bfc96f0 411-412
+test/dpad/bed/fake_addons.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-450
+test/dpad/t4_journeys_tv11_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-294
+test/watch_marks_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-255
+tool/vega_runtime/package.json
+  s_6b5edf213815c6::t_6379dbf55d1fb3 4,6
+lib/data/trackers/library_import.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 234-239
+assets/plugins/scraper_runtime.js
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-91
+lib/screens/party/lounges_view.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-614
+lib/data/sources/plugins/plugin_index.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-175
+lib/data/trackers/tracker_hub.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 4,21,83-89,92-96,280-333,350-351,365,410-412,418-423,430-431,528-529,545
+linux/runner/my_application.cc
+  s_6b5edf213815c6::t_6379dbf55d1fb3 115-116
+test/dpad/t4_journeys_plugins_engine_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-183
+test/dpad/t4_journeys_tv7_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 118-130
+test/dpad/t4_journeys_watched_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-287
+lib/data/party/party_library.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 28-30,32
+test/dpad/t4_journeys_tv10_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-372
+lib/screens/party/chat_view.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-426
+lib/mpv/vyse_video.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 46-53,77,87-89,106-121,131-132
+macos/Runner/MainFlutterWindow.swift
+  s_6b5edf213815c6::t_6379dbf55d1fb3 27
+tool/vega_runtime/adapter.js
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1
+tool/vega_runtime/build.mjs
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1,5-6,17-26
+lib/data/party/dms.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 8,10,19,26,39,64,82,133-134,197-199
+lib/data/sources/torrents.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 55,59-90,147,149-150,152,156-172,176-178,186,189,195-196,206,271,310,318-319,325,356,393,395-400,409,412-413
+lib/data/subtitles/sound_sync.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-244
+lib/dpad/focusable_wrapper.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 474-481
+lib/data/subtitles/auto_sync.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-464
+test/dpad/t4_journeys_handover_resume_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-151
+lib/data/phone_edit/phone_settings.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 17,185-205,399,467-478,481,495
+lib/screens/discover/discover_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 10,12-13,17,20-22,30-31,41-44,50-97,101-116,120,128-129,282-295,304-306,311-316,318-327,439-440,450-455,479-491,526-527,529-530,549-561,594,740-854
+  s_6b5edf213815c6::t_009b5f20167e29 855
+lib/screens/profile/profile_page.dart
+  s_6b5edf213815c6::t_ffc1dc7891d6f0 3133,3144,3191
+  s_6b5edf213815c6::t_6379dbf55d1fb3 7-10,13,67,1390,1395-1479,1486,1502,1505-1507,1864-1873,2599-2603,2616-2617,2633,2655-2665,2682-2699,2706,2717,2722-2967,2998-2999,3017-3019,3028-3035
+linux/runner/mpv/mpv_plugin.cc
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1159-1166
+android/app/src/main/kotlin/com/vyse/vyse_tv/MainActivity.kt
+  s_6b5edf213815c6::t_6379dbf55d1fb3 271-272,493-494
+  s_6b5edf213815c6::t_6545087604a399 495
+lib/widgets/watched_marks.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-226
+lib/core/nav.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-2,7,9,14,57-81
+  s_6b5edf213815c6::t_55d98d818123b5 82
+lib/screens/party/party_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 18,432-442,494
+lib/screens/audiobooks/audiobooks_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 3,160-162
+lib/screens/search/search_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 13,15,22,28-31,53-61,142-143,151-157,160,207-225,467-498,564-585,657-658,660,662-665,668-710,712-717,721,723,747,760-768,774,782,810-820
+test/dpad/bed/fake_lounges.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-155
+lib/data/trackers/trakt_tracker.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 140-143,145-178,183,187-188,418-444
+  s_6b5edf213815c6::t_1fee8010477fdd 445
+lib/data/trackers/media_ref.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 37-39,41-44,77
+test/dpad/t4_journeys_tv8_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 187-207
+lib/data/sources/plugins/example/run.mjs
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-9
+test/dpad/t4_journeys_autosync_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-732
+lib/data/account/account_sync.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 3,20,40-45,202-214,271-278
+lib/data/subtitles/voice_activity.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-460
+lib/screens/details/episode_explorer.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 10,12-13,16,57,59-61,73-75,91-111,144-152,178-180,184,186-187,195,199-218,287-299,301,327-330,358,383-406,500-512,514-521,623-624,626-628,637-642,661-745,747,751,756,794,797-799,904,1104,1112,1133-1135
+lib/screens/live_tv/live_tv_player_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 3,9,57-66,131,150-166,169,174-175,426-436
+  s_6b5edf213815c6::t_8d6338bca3a69a 437
+windows/runner/mpv/mpv_plugin.cpp
+  s_6b5edf213815c6::t_6379dbf55d1fb3 30-37,46,50
+lib/data/trackers/simkl_tracker.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 135,137-156,158,165,174,326-380
+  s_6b5edf213815c6::t_2aa8ab26616f8e 381
+lib/data/app_settings.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 118-119,187-199
+  s_6b5edf213815c6::t_06d9e58112e961 150-152
+  s_6b5edf213815c6::t_cb86e3e498ca6d 204,207-210
+lib/data/subtitles/subtitles.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 84,89-122
+  s_6b5edf213815c6::t_c6b1ddbe76acea 123
+lib/screens/player/sources_page.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 8,11,19,37-39,113,115-118,140-141,164-169,199-212,214-215,217-224,232-233,307-315,317-343,360-361,380,416-425,435-453,549-550,665,700-723,837-853,1185-1207,1257-1264,1283
+test/dpad/meta_addons_protocol_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-239
+test/subtitle_fetch_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 1-33
+lib/screens/party/rooms_view.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 39,43-45,111,268,277,279,424,433,453-456,528-531
+tool/vega_runtime/try.mjs
+  s_6b5edf213815c6::t_6379dbf55d1fb3 3,21
+test/dpad/t4_journeys_tv6_test.dart
+  s_6b5edf213815c6::t_6379dbf55d1fb3 7,32,50,154-176
+  s_6b5edf213815c6::t_18710a1e19ca30 177-179
+.github/workflows/build.yml
+  s_6b5edf213815c6::t_6379dbf55d1fb3 107-121,203-206,215,244-258,308,331-345,388-402,430-444
+tool/vega_runtime/package-lock.json
+  s_6b5edf213815c6::t_a397442880aa52 1-1099
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ce7c4506842355d07a248baaf9e03ef22c23dc6b",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
