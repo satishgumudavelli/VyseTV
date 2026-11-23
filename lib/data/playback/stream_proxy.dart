@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../network/net_state.dart';
+
 /// Local HLS relay on 127.0.0.1, modelled on the London relay's stream-proxy + nginx pipes.
 ///
 /// * Playlists are fetched with spoofed Referer/Origin and every URL is rewritten back through here.
@@ -18,11 +20,21 @@ class StreamProxy {
 
   HttpServer? _server;
   Future<HttpServer>? _starting;
-  final _client = HttpClient()
+  final _direct = HttpClient()
     ..autoUncompress = false
     ..idleTimeout = const Duration(seconds: 30)
     ..maxConnectionsPerHost = 16
     ..connectionTimeout = const Duration(seconds: 10);
+
+  // Dart's HttpClient never serves a request that waits behind a per-host connection limit when it goes through a CONNECT proxy
+  // (WARP's, or the local gateway of the network modes): with the limit of 16 above, the 17th concurrent segment stalled for 20 s and
+  // became a 502, so segments were skipped and the sound went with them. Through a proxy the client has no such limit.
+  final _proxied = HttpClient()
+    ..autoUncompress = false
+    ..idleTimeout = const Duration(seconds: 30)
+    ..connectionTimeout = const Duration(seconds: 10);
+
+  HttpClient get _client => NetState.proxyPort == null ? _direct : _proxied;
   final _vod = <String, String>{}; // finished (VOD) playlists never change; keep their text
   final _hosts = <String, Map<String, String>>{}; // hosts that want their own headers (anime sources)
   final _exact = <String>{}; // of those, the ones that get nothing else (a link you pasted)

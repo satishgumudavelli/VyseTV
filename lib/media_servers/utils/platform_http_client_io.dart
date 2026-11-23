@@ -7,6 +7,7 @@ import '../../core/logs/app_logger.dart';
 import 'happy_eyeballs.dart';
 import 'managed_http_client.dart';
 import 'media_server_timeouts.dart';
+import '../../data/network/net_state.dart';
 
 final Set<String> _loggedPlatformClients = <String>{};
 
@@ -40,7 +41,8 @@ void _logPlatformClient(String platform, String client) {
 ManagedHttpClient _createIoClient(String debugLabel, Duration connectTimeout) {
   final httpClient = HttpClient()
     ..connectionTimeout = connectTimeout
-    ..maxConnectionsPerHost = 12
+    // (no limit through a network mode's proxy: Dart's client stalls the requests that wait behind it there; see StreamProxy)
+    ..maxConnectionsPerHost = NetState.proxyPort == null ? 12 : null
     ..idleTimeout = const Duration(seconds: 15)
     ..connectionFactory = happyEyeballsConnectionFactory;
   return ManagedHttpClient(IOClient(httpClient), debugLabel: debugLabel, forceCloseOnDrainTimeout: true);
