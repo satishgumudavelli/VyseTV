@@ -1,0 +1,39 @@
+test/dpad/t4_journeys_plugins_test.dart
+  s_6b5edf213815c6::t_a34705e95fd3e1 187,204-205
+test/dpad/bed/source_scan.dart
+  s_6b5edf213815c6::t_d21508c4e48617 72-73
+lib/data/sources/plugins/js_plugins.dart
+  s_6b5edf213815c6::t_af41928c6bf7d0 332-334,342-365,379-381,484,492
+  s_6b5edf213815c6::t_1f32d5496ba754 335-341
+lib/screens/profile/profile_page.dart
+  s_6b5edf213815c6::t_f484647f0a0534 3133
+test/plugin_film_sources_test.dart
+  s_6b5edf213815c6::t_1f32d5496ba754 1-6,8-82
+  s_6b5edf213815c6::t_87181160f42ac0 7
+lib/data/sources/film_sources/source_settings.dart
+  s_6b5edf213815c6::t_f484647f0a0534 13-22
+lib/data/sources/plugins/plugin_film_sources.dart
+  s_6b5edf213815c6::t_f484647f0a0534 1-54
+lib/data/sources/film_sources/film_sources.dart
+  s_6b5edf213815c6::t_f484647f0a0534 11,41
+android/app/build.gradle.kts
+  s_6b5edf213815c6::t_ed67f9cb4fa5c6 313-317
+android/app/src/main/AndroidManifest.xml
+  s_6b5edf213815c6::t_3471eafc1ed730 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f9d8a7260d5e933aded4c3ee2a6109f33ecade2d",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
