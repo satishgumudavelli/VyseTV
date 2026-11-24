@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../network/network_modes.dart';
 import 'account.dart';
 
 /// One kind of data the account keeps in step with this device.
@@ -97,6 +98,19 @@ class AccountSync {
     }
     Account.user.addListener(_onAccount);
     _onAccount();
+    // The first sync runs while a network mode (WARP) is still connecting, and fails where the server is blocked: try again once a
+    // mode is up.
+    for (final m in [NetworkModes.instance.warp, NetworkModes.instance.antiDpi]) {
+      m.addListener(() {
+        if (m.value.phase != ModePhase.active) return;
+        Future<void>.delayed(const Duration(seconds: 1), _retry);
+      });
+    }
+  }
+
+  static void _retry() {
+    if (_user == null || _merging != null || status.value == 'Synced') return;
+    _merging = _merge().whenComplete(() => _merging = null);
   }
 
   static void _onAccount() {
