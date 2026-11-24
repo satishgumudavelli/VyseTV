@@ -28,7 +28,7 @@ final http.Client netClient = IOClient(
 /// The proxy for [uri]: the local gateway while a network mode has a route, otherwise a direct connection; this device and its local
 /// network always go direct.
 String _findProxy(Uri uri) {
-  final port = NetState.proxyPort;
+  final port = NetState.proxyPort ?? (uri.host == NetState.serverHost ? NetState.serverPort : null);
   return port == null || isLocalHost(uri.host) ? 'DIRECT' : 'PROXY 127.0.0.1:$port';
 }
 

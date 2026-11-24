@@ -126,6 +126,21 @@ void main() {
       expect(said.last, 'WARP disconnected');
     });
 
+    test('server only: the gateway runs, but only VyseTV\'s own server uses it; players and the rest go direct', () async {
+      await modes.setWarp(true);
+      await modes.setWarpServerOnly(true);
+      expect(modes.dartProxyPort, isNull);
+      expect(modes.gatewayPort, isNull);
+      expect(platform.proxies.last, isNull);
+      expect(NetState.proxyPort, isNull);
+      expect(NetState.serverPort, 9000);
+      await modes.setWarpServerOnly(false);
+      expect(NetState.serverPort, isNull);
+      expect(NetState.proxyPort, 9000);
+      expect(platform.proxies.last, 9000);
+      await modes.setWarp(false);
+    });
+
     test('a failure returns the switch to off and the route to direct, with a sentence', () async {
       platform.warpError = NetworkError('Cloudflare did not answer');
       await modes.setWarp(true);

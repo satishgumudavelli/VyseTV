@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../app_settings.dart';
+import '../server_config.dart';
 import 'anti_dpi_presets.dart';
 import 'dns_providers.dart';
 import 'local_gateway.dart';
@@ -90,10 +91,13 @@ class NetworkModes {
   List<String> get dohEndpoints => route.value is HttpProxyRoute ? const [] : dnsEndpointsFor(AppSettings.netDoh.value, AppSettings.netDohUrl.value);
 
   /// The gateway's port when the app's own HTTP clients must go through it (a route is active); null otherwise.
-  int? get dartProxyPort => route.value is DirectRoute ? null : _gateway?.port;
+  int? get dartProxyPort => route.value is DirectRoute || _serverOnly ? null : _gateway?.port;
+
+  /// WARP carries VyseTV's own server only (the "VyseTV server only" switch): the rest of the app goes straight out.
+  bool get _serverOnly => route.value is HttpProxyRoute && AppSettings.netWarpServerOnly.value;
 
   /// The gateway's port for native players (a route is active or Secure DNS is on); null when they can go straight out.
-  int? get gatewayPort => _gateway?.port;
+  int? get gatewayPort => _serverOnly ? null : _gateway?.port;
 
   // ── WARP ──
 
@@ -132,6 +136,12 @@ class NetworkModes {
       if (gen != _warpGen) return;
       await _fail(warp, AppSettings.netWarp, 'WARP error: ${_why(e)}', _why(e), _stopWarp);
     }
+  }
+
+  /// Switches WARP between carrying everything and carrying only VyseTV's own server.
+  Future<void> setWarpServerOnly(bool on) async {
+    AppSettings.netWarpServerOnly.set(on);
+    await _applyRouteSaying();
   }
 
   Future<void> _stopWarp() async {
@@ -316,6 +326,8 @@ class NetworkModes {
   /// Tells the HTTP clients (this isolate's [NetState]) where to go now.
   void _publish() {
     NetState.proxyPort = dartProxyPort;
+    NetState.serverHost = Uri.parse(accountServer).host;
+    NetState.serverPort = _serverOnly ? _gateway?.port : null;
     NetState.doh = dohEndpoints;
   }
 
@@ -328,7 +340,10 @@ class NetworkModes {
       await _dropGateway();
       return null;
     }
-    if (_gateway != null && _gatewayRoute == r && listEquals(_gatewayDoh, doh)) return null;
+    if (_gateway != null && _gatewayRoute == r && listEquals(_gatewayDoh, doh)) {
+      await _platform.setProxy(_serverOnly ? null : _gateway!.port); // (the scope may have changed)
+      return null;
+    }
     await _dropGateway();
     try {
       final g = await _startGateway(route: r, dohEndpoints: doh);
@@ -339,7 +354,7 @@ class NetworkModes {
       _gateway = g;
       _gatewayRoute = r;
       _gatewayDoh = doh;
-      await _platform.setProxy(g.port);
+      await _platform.setProxy(_serverOnly ? null : g.port);
       return null;
     } catch (e) {
       // no gateway: the app keeps its normal route rather than a broken one

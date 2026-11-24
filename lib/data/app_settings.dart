@@ -153,6 +153,8 @@ class AppSettings {
   // Network modes (data/network/network_modes.dart): this device only, so a TV's choice never reaches a phone through account sync.
   /// Route the app's traffic through Cloudflare WARP.
   static final netWarp = Setting<bool>('device.net.warp', false);
+  /// With WARP on: only VyseTV's own server (account, sync, API) goes through it; sources and video stay direct.
+  static final netWarpServerOnly = Setting<bool>('device.net.warpServerOnly', false);
   /// Secure DNS provider: 'off', 'cloudflare', 'google', 'adguard' or 'custom'; the custom resolver's address is [netDohUrl].
   static final netDoh = Setting<String>('device.net.doh', 'off');
   static final netDohUrl = Setting<String>('device.net.dohUrl', '');
@@ -207,7 +209,7 @@ class AppSettings {
         audioDelayMs, audioPassthrough, audioChannels, hdrOutput, matchRefreshRate, playerEngine, mpvHandOver, leanMotion, pictureShape, volumeLevelling,
         upscaler, ambientLight, partyLibrary, musicAutoplay, debridProvider, debridOn, updateAuto, updateSkipped, addonsRefreshed,
         torrentMemory, torrentPreload, torrentConnections, torrentUpload, torrentTrackers, publicTrackers, myListGrid, myListSort, partyMembers, partySounds, partyMuted, animeAdult, animeAudio,
-              netWarp, netDoh, netDohUrl, netAntiDpi, netAntiDpiPreset, netAntiDpiArgs,
+              netWarp, netWarpServerOnly, netDoh, netDohUrl, netAntiDpi, netAntiDpiPreset, netAntiDpiArgs,
       ];
 
   static Future<void> initialize() async {

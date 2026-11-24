@@ -7,6 +7,11 @@ class NetState {
   /// The local gateway's port while a route (WARP, Anti-DPI) is active: HTTP clients use it as their proxy. Null: go straight out.
   static int? proxyPort;
 
+  /// The gateway's port when only VyseTV's own server ([serverHost]) goes through it (WARP's "VyseTV server only"): everything else is
+  /// direct. Only read by the main isolate's clients.
+  static int? serverPort;
+  static String serverHost = '';
+
   /// Secure DNS endpoints to look names up with first (empty: the system resolver, with Cloudflare as the fallback).
   static List<String> doh = const [];
 

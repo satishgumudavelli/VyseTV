@@ -116,6 +116,16 @@ class _NetworkTabState extends State<_NetworkTab> {
     );
   }
 
+  Widget _warpScopeRow() => _Row(
+    title: 'WARP for VyseTV server only',
+    subtitleWidget: _subtitle(
+      "Send only VyseTV's own server (account, sync) through WARP",
+      const SizedBox.shrink(),
+      'Sources and video stay on your normal connection.',
+    ),
+    trailing: _Switch(value: AppSettings.netWarpServerOnly.value, onChanged: (on) => unawaited(_modes.setWarpServerOnly(on))),
+  );
+
   Widget _dnsRow(NetworkCapabilities? caps) {
     final available = caps?.dns ?? true;
     final id = AppSettings.netDoh.value;
@@ -313,6 +323,7 @@ class _NetworkTabState extends State<_NetworkTab> {
       AppSettings.netDohUrl,
       AppSettings.netAntiDpiPreset,
       AppSettings.netAntiDpiArgs,
+      AppSettings.netWarpServerOnly,
     ]),
     builder: (context, _) {
       final caps = _modes.capabilities.value;
@@ -321,6 +332,7 @@ class _NetworkTabState extends State<_NetworkTab> {
         subtitle: 'For networks that block sites. WARP and Anti-DPI cannot run together; Secure DNS works with Anti-DPI. Saved on this device.',
         children: [
           _warpRow(caps),
+          _warpScopeRow(),
           _dnsRow(caps),
           _antiDpiRow(caps),
           if (_last != null) _Row(title: 'Last message', subtitle: _last),
