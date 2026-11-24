@@ -1,0 +1,19 @@
+test/dpad/bed/source_scan.dart
+  s_6b5edf213815c6::t_e17d427cd69a12 72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5763358f0c1400dafd9ae187ae3df827abdc6426",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
