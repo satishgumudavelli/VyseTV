@@ -1,0 +1,20 @@
+lib/data/account/account_sync.dart
+  s_6b5edf213815c6::t_120f8446a63470 101-113
+  s_6b5edf213815c6::t_f538c077c0a18f 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "339b5ad7f87646a1dcf820f6566110273ba09a69",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
