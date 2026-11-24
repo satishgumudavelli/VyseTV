@@ -1274,6 +1274,11 @@ class Addons {
     return [for (final l in all) ...l];
   }
 
+  /// The stream in [l] that is the same release (bingeGroup), else the same quality and cached
+  /// state; null when neither is there.
+  static AddonStream? matching(List<AddonStream> l, {String? bingeGroup, String? quality, bool? cached}) =>
+      (bingeGroup == null ? null : l.where((s) => s.bingeGroup == bingeGroup).firstOrNull) ?? l.where((s) => s.quality == quality && s.cached == cached).firstOrNull;
+
   /// The same addon's stream for another episode: the same release (bingeGroup) when it has it,
   /// else the same quality, else its first.
   static Future<AddonPick?> follow(AddonPick p, int? season, int? episode) async {
@@ -1281,9 +1286,7 @@ class Addons {
     try {
       final l = (await streams(p.stream.addon, t))?.streams.where((s) => s.playable).toList();
       if (l == null || l.isEmpty) return null;
-      final was = p.stream;
-      final same = was.bingeGroup == null ? null : l.where((s) => s.bingeGroup == was.bingeGroup).firstOrNull;
-      return AddonPick(same ?? l.where((s) => s.quality == was.quality && s.cached == was.cached).firstOrNull ?? l.first, t);
+      return AddonPick(matching(l, bingeGroup: p.stream.bingeGroup, quality: p.stream.quality, cached: p.stream.cached) ?? l.first, t);
     } catch (_) {
       return null;
     }

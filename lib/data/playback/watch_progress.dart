@@ -26,6 +26,8 @@ class WatchEntry {
     this.subDelay = 0,
     this.marks = const {},
     this.server,
+    this.positions = const {},
+    this.pick,
   });
 
   final Media media;
@@ -61,6 +63,14 @@ class WatchEntry {
   /// when you carry on, and for the next episode.
   final String? server;
 
+  /// Shows: where each unfinished episode was left, in seconds, keyed "S1E2": going back to an
+  /// earlier episode carries on from its own spot, not from the one you're on.
+  final Map<String, int> positions;
+
+  /// The addon source it was last played from (addon manifest url `a`, release `b`, quality `q`,
+  /// cached `c`): the next episode, and one opened from the list, start from the same one.
+  final Map<String, dynamic>? pick;
+
   double get fraction => duration.inMilliseconds <= 0 ? 0 : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
   Duration get left => duration - position;
   bool get finished => fraction >= WatchProgress.finishedAt;
@@ -84,6 +94,7 @@ class WatchEntry {
     DateTime? updated,
     Map<String, double>? episodes,
     Map<String, int>? marks,
+    Map<String, int>? positions,
   }) => WatchEntry(
     media: media,
     position: position ?? this.position,
@@ -98,6 +109,8 @@ class WatchEntry {
     subDelay: subDelay,
     marks: marks ?? this.marks,
     server: server,
+    positions: positions ?? this.positions,
+    pick: pick,
   );
 
   Map<String, dynamic> toJson() => {
@@ -126,6 +139,8 @@ class WatchEntry {
     if (subDelay != 0) 'sd': subDelay,
     if (marks.isNotEmpty) 'w': marks,
     'srv': ?server,
+    if (positions.isNotEmpty) 'ps': positions,
+    'pk': ?pick,
   };
 
   static WatchEntry fromJson(Map<String, dynamic> j) {
@@ -146,6 +161,8 @@ class WatchEntry {
       subDelay: (j['sd'] as num?)?.toDouble() ?? 0,
       marks: {for (final e in ((j['w'] as Map?) ?? const {}).entries) '${e.key}': (e.value as num).toInt()},
       server: j['srv'] as String?,
+      positions: {for (final e in ((j['ps'] as Map?) ?? const {}).entries) '${e.key}': (e.value as num).toInt()},
+      pick: j['pk'] is Map ? Map<String, dynamic>.from(j['pk'] as Map) : null,
     );
   }
 }
@@ -189,8 +206,17 @@ class WatchProgress {
   /// finished it: where a watch party you start carries on from.
   static double resumeSeconds(Media media, {int? season, int? episode}) {
     final s = find(media);
-    if (s == null || s.season != season || s.episode != episode || s.fraction >= finishedAt) return 0;
-    return s.position.inMilliseconds / 1000;
+    if (s == null) return 0;
+    return (resumeAt(s, season: season, episode: episode)?.inMilliseconds ?? 0) / 1000;
+  }
+
+  /// Where [s] says that episode (or film) was left: its own saved spot, else the entry's
+  /// position when that is the episode it's on. Null: nowhere (not started, or finished).
+  static Duration? resumeAt(WatchEntry s, {int? season, int? episode}) {
+    if (s.season == season && s.episode == episode) return s.fraction < finishedAt ? s.position : null;
+    final k = itemKey(season: season, episode: episode);
+    final sec = s.positions[k];
+    return sec == null || s.seen(k) ? null : Duration(seconds: sec);
   }
 
   /// Records where playback is. Anything actually started counts.
@@ -204,6 +230,7 @@ class WatchProgress {
     Map<String, dynamic>? subtitle,
     double subDelay = 0,
     String? server,
+    Map<String, dynamic>? pick,
   }) {
     if (duration < const Duration(minutes: 1) || position < const Duration(seconds: 3)) return;
     final old = find(media);
@@ -212,6 +239,15 @@ class WatchProgress {
     final marks = {...?old?.marks};
     final k = itemKey(season: season, episode: episode);
     if (k != film && f > (episodes[k] ?? 0)) episodes[k] = f;
+    // each episode keeps its own spot (finished: none)
+    final positions = {...?old?.positions};
+    if (k != film) {
+      if (f >= finishedAt) {
+        positions.remove(k);
+      } else {
+        positions[k] = position.inSeconds;
+      }
+    }
     // watched to the end after it was marked unwatched: watched again, as of now
     if (f >= finishedAt && (marks[k] ?? 0) < 0) marks[k] = DateTime.now().millisecondsSinceEpoch;
     _set([
@@ -228,6 +264,8 @@ class WatchProgress {
         subDelay: subDelay,
         marks: marks,
         server: server ?? old?.server,
+        positions: positions,
+        pick: pick ?? old?.pick,
       ),
       ...entries.value.where((e) => !_same(e.media, media)),
     ].take(_max).toList());
@@ -302,6 +340,8 @@ class WatchProgress {
         episodes: episodes,
         marks: marks,
         server: old?.server,
+        positions: old?.positions ?? const {},
+        pick: old?.pick,
       ));
       return changed;
     }
@@ -395,6 +435,8 @@ class WatchProgress {
         subDelay: on?.subDelay ?? 0,
         marks: marks,
         server: old?.server,
+        positions: old?.positions ?? const {},
+        pick: old?.pick,
       );
     }
     return old.copyWith(updated: updated, episodes: episodes, marks: marks);
@@ -444,6 +486,8 @@ class WatchProgress {
       subDelay: base.subDelay,
       marks: marks,
       server: base.server,
+      positions: {...theirs.positions, ...mine.positions, ...base.positions},
+      pick: base.pick ?? mine.pick ?? theirs.pick,
     );
   }
 

@@ -233,6 +233,7 @@ class _SourcesPageState extends State<SourcesPage> {
                 ..streams = [...own, ...?got?.streams]
                 ..torrents = got?.torrents ?? 0;
             });
+            _resumeSource(a, r.streams);
           },
           onError: (Object e) {
             if (!mounted) return;
@@ -245,6 +246,20 @@ class _SourcesPageState extends State<SourcesPage> {
         ),
       );
     }
+  }
+
+  bool _autoTried = false;
+
+  /// An episode opened from the list: the source you played this show from last time starts
+  /// (that addon's same release, else same quality) without asking again. Back stays here.
+  void _resumeSource(Addon a, List<AddonStream> streams) {
+    final saved = WatchProgress.find(_m)?.pick;
+    if (_autoTried || saved == null || widget.overlay || _ep == null || widget.anime != null || saved['a'] != a.manifestUrl) return;
+    if (Rooms.mine.value?.iOwn == true) return;
+    final s = Addons.matching([for (final x in streams) if (x.playable) x], bingeGroup: saved['b'] as String?, quality: saved['q'] as String?, cached: saved['c'] as bool?);
+    if (s == null) return;
+    _autoTried = true;
+    unawaited(_play(s));
   }
 
   Future<_Info> _loadInfo() async {

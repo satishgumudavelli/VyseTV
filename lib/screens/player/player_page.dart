@@ -1664,8 +1664,7 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
         room.now > 5) {
       _resumeOverride = Duration(milliseconds: (room.now * 1000).round());
     }
-    _resumeAt = _resumeOverride ??
-        (saved != null && saved.season == ep?.season && saved.episode == ep?.number && saved.fraction < WatchProgress.finishedAt ? saved.position : null);
+    _resumeAt = _resumeOverride ?? (saved == null ? null : WatchProgress.resumeAt(saved, season: ep?.season, episode: ep?.number));
     _resumeOverride = null;
     // carrying on with this film or episode: the subtitle and timing you had beat Settings
     final sameEp = saved != null && saved.season == ep?.season && saved.episode == ep?.number;
@@ -4076,6 +4075,7 @@ class _PlayerPageState extends State<_PlayerView> with WidgetsBindingObserver {
       subtitle: _subMemo,
       subDelay: _subMemo == null ? 0 : _subOffset,
       server: _films ? _playingLink?.partyKey : null,
+      pick: _pick == null || _follower ? null : {'a': _pick!.stream.addon.manifestUrl, 'b': _pick!.stream.bingeGroup, 'q': _pick!.stream.quality, 'c': _pick!.stream.cached},
     );
     _savedAt = DateTime.now();
     // an anime episode (or film) watched to VyseTV's "finished" point: AniList
