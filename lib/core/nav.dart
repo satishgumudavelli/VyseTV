@@ -12,6 +12,7 @@ import '../screens/details/details_page.dart';
 import '../screens/discover/discover_page.dart';
 import '../screens/details/person_page.dart';
 import '../screens/search/search_page.dart';
+import '../screens/shell/shell.dart' show AppShell;
 
 /// The app's own navigator, under every tab's: full-screen pages (the player) open here, and
 /// what floats over every page (the mini player, the mini chat) sits in its overlay.
@@ -34,6 +35,16 @@ Widget _depth(Animation<double> a, Animation<double> secondary, Widget child) {
   );
 }
 
+/// The navigator a page beside the rail opens in from [context]: its own tab's; from a page over
+/// the shell (the sources page, the player: they open on the app's own navigator, where a page
+/// of the shell's would have no rail, no backdrop and no page style), the tab on screen's, once
+/// what covers the shell has closed.
+NavigatorState besideRail(BuildContext context) {
+  final nav = Navigator.of(context);
+  if (nav != rootNavigatorKey.currentState) return nav;
+  return AppShell.uncover() ?? nav;
+}
+
 class ShellRoute<T> extends PageRouteBuilder<T> {
   ShellRoute({required Widget child, super.settings})
       : super(
@@ -52,7 +63,7 @@ Future<void> openDiscover(
   String subtitle = 'Movies and TV shows',
   required DiscoverQuery query,
 }) =>
-    Navigator.of(context).push(ShellRoute(child: DiscoverPage(title: title, subtitle: subtitle, initial: query)));
+    besideRail(context).push(ShellRoute(child: DiscoverPage(title: title, subtitle: subtitle, initial: query)));
 
 /// Opens a Stremio link in VyseTV (`stremio:///detail/…`, a search, a catalog of one of your
 /// addons; the same after Stremio Web's `#`). False when it isn't one VyseTV can open.
@@ -62,7 +73,7 @@ Future<bool> openStremioLink(BuildContext context, String link) async {
       unawaited(openDetails(context, MetaAddons.bare(type, id)));
       return true;
     case StremioSearch(:final query):
-      unawaited(Navigator.of(context).push(ShellRoute(child: SearchPage(query: query))));
+      unawaited(besideRail(context).push(ShellRoute(child: SearchPage(query: query))));
       return true;
     case StremioDiscover(:final manifestUrl, :final type, :final catalogId, :final genre):
       final url = Addons.normalize(manifestUrl);
@@ -76,17 +87,17 @@ Future<bool> openStremioLink(BuildContext context, String link) async {
 }
 
 /// Opens Discover on one of your metadata addons' catalogs ([genre] picked, when given).
-Future<void> openCatalog(BuildContext context, CatalogRef ref, {String? genre}) => Navigator.of(context).push(ShellRoute(
+Future<void> openCatalog(BuildContext context, CatalogRef ref, {String? genre}) => besideRail(context).push(ShellRoute(
       child: DiscoverPage(title: genre ?? ref.title, subtitle: 'From ${ref.addon.name}', catalog: ref, genre: genre),
     ));
 
 Future<void> openPerson(BuildContext context, {required int id, required String name, String? profilePath, String? heroTag}) =>
-    Navigator.of(context).push(ShellRoute(
+    besideRail(context).push(ShellRoute(
       child: PersonPage(id: id, name: name, profilePath: profilePath, heroTag: heroTag),
     ));
 
 /// A studio or network page: its logo over an endless, filterable grid of everything it made.
-Future<void> openStudio(BuildContext context, Studio s) => Navigator.of(context).push(ShellRoute(
+Future<void> openStudio(BuildContext context, Studio s) => besideRail(context).push(ShellRoute(
       child: DiscoverPage(
         title: s.name,
         subtitle: [s.kind, ?s.country].join(' · '),
@@ -101,4 +112,4 @@ Future<void> openStudio(BuildContext context, Studio s) => Navigator.of(context)
 /// poster into place.
 Future<void> openDetails(BuildContext context, Media media, {String? heroTag}) => media.anime
     ? openAnime(context, Anime.fromMedia(media), heroTag: heroTag)
-    : Navigator.of(context).push(ShellRoute(child: DetailsPage(media: media, heroTag: heroTag)));
+    : besideRail(context).push(ShellRoute(child: DetailsPage(media: media, heroTag: heroTag)));

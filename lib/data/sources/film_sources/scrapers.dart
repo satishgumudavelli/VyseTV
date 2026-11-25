@@ -19,8 +19,10 @@ import 'film_sources.dart' show FilmSource;
 typedef Scraper = Future<List<FoundStream>> Function(FilmQuery q);
 
 /// Every ported source that passed, in the default order (after Movy), each under the
-/// site's own name. The first four are the user's own order: CNO, VidUp, 111477, VidLink.
+/// site's own name. The first five are the user's own order: Cinejoy (right under Movy), CNO,
+/// VidUp, 111477, VidLink.
 const portedSources = [
+  FilmSource(id: 'cinejoy', name: 'Cinejoy', note: 'Films and shows, up to 4K', scraper: cinejoy), // cinejoy.js
   FilmSource(id: 'cno', name: 'CNO', note: 'Films and shows, up to 4K', scraper: cno), // cno.js
   FilmSource(id: 'vidup', name: 'VidUp', note: 'Films and shows, up to 4K', scraper: vidup), // vidup.js
   FilmSource(id: '111477', name: '111477', note: 'Films and shows, as very large files (often 4K remuxes)', scraper: s111477), // 111477.js
@@ -3088,4 +3090,102 @@ Future<List<FoundStream>> mapple(FilmQuery q) async {
 
   final seen = <String>{};
   return [for (final list in results) for (final s in list) if (seen.add(s.url)) s];
+}
+
+// ──────────────────── Cinejoy (cinejoy.pk) ────────────────────
+
+/// cinejoy.js: cinejoy.pk's own API (api.wing.st), its questions sealed and its answers opened by
+/// enc-dec.app. Every Cinejoy server that has the title gives one link: its master playlist,
+/// handed over whole, so the player picks the quality from it and keeps separate sound (Light's)
+/// with the picture. Their pieces are fragmented MP4 named as pictures (.png, .jpg), and every
+/// request, piece by piece, needs Cinejoy's Referer and Origin: the relay sends them on each.
+///
+/// Not in the JS: Sirius and Polaris are asked too. Polaris's pieces are MPEG-TS hidden inside
+/// PNG pictures, which the relay takes out (StreamProxy.hiddenVideo); it often has titles the
+/// others don't.
+const _cjWing = 'https://api.wing.st';
+const _cjEncDec = 'https://enc-dec.app/api';
+const _cjHeaders = {'User-Agent': sdkUA, 'Referer': 'https://cinejoy.pk/', 'Origin': 'https://cinejoy.pk'};
+const _cjServers = ['light', 'lisbon', 'nebula', 'sirius', 'polaris'];
+
+Future<List<FoundStream>> cinejoy(FilmQuery q) async {
+  try {
+    final meta = await getTmdbMetadata(q.id, q.isTv);
+    var servers = [(name: 'Light', uhd: true), (name: 'Lisbon', uhd: true), (name: 'Nebula', uhd: false)];
+    try {
+      final listed = await fetchJson('$_cjWing/servers', headers: {..._cjHeaders, 'Accept': '*/*'}, timeout: const Duration(seconds: 3));
+      final known = [
+        for (final s in (dig(listed, ['servers']) as List?) ?? const [])
+          if (_cjServers.contains('${dig(s, ['name']) ?? ''}'.toLowerCase())) (name: '${s['name']}', uhd: dig(s, ['4k']) == true),
+      ];
+      if (known.isNotEmpty) servers = known;
+    } catch (_) {}
+    final found = await Future.wait([
+      for (final s in servers)
+        _cjServer(q, meta, s.name, s.uhd)
+            .timeout(const Duration(seconds: 10), onTimeout: () => const <FoundStream>[])
+            .catchError((Object _) => const <FoundStream>[]),
+    ]);
+    final seen = <String>{};
+    return [for (final list in found) for (final f in list) if (seen.add(f.url)) f];
+  } catch (_) {
+    return const [];
+  }
+}
+
+/// What one Cinejoy server has: its question to api.wing.st sealed by enc-dec.app, sent as
+/// bytes, and the bytes that come back opened by enc-dec.app again.
+Future<List<FoundStream>> _cjServer(FilmQuery q, TmdbMeta meta, String server, bool uhd) async {
+  final params = {
+    'title': meta.title.isEmpty ? 'Media' : meta.title,
+    'type': q.hasEpisode ? 'series' : 'movie',
+    'year': '${meta.year ?? ''}',
+    'imdb': meta.imdbId ?? '',
+    'tmdb': q.id,
+    'server': server,
+    if (q.hasEpisode) ...{'season': '${q.season}', 'episode': '${q.episode}'},
+  };
+  final query = [for (final e in params.entries) '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}'].join('&');
+  final enc = await fetchJson('$_cjEncDec/enc-cinejoy?url=${Uri.encodeComponent('$_cjWing/?$query')}',
+      headers: const {'User-Agent': sdkUA, 'Accept': 'application/json'}, timeout: const Duration(seconds: 4));
+  final data = dig(enc, ['result', 'data']), state = dig(enc, ['result', 'state']);
+  if (data is! String || data.isEmpty || !truthy(state)) return const [];
+
+  final sealed = await fetchRaw('$_cjWing/g',
+      method: 'POST', headers: {..._cjHeaders, 'Accept': '*/*'}, body: base64Url.decode(base64Url.normalize(data)), timeout: const Duration(seconds: 5));
+  if (sealed.statusCode < 200 || sealed.statusCode >= 300 || sealed.bodyBytes.isEmpty) return const [];
+
+  final dec = await fetchJson('$_cjEncDec/dec-cinejoy',
+      method: 'POST',
+      headers: const {'User-Agent': sdkUA, 'Content-Type': 'application/json'},
+      body: json.encode({'text': base64Url.encode(sealed.bodyBytes).replaceAll('=', ''), 'state': state}),
+      timeout: const Duration(seconds: 4));
+  final items = dig(dec, ['result', 'data', 'stream']);
+  if (items is! List) return const [];
+
+  final out = <FoundStream>[];
+  for (final item in items) {
+    final playlist = dig(item, ['playlist']);
+    if (playlist is! String || !playlist.startsWith('http')) continue;
+    // inspectPlaylist: the playlist answers, and its best quality is the link's
+    final String text;
+    try {
+      text = await fetchText(playlist, headers: _cjHeaders, timeout: const Duration(milliseconds: 2500));
+    } catch (_) {
+      continue;
+    }
+    if (!text.contains('#EXTM3U')) continue;
+    var best = 0, bestW = 0;
+    for (final m in RegExp(r'RESOLUTION=(\d+)x(\d+)', caseSensitive: false).allMatches(text)) {
+      final h = int.parse(m[2]!);
+      if (h > best) (best, bestW) = (h, int.parse(m[1]!));
+    }
+    // one quality, no master (Polaris): its playlist is named after it (1080p.m3u8)
+    if (best == 0) best = int.tryParse(RegExp(r'(\d{3,4})p\.m3u8').firstMatch(Uri.parse(playlist).path)?[1] ?? '') ?? 0;
+    final quality = best == 0
+        ? (uhd ? '4K' : 'Auto')
+        : (bestW >= 3800 || best >= 2160 ? '4K' : (best >= 1440 ? '1440p' : (best >= 1080 ? '1080p' : (best >= 720 ? '720p' : '${best}p'))));
+    out.add(FoundStream(url: playlist, server: 'Cinejoy $server', quality: quality, type: 'hls', headers: _cjHeaders));
+  }
+  return out;
 }

@@ -8,6 +8,7 @@ import '../account/account.dart';
 import '../sources/addons.dart';
 import '../app_settings.dart';
 import '../sources/film_sources/source_settings.dart';
+import '../sources/plugins/js_plugins.dart' show PluginRef;
 import '../catalog/tmdb.dart' show Media;
 import 'rooms.dart';
 
@@ -240,13 +241,14 @@ class WatchParty {
   // ── a source picked from the host's addons ──
 
   /// [p] as it travels in the watch state (the addon's name only, never its link, which can
-  /// hold the host's keys).
+  /// hold the host's keys). A plugin's stream goes without its link too: which plugin found it
+  /// and which of its links it is, and each guest runs that plugin to find their own.
   static Map<String, dynamic> sourceJson(AddonPick p) {
-    final s = p.stream, t = p.target;
+    final s = p.stream, t = p.target, plugin = s.plugin;
     String cut(String x) => x.length > 600 ? x.substring(0, 600) : x;
     return {
       'addon': {'id': s.addon.id, 'name': s.addon.name},
-      'url': s.url,
+      if (plugin != null) 'plugin': plugin.toJson() else 'url': s.url,
       'infoHash': ?s.infoHash,
       'fileIdx': ?s.fileIdx,
       if (s.trackers.isNotEmpty) 'trackers': s.trackers.take(20).toList(),
@@ -255,9 +257,27 @@ class WatchParty {
       'description': cut(s.description),
       'filename': ?s.filename,
       'bingeGroup': ?s.bingeGroup,
-      if (s.headers.isNotEmpty) 'headers': s.headers,
+      if (s.headers.isNotEmpty && plugin == null) 'headers': s.headers,
       'size': ?s.sizeBytes,
-      't': {'type': t.type, 'imdb': ?t.imdb, 'tmdb': ?t.tmdb, 'kitsu': ?t.kitsu, 'season': ?t.season, 'episode': ?t.episode, 'anime': t.anime},
+      't': {
+        'type': t.type,
+        'imdb': ?t.imdb,
+        'tmdb': ?t.tmdb,
+        'kitsu': ?t.kitsu,
+        'season': ?t.season,
+        'episode': ?t.episode,
+        'anime': t.anime,
+        // (what a plugin is asked by: the title, and where IMDb counts an addon title's episode)
+        if (plugin != null) ...{
+          'title': ?t.title,
+          'year': ?t.year,
+          'imdbSeason': ?t.imdbSeason,
+          'imdbEpisode': ?t.imdbEpisode,
+          // (one of the plugin's own titles: its own ids, which a guest's run asks it by)
+          'raw': ?t.raw,
+          'video': ?t.video,
+        },
+      },
     };
   }
 
@@ -276,16 +296,28 @@ class WatchParty {
         season: (t['season'] as num?)?.toInt(),
         episode: (t['episode'] as num?)?.toInt(),
         anime: t['anime'] == true,
+        title: t['title'] as String?,
+        year: (t['year'] as num?)?.toInt(),
+        imdbSeason: (t['imdbSeason'] as num?)?.toInt(),
+        imdbEpisode: (t['imdbEpisode'] as num?)?.toInt(),
+        raw: t['raw'] as String?,
+        video: t['video'] as String?,
       );
       if (s!.episode != null && (target.episode != s.episode || (!target.anime && target.season != s.season))) return null;
       final a = j['addon'] as Map<String, dynamic>;
       final id = '${a['id'] ?? ''}', name = '${a['name'] ?? 'Addon'}';
-      final addon = Addons.list.value.where((x) => x.id == id).firstOrNull ?? Addon(manifestUrl: '', id: id, name: name);
+      // a plugin's: which plugin and link (found again here); one that names none isn't playable
+      final plugin = j.containsKey('plugin') ? PluginRef.fromJson(j['plugin']) : null;
+      if (j.containsKey('plugin') && plugin == null) return null;
+      final addon =
+          Addons.list.value.where((x) => x.id == id).firstOrNull ??
+          (plugin != null ? Addon(manifestUrl: plugin.repo, id: id, name: name, streams: true, plugins: true) : Addon(manifestUrl: '', id: id, name: name));
       final hash = j['infoHash'] as String?;
       return AddonPick(
         AddonStream(
           addon: addon,
-          url: '${j['url'] ?? ''}',
+          url: plugin != null ? '' : '${j['url'] ?? ''}',
+          plugin: plugin,
           text: '${j['text'] ?? ''}',
           name: '${j['name'] ?? ''}',
           description: '${j['description'] ?? ''}',

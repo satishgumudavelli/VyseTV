@@ -99,9 +99,31 @@ class AppShell extends StatefulWidget {
 
   @override
   State<AppShell> createState() => _AppShellState();
+
+  /// For a page over the shell (the sources page, the player: they open on the app's own
+  /// navigator) that opens a page belonging beside the rail: the navigator of the tab on screen,
+  /// once what covers the shell has closed. Null when there's no shell.
+  static NavigatorState? uncover() {
+    final s = _AppShellState._live;
+    if (s == null || !s.mounted) return null;
+    final route = s._route;
+    if (route != null && route.isActive) rootNavigatorKey.currentState?.popUntil((r) => r == route);
+    return s._nav(s._current).currentState;
+  }
 }
 
 class _AppShellState extends State<AppShell> {
+  static _AppShellState? _live;
+
+  /// The route the shell is on (the intro may be under it).
+  ModalRoute<Object?>? _route;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+  }
+
   /// The section on screen, by id. The app opens on the first one the navbar shows.
   String _current = NavLayout.visible.first.id;
 
@@ -252,6 +274,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _live = this;
     // the minimized player and the floating chat live over every page from here on
     WidgetsBinding.instance.addPostFrameCallback((_) => FloatingLayer.attach());
     WatchParty.state.addListener(_watchChanged);
@@ -336,6 +359,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    if (_live == this) _live = null;
     FloatingLayer.onLeave = null;
     FloatingLayer.detach();
     WatchParty.state.removeListener(_watchChanged);

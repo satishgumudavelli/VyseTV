@@ -219,7 +219,7 @@ class LoungeMaking {
 
 /// Something that happened in the lounge you have open.
 class LoungeEvent {
-  const LoungeEvent(this.type, {this.message, this.id = '', this.lounge, this.banned = false});
+  const LoungeEvent(this.type, {this.message, this.id = '', this.lounge, this.banned = false, this.quiet = false});
 
   /// message, remove, members, lounge, you (your timeout changed), removed (you were taken out),
   /// deleted (the lounge is gone).
@@ -228,6 +228,9 @@ class LoungeEvent {
   final String id; // the message removed
   final Lounge? lounge; // its new details
   final bool banned;
+
+  /// removed: not by a moderator, but because you sent nothing for 24 hours.
+  final bool quiet;
 }
 
 /// Someone replied to you: in a lounge or in your room's chat.
@@ -455,6 +458,7 @@ class Lounges {
         id: d['id'] as String? ?? '',
         lounge: d['detail'] is Map<String, dynamic> ? Lounge.fromJson(d['detail'] as Map<String, dynamic>) : null,
         banned: d['banned'] == true,
+        quiet: d['quiet'] == true,
       ),
     );
   });

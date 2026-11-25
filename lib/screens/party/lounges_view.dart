@@ -13,8 +13,8 @@ import 'lounge_page.dart';
 import 'party_widgets.dart';
 import 'rooms_view.dart' show PartyField, PartySheet;
 
-// Lounges: public chat rooms in Party, for talking rather than watching. The list beside the
-// rooms (official ones on top, then yours), the page to find others, and making one.
+// Lounges: public chat rooms in Party, for talking rather than watching. Party's Lounges tab
+// (official ones on top, then yours), the page to find others, and making one.
 
 IconData loungeIcon(String topic) => switch (topic) {
   'films' => Icons.movie_rounded,
@@ -55,10 +55,10 @@ Future<void> openLoungeList(NavigatorState nav) => nav.push(
   ),
 );
 
-/// The lounges, one line each: official ones, then the ones you have a seat in. Unread ones are
-/// bright, replies to you are counted. Shown above the rooms.
-class PartyLoungesPanel extends StatelessWidget {
-  const PartyLoungesPanel({super.key});
+/// Party's Lounges tab, the first beside Messages: Find and Make, then the official lounges and
+/// the ones you have a seat in, one line each. Unread ones are bright, replies to you counted.
+class PartyLoungesTab extends StatelessWidget {
+  const PartyLoungesTab({super.key});
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -71,52 +71,70 @@ class PartyLoungesPanel extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 0, 6),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'LOUNGES',
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .7, color: VyseColors.textDim),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Find lounges',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => openLoungeList(nav),
-                  icon: const Icon(Icons.explore_outlined, size: 19, color: VyseColors.textDim),
-                ),
-                IconButton(
-                  tooltip: 'Make a lounge',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => showMakeLoungeDialog(context),
-                  icon: const Icon(Icons.add_rounded, size: 22, color: VyseColors.text),
-                ),
-              ],
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              PartyChipButton(icon: Icons.explore_outlined, label: 'Find lounges', onTap: () => openLoungeList(nav)),
+              PartyChipButton(icon: Icons.add_rounded, label: 'Make a lounge', onTap: () => showMakeLoungeDialog(context)),
+            ],
           ),
-          for (final l in official) LoungeRow(lounge: l, onTap: () => openLounge(nav, l)),
-          if (yours.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            for (final l in yours) LoungeRow(lounge: l, onTap: () => openLounge(nav, l)),
-          ],
+          const SizedBox(height: 16),
           if (official.isEmpty && yours.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: Text('Public chat rooms. Find one to join, or make your own.', style: TextStyle(fontSize: 12.5, height: 1.4, color: VyseColors.textFaint)),
-            ),
+            const PartyNote(icon: Icons.forum_outlined, text: 'Public chat rooms. Find one to join, or make your own.')
+          else ...[
+            if (official.isNotEmpty) _LoungeList(title: 'Official', lounges: official),
+            if (official.isNotEmpty && yours.isNotEmpty) const SizedBox(height: 18),
+            if (yours.isNotEmpty) _LoungeList(title: 'Yours', lounges: yours),
+          ],
         ],
       );
     },
   );
 }
 
-/// A lounge's line: its topic's icon, its name (bright when there's something new), replies to
-/// you, and how full it is.
+/// A titled card of lounge lines, as the friend lists beside it.
+class _LoungeList extends StatelessWidget {
+  const _LoungeList({required this.title, required this.lounges});
+  final String title;
+  final List<Lounge> lounges;
+
+  @override
+  Widget build(BuildContext context) {
+    final nav = Navigator.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            title.toUpperCase(),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .7, color: VyseColors.textDim),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: partyCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: VyseColors.stroke),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (var i = 0; i < lounges.length; i++) ...[
+                if (i > 0) const Divider(height: 1, thickness: 1, color: VyseColors.stroke),
+                LoungeRow(lounge: lounges[i], onTap: () => openLounge(nav, lounges[i])),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A lounge's line: its topic's icon, its name (bright when there's something new) and what it
+/// is about, replies to you, and how full it is.
 class LoungeRow extends StatelessWidget {
   const LoungeRow({super.key, required this.lounge, required this.onTap});
   final Lounge lounge;
@@ -126,60 +144,79 @@ class LoungeRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = lounge;
     final fresh = l.joined && l.unread && !l.muted;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Pressable(
-        onTap: onTap,
-        tooltip: l.joined ? null : (l.full ? 'Full' : 'Take a seat to read it'),
-        builder: (context, hovered, _) => AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: hovered ? .06 : 0),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(loungeIcon(l.topic), size: 17, color: fresh || l.replies > 0 ? VyseColors.text : VyseColors.textDim),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  l.name,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: fresh || l.replies > 0 ? FontWeight.w800 : FontWeight.w600,
-                    color: fresh || l.replies > 0 || l.joined ? VyseColors.text : VyseColors.textDim,
+    final lit = fresh || l.replies > 0;
+    final full = l.full && !l.joined;
+    return Pressable(
+      onTap: onTap,
+      tooltip: l.joined ? null : (full ? 'Full' : 'Take a seat to read it'),
+      builder: (context, hovered, _) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        color: Colors.white.withValues(alpha: hovered ? .05 : 0),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: VyseColors.accent.withValues(alpha: lit ? .22 : .1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(loungeIcon(l.topic), size: 20, color: lit ? VyseColors.accent : VyseColors.textDim),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l.name,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: lit ? FontWeight.w900 : FontWeight.w700,
+                      color: lit || l.joined ? VyseColors.text : VyseColors.textDim,
+                    ),
                   ),
+                  const SizedBox(height: 2),
+                  Text(
+                    l.description.isEmpty ? l.topicName : l.description,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5, color: VyseColors.textDim, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            if (l.replies > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(color: VyseColors.accent, borderRadius: BorderRadius.circular(9)),
+                child: Text(
+                  '@${l.replies > 9 ? '9+' : l.replies}',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.black),
                 ),
               ),
-              if (l.replies > 0) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(color: VyseColors.accent, borderRadius: BorderRadius.circular(9)),
-                  child: Text(
-                    '@${l.replies > 9 ? '9+' : l.replies}',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.black),
-                  ),
-                ),
-              ] else if (fresh) ...[
-                const SizedBox(width: 6),
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: const BoxDecoration(color: VyseColors.text, shape: BoxShape.circle),
-                ),
-              ],
+            ] else if (fresh) ...[
               const SizedBox(width: 8),
-              Text(
-                '${l.size}/${l.limit}',
-                style: TextStyle(fontSize: 11.5, color: l.full && !l.joined ? const Color(0xFFFF8A8C) : VyseColors.textFaint, fontWeight: FontWeight.w700),
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(color: VyseColors.text, shape: BoxShape.circle),
               ),
             ],
-          ),
+            const SizedBox(width: 10),
+            Icon(Icons.event_seat_rounded, size: 13, color: full ? const Color(0xFFFF8A8C) : VyseColors.textFaint),
+            const SizedBox(width: 4),
+            Text(
+              '${l.size}/${l.limit}',
+              style: TextStyle(fontSize: 12, color: full ? const Color(0xFFFF8A8C) : VyseColors.textFaint, fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
       ),
     );

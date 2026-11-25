@@ -16,6 +16,9 @@ enum LoopMode { off, all, one }
 
 /// The app-wide music queue and player. Listen for queue / play state; [position] ticks separately
 /// so the whole UI doesn't rebuild several times a second.
+/// A song's address, and the client name it must be fetched with when the lookup gives one.
+typedef MusicAddress = ({String url, String? userAgent});
+
 class MusicPlayer extends ChangeNotifier {
   MusicPlayer._() {
     _player.streams.playing.listen((v) {
@@ -28,6 +31,11 @@ class MusicPlayer extends ChangeNotifier {
     });
     _player.streams.position.listen((p) {
       position.value = p;
+      // a while into a song: the next one is looked up now, so it starts at once
+      if (_started && p > const Duration(seconds: 15) && _aheadFor != _generation) {
+        _aheadFor = _generation;
+        _lookAhead();
+      }
       if (MusicLog.enabled && !_logSound && p > const Duration(milliseconds: 400)) {
         _logSound = true;
         MusicLog.line('  sound   after ${_logClock.elapsedMilliseconds}ms');
@@ -142,6 +150,7 @@ class MusicPlayer extends ChangeNotifier {
     if (tracks.isEmpty) return;
     _gated('own');
     _failStreak = 0;
+    _ahead.clear();
     autoIds.clear();
     _original = [...tracks];
     queue = [...tracks];
@@ -345,6 +354,7 @@ class MusicPlayer extends ChangeNotifier {
 
   Future<void> partyStop() async {
     _generation++;
+    _ahead.clear();
     await _player.stop();
     queue = [];
     _original = [];
@@ -386,20 +396,91 @@ class MusicPlayer extends ChangeNotifier {
         ),
       );
 
-  /// The stream for [t]. The lookup gets twenty seconds, and one more go a moment later if the
-  /// network failed it. An answer of "nothing" isn't asked twice: the same question right away
-  /// gets the same answer, and repeated look-ups are what make YouTube refuse a device.
-  Future<MusicStreamResult?> _lookup(MusicTrack t, int gen) async {
-    for (var attempt = 1; ; attempt++) {
-      try {
-        return await (MusicLog.enabled ? _loggedLookup(t) : MusicService.instance.getAudioStream(t)).timeout(const Duration(seconds: 20));
-      } catch (e) {
-        MusicLog.line('  lookup  try $attempt failed at ${_logClock.elapsedMilliseconds}ms: ${MusicLog.clip('$e', 300)}');
-        if (attempt == 2 || gen != _generation) rethrow;
-        await Future<void>.delayed(const Duration(milliseconds: 1500));
-        if (gen != _generation) rethrow;
+  /// Tests: answers in place of YouTube's (nothing is asked of the network).
+  @visibleForTesting
+  static Future<MusicAddress?> Function(MusicTrack t)? debugLookup;
+
+  /// Every lookup asked, for tests to count.
+  @visibleForTesting
+  static int debugAsked = 0;
+
+  /// One question to the lookup: [t]'s address, or null when it found none.
+  Future<MusicAddress?> _ask(MusicTrack t) async {
+    debugAsked++;
+    final hook = debugLookup;
+    if (hook != null) return hook(t);
+    final r = await (MusicLog.enabled ? _loggedLookup(t) : MusicService.instance.getAudioStream(t));
+    return r == null ? null : (url: r.url, userAgent: r.userAgent);
+  }
+
+  /// The address for [t]. The lookup gets twenty seconds, and one more go a moment later if it
+  /// failed or found nothing. Its misses are mostly its own time-outs ("candidate … timed out"):
+  /// on 23 Nov 2026, 2 of 34 songs came back with nothing, and both answered when asked again.
+  /// Never more than twice: a burst of look-ups is what makes YouTube refuse a device. A song
+  /// looked up while the one before it played ([_lookAhead]) is answered from that.
+  Future<MusicAddress?> _lookup(MusicTrack t, int gen) async {
+    final ahead = _ahead.remove(t.id);
+    if (ahead != null) {
+      final r = await ahead;
+      final ends = r == null ? null : _expiryOf(r.url);
+      if (r != null && (ends == null || DateTime.now().isBefore(ends.subtract(const Duration(minutes: 5))))) {
+        MusicLog.line('  lookup  found while the song before played');
+        return r;
       }
     }
+    for (var attempt = 1; ; attempt++) {
+      Object? failure;
+      StackTrace? trace;
+      try {
+        final r = await _ask(t).timeout(const Duration(seconds: 20));
+        if (r != null) return r;
+        MusicLog.line('  lookup  try $attempt found nothing at ${_logClock.elapsedMilliseconds}ms');
+      } catch (e, st) {
+        failure = e;
+        trace = st;
+        MusicLog.line('  lookup  try $attempt failed at ${_logClock.elapsedMilliseconds}ms: ${MusicLog.clip('$e', 300)}');
+      }
+      if (attempt == 2 || gen != _generation) {
+        if (failure != null) Error.throwWithStackTrace(failure, trace!);
+        return null;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+      if (gen != _generation) {
+        if (failure != null) Error.throwWithStackTrace(failure, trace!);
+        return null;
+      }
+    }
+  }
+
+  /// Songs looked up ahead: the one after the song on now, found while it plays.
+  final _ahead = <String, Future<MusicAddress?>>{};
+
+  /// Tests: looks the next song up now, as fifteen seconds into a song does.
+  @visibleForTesting
+  void debugLookAhead() => _lookAhead();
+
+  /// The song [_lookAhead] last ran for (its [_generation]).
+  int _aheadFor = -1;
+
+  /// Looks the next song up while this one plays: it then starts at once (the lookup keeps what
+  /// it found), and a miss is asked again before anyone is waiting for it. Only a while into a
+  /// song, so skipping through a queue looks nothing up ahead.
+  void _lookAhead() {
+    if (index + 1 >= queue.length) return;
+    final next = queue[index + 1];
+    if (_ahead.containsKey(next.id)) return;
+    _ahead
+      ..clear()
+      ..[next.id] = () async {
+        for (var attempt = 1; attempt <= 2; attempt++) {
+          try {
+            final r = await _ask(next).timeout(const Duration(seconds: 20));
+            if (r != null) return r;
+          } catch (_) {}
+          if (attempt == 1) await Future<void>.delayed(const Duration(seconds: 2));
+        }
+        return null;
+      }();
   }
 
   /// The song on now broke: mpv gave up on its address (refused, expired after its six hours,

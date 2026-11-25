@@ -6,7 +6,7 @@ part of 'details_page.dart';
 
 /// Opens an anime's page.
 Future<void> openAnime(BuildContext context, Anime a, {String? heroTag}) =>
-    Navigator.of(context).push(ShellRoute(child: AnimeDetailsPage(anime: a, heroTag: heroTag)));
+    besideRail(context).push(ShellRoute(child: AnimeDetailsPage(anime: a, heroTag: heroTag)));
 
 /// AniList's cover colour ("#e4a15d"), for placeholders and glows.
 Color? animeColor(Anime a) {

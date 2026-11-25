@@ -18,12 +18,21 @@ They run in the same sandbox, with the same time budget (17 s) and one retry for
 
 Not supported: `openWebView` (a browser challenge: those providers find nothing), cookies kept between calls, multipart bodies.
 
+A provider can also be browsed, as VyseTV browses a Stremio metadata addon (lib/data/sources/plugins/README.md, *Plugins
+that list titles*). Its `catalog.js` comes down with the other modules and is read at install by the app itself (its
+lists and genres are plain data). The adapter answers the rest: `__vegaCatalog` (a page of a catalog, a genre or a
+search: `getPosts` / `getSearchPosts`, titles cleaned of "Download" and formats, a show told by its title or link),
+`__vegaMeta` (a title's page as a Stremio meta: a show's seasons from its `linkList`, their episodes numbered), and
+`getStreams` with an `ownId` (the page's link, or `<link>|<season>|<episode>`: no search).
+
 ## Scraper lists
 
 `assets/plugins/scraper_runtime.js` runs a scraper from a scraper list (a `manifest.json` with a `scrapers` list):
 the real crypto-js, then `scrapers.js`, which gives the scraper `module`, `exports` and `require` (cheerio, axios,
 crypto-js), runs it in a function of its own and answers VyseTV's `getStreams(query)` with its
 `getStreams(tmdbId, mediaType, season, episode)`. It loads after `vega_runtime.js`, whose `fetch`, axios and cheerio it uses.
+A scraper that lists titles is also asked `__scraperCatalog` (its `getCatalog`, either way scripts write it) and
+`__scraperMeta` (its `getMeta`), and `getStreams` with an `ownId` (its own id in place of a TMDB id).
 
 ## Files
 

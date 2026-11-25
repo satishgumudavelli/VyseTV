@@ -1,13 +1,18 @@
-// T4 for lounges (public chat rooms in Party) on an Android TV and a phone: the remote's arrows,
-// OK and Back only. The server is made up (bed/fake_lounges.dart). Pictures of each step go to
+// T4 for lounges (public chat rooms in Party, the first tab beside Messages) on an Android TV and
+// a phone: the remote's arrows, OK and Back only. The server is made up (bed/fake_lounges.dart). Pictures of each step go to
 // docs/dpad/pictures/lounges, to look at.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vyse_tv/data/party/dms.dart';
+import 'package:vyse_tv/dpad/dpad_traversal.dart';
 import 'package:vyse_tv/screens/party/chat_view.dart';
+import 'package:vyse_tv/screens/party/friends_view.dart';
 import 'package:vyse_tv/screens/party/lounge_page.dart';
 import 'package:vyse_tv/screens/party/lounges_view.dart';
 import 'package:vyse_tv/screens/party/party_page.dart';
+import 'package:vyse_tv/screens/party/rooms_view.dart';
+import 'package:vyse_tv/widgets/common.dart';
 
 import 'bed/fake_lounges.dart';
 import 'bed/phase9_pages.dart';
@@ -15,19 +20,28 @@ import 'harness.dart';
 
 bool _inBox() => FocusManager.instance.primaryFocus?.nearestScope?.debugLabel?.contains('Modal') ?? false;
 bool _typing() => FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<EditableText>() != null;
-String? _tip() => FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<IconButton>()?.tooltip;
 bool _onMessage() => FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<PartyChatList>() != null;
 
 late FakeLounges server;
 
-Future<void> _party(WidgetTester t) async {
+/// Party, on its Lounges tab: the bed's account has an unread message, so Party opens on
+/// Messages and the remote goes to Lounges (OK on its tab).
+Future<void> _party(WidgetTester t, {bool unread = true}) async {
   signIn();
+  if (!unread) Dms.threads.value = const [];
   server = FakeLounges()..install();
   await Bed.pumpShell(t);
   await Bed.openSection(t, 'party');
   await Bed.settle(t, rounds: 5);
   expect(find.byType(PartyPage), findsOneWidget);
   await Bed.dpadMode(t);
+  if (unread) {
+    expect(find.byType(PartyLoungesTab), findsNothing, reason: 'an unread message: Party opens on Messages');
+    await Bed.focus(t, _tab('Lounges'));
+    await Bed.ok(t);
+    await Bed.settle(t, rounds: 3);
+  }
+  expect(find.byType(PartyLoungesTab), findsOneWidget);
 }
 
 void _done() {
@@ -46,9 +60,50 @@ Future<bool> _walk(WidgetTester t, bool Function() ok, {int tries = 14}) async {
   return ok();
 }
 
+/// The tab of Party's middle row (Lounges, Messages, Online…) whose label is [label].
+Finder _tab(String label) => find
+    .ancestor(
+      of: find.descendant(of: find.descendant(of: find.byType(PartyFriendsArea), matching: find.byType(DpadRail)), matching: find.text(label)),
+      matching: find.byType(Pressable),
+    )
+    .first;
+
 void main() {
   setUpAll(() => Bed.boot(as: TargetPlatform.android));
   final screens = OnScreens(Screens.android);
+
+  // The user (2026-11-23): lounges belong in the middle, as the first option next to Messages,
+  // Online, All, Pending…, not above the rooms.
+  testWidgets('Lounges: the first tab beside Messages and what Party opens on (requests waiting too); not in the rooms list; tab, Find lounges, the lounges by remote', (t) async {
+    addTearDown(_done);
+    final problems = await Bed.overflows(() async {
+      await _party(t, unread: false);
+      final order = ['Lounges', 'Messages', 'Online', 'All', 'Pending', 'Blocked', 'Add friend'];
+      final xs = [for (final label in order) t.getRect(_tab(label)).left];
+      expect([...xs]..sort(), xs, reason: 'the tabs, Lounges first: $order');
+      expect(find.widgetWithText(LoungeRow, 'General'), findsOneWidget, reason: 'the Lounges tab is what shows');
+      expect(find.descendant(of: find.byType(PartyRoomsPanel), matching: find.byType(LoungeRow)), findsNothing, reason: 'no lounges above the rooms');
+
+      await Bed.focus(t, _tab('Lounges'));
+      expect(Bed.focused(), contains('Lounges'));
+      await Bed.right(t);
+      expect(Bed.focused(), contains('Messages'), reason: 'Right along the tabs');
+      await Bed.left(t);
+      expect(Bed.focused(), contains('Lounges'));
+      await Bed.down(t);
+      expect(Bed.focused(), anyOf(contains('Find lounges'), contains('Make a lounge')), reason: 'Down from the tab: its buttons');
+      await Bed.picture(t, 'lounges/0-tab');
+      for (var i = 0; i < 4 && !Bed.focused().contains('LoungeRow'); i++) {
+        await Bed.down(t);
+      }
+      expect(Bed.focused(), contains('LoungeRow'), reason: 'then the lounges');
+      expect(Bed.focusInView(), isTrue);
+      await Bed.ok(t);
+      await Bed.settle(t, rounds: 5);
+      expect(find.byType(LoungePage), findsOneWidget, reason: 'OK opens it');
+    });
+    expect(problems, isEmpty);
+  }, variant: screens);
 
   testWidgets('Lounges: OK on a lounge opens it; a reply to you is lit; Reply from a message\'s menu sends what it answers; Back returns to the lounge', (t) async {
     addTearDown(_done);
@@ -143,13 +198,13 @@ void main() {
     addTearDown(_done);
     final problems = await Bed.overflows(() async {
       await _party(t);
-      // up from the first lounge to the list's buttons, then along them
+      // up from the first lounge to the tab's buttons, then along them
       await Bed.focus(t, find.widgetWithText(LoungeRow, 'General'));
       await Bed.up(t);
-      for (var i = 0; i < 3 && _tip() != 'Find lounges'; i++) {
+      for (var i = 0; i < 3 && !Bed.focused().contains('Find lounges'); i++) {
         await Bed.left(t);
       }
-      expect(_tip(), 'Find lounges', reason: 'Find lounges is reachable with the arrows (focus: ${Bed.focused()})');
+      expect(Bed.focused(), contains('Find lounges'), reason: 'Find lounges is reachable with the arrows');
       await Bed.ok(t);
       await Bed.settle(t, rounds: 5);
       expect(find.byType(LoungesPage), findsOneWidget);
@@ -176,6 +231,31 @@ void main() {
       }
       expect(_inBox(), isFalse);
       expect(Bed.focused(), isNot('nothing'));
+    });
+    expect(problems, isEmpty);
+  }, variant: screens);
+
+  // The user (2026-11-23): someone who sends nothing for 24 hours is taken off the lounge. The
+  // server frees the seat and says why; the app says so and offers a seat again.
+  testWidgets('Lounges: a seat freed after 24 hours without a message says so, and the lounge offers a seat again', (t) async {
+    addTearDown(_done);
+    final problems = await Bed.overflows(() async {
+      await _party(t);
+      await Bed.focus(t, find.widgetWithText(LoungeRow, 'General'));
+      await Bed.ok(t);
+      await Bed.settle(t, rounds: 5);
+      expect(find.byType(PartyChatList), findsOneWidget);
+      expect(find.textContaining('a seat goes back after 24 hours without a message'), findsOneWidget, reason: 'the chat says the rule');
+      server.seats.remove('general');
+      server.live!({'lounge': 'general', 'type': 'removed', 'quiet': true});
+      await Bed.settle(t, rounds: 4);
+      expect(find.text('No message from you in 24 hours, so your seat went back.'), findsOneWidget);
+      expect(find.text('A moderator took your seat.'), findsNothing, reason: 'nobody took it: it went back');
+      expect(find.text('Take a seat'), findsOneWidget, reason: 'the lounge offers a seat again');
+      expect(find.textContaining('so does your seat if you send nothing'), findsOneWidget, reason: 'and says the rule there too');
+      await Bed.picture(t, 'lounges/11-seat-went-back');
+      expect(await _walk(t, () => Bed.focused().contains('Take a seat') || Bed.focused().contains('FilledButton')), isTrue,
+          reason: 'the remote reaches Take a seat (focus: ${Bed.focused()})');
     });
     expect(problems, isEmpty);
   }, variant: screens);

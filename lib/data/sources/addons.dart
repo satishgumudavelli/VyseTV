@@ -10,6 +10,7 @@ import 'badges.dart';
 import 'film_sources/common.dart' show getTmdbMetadata, fetchText, HttpError;
 import 'knaben.dart';
 import 'plugins/js_plugins.dart';
+import 'plugins/plugin_catalogs.dart';
 import '../net.dart';
 import 'sources.dart' show StreamSource;
 import '../playback/stream_proxy.dart';
@@ -142,6 +143,8 @@ class Addon {
     this.addonCatalogs = const [],
     this.needsSetup = false,
     this.plugins = false,
+    this.browse,
+    this.comicsOff = const [],
   });
 
   /// Where its manifest is: `https://…/manifest.json` (a plugin repository: its `repo.json`).
@@ -184,6 +187,14 @@ class Addon {
   /// A repository of scraper plugins (plugins/js_plugins.dart), not a Stremio addon: its
   /// [manifestUrl] is the repository's file, and each plugin in it is asked for streams.
   final bool plugins;
+
+  /// A plugin repository: the plugins whose catalogs you browse (Settings > Addons,
+  /// plugins/plugin_catalogs.dart). Null: not picked yet.
+  final List<String>? browse;
+
+  /// A plugin repository's comic plugins you turned off: the others' catalogs are in the Manga
+  /// section (data/manga/plugin_comics.dart), never on Home.
+  final List<String> comicsOff;
 
   /// It offers something to browse, or the details of titles.
   bool get metadata => catalogs.isNotEmpty || meta;
@@ -247,18 +258,36 @@ class Addon {
     addonCatalogs: addonCatalogs,
     needsSetup: needsSetup,
     plugins: plugins,
+    browse: browse,
+    comicsOff: comicsOff,
   );
 
-  /// A plugin repository as an addon: films and shows' streams, from its plugins.
-  factory Addon.ofPlugins(PluginRepoInfo r) => Addon(
-    manifestUrl: r.url,
-    id: 'plugins.${PluginRepos.repoKey(r.url)}',
-    name: r.name,
-    description: pluginsAbout(r.plugins),
-    streams: true,
-    streamTypes: const ['movie', 'series'],
-    plugins: true,
-  );
+  /// A plugin repository as an addon: films and shows' streams, from its plugins; and the
+  /// catalogs of those you browse ([browse]; not picked yet: a scraper list's that list titles,
+  /// none of a Vega provider's), with their titles' details.
+  factory Addon.ofPlugins(PluginRepoInfo r, {List<String>? browse, List<String> comicsOff = const []}) {
+    final on = browse ?? [for (final p in r.plugins) if (!p.vega && !p.comic && p.catalogs.isNotEmpty) p.id];
+    return Addon(
+      manifestUrl: r.url,
+      id: 'plugins.${PluginRepos.repoKey(r.url)}',
+      name: r.name,
+      description: pluginsAbout(r.plugins),
+      streams: true,
+      streamTypes: const ['movie', 'series'],
+      plugins: true,
+      // (a comic plugin's catalogs are in the Manga section instead)
+      catalogs: [
+        for (final p in r.plugins)
+          if (on.contains(p.id) && !p.comic)
+            for (final c in p.catalogs) PluginCatalogs.addonCatalog(p, c),
+      ],
+      // (its titles' details stay, with their catalogs off: they are in your history)
+      meta: r.plugins.any((p) => p.catalogs.isNotEmpty && !p.comic),
+      metaPrefixes: [PluginCatalogs.prefix(r.url)],
+      browse: on,
+      comicsOff: comicsOff,
+    );
+  }
 
   /// "12 plugins: A, B, C and 9 more".
   static String pluginsAbout(List<PluginEntry> l) {
@@ -323,6 +352,8 @@ class Addon {
     if (metaPrefixes.isNotEmpty) 'mp': metaPrefixes,
     if (addonCatalogs.isNotEmpty) 'ac': [for (final c in addonCatalogs) c.toJson()],
     if (plugins) 'pl': true,
+    'pb': ?browse,
+    if (comicsOff.isNotEmpty) 'co': comicsOff,
   };
 
   static Addon? fromJson(Map<String, dynamic> j) {
@@ -350,6 +381,8 @@ class Addon {
         catalogsRead: j.containsKey('cat'),
         addonCatalogs: [for (final c in (j['ac'] is List ? j['ac'] as List : const [])) ?AddonCatalog.fromJson(c)],
         plugins: j['pl'] == true,
+        browse: j['pb'] is List ? [for (final x in j['pb'] as List) '$x'] : null,
+        comicsOff: l('co'),
       );
     } catch (_) {
       return null;
@@ -498,12 +531,24 @@ class AddonStream {
     this.external,
     this.subtitles = const [],
     this.hls,
+    this.plugin,
   });
   final Addon addon;
 
   /// An HLS playlist, said by its source (a plugin's link need not end in .m3u8); null: by its link.
   final bool? hls;
-  final String url; // empty for a torrent
+  final String url; // empty for a torrent, and for a plugin's link still to be found on this device
+
+  /// A plugin's link: which plugin found it and which of its links it is (a watch party's guests
+  /// run that plugin themselves: [Addons.pluginAgain]).
+  final PluginRef? plugin;
+
+  /// A plugin's link the host of a watch party played, to be found again here.
+  bool get findHere => plugin != null && url.isEmpty;
+
+  /// Which stream this is in a watch party: a plugin's link by its plugin and place (each device
+  /// finds its own link), a torrent by its file, anything else by its link.
+  String get partyKey => plugin?.key ?? (torrent ? '$infoHash:$fileIdx' : url);
 
   /// Not a video VyseTV plays but a link that opens elsewhere: a web page (`externalUrl`), a
   /// YouTube video (`ytId`, opened on YouTube), or a Stremio link (`stremio:///detail/…`, opened
@@ -869,7 +914,9 @@ class Addons {
           () async {
             try {
               // a plugin repository: its plugins whose version changed are downloaded again
-              fresh[a.manifestUrl] = a.plugins ? Addon.ofPlugins(await PluginRepos.install(a.manifestUrl)) : Addon.fromManifest(a.manifestUrl, await _manifest(a.manifestUrl));
+              fresh[a.manifestUrl] = a.plugins
+                  ? Addon.ofPlugins(await PluginRepos.install(a.manifestUrl), browse: a.browse, comicsOff: a.comicsOff)
+                  : Addon.fromManifest(a.manifestUrl, await _manifest(a.manifestUrl));
             } catch (_) {}
           }(),
     ]);
@@ -1015,16 +1062,31 @@ class Addons {
     } on FormatException catch (e) {
       throw e.message;
     }
-    final a = Addon.ofPlugins(info);
     final l = [...list.value];
     final i = l.indexWhere((x) => x.manifestUrl == url);
+    final a = Addon.ofPlugins(info, browse: i >= 0 ? l[i].browse : null, comicsOff: i >= 0 ? l[i].comicsOff : const []);
     if (i >= 0) {
       l[i] = a.copyWith(enabled: l[i].enabled);
+    } else if (a.catalogs.isNotEmpty) {
+      // (with catalogs, like a metadata addon: just above TMDB, so its rows lead on Home)
+      final t = l.indexWhere((x) => x.manifestUrl == Addon.tmdb.manifestUrl);
+      l.insert(t < 0 ? l.length : t, a);
     } else {
       l.add(a);
     }
     _save(l);
     return a;
+  }
+
+  /// Plugin repository [a]'s catalogs: those of the plugins in [on] (Settings > Addons), and of
+  /// its comic plugins all but [comicsOff] (null: as they are).
+  static Future<void> setBrowse(Addon a, List<String> on, {List<String>? comicsOff}) async {
+    final info = await PluginRepos.local(a.manifestUrl) ?? await PluginRepos.install(a.manifestUrl);
+    final l = [...list.value];
+    final i = l.indexWhere((x) => x.manifestUrl == a.manifestUrl);
+    if (i < 0) return;
+    l[i] = Addon.ofPlugins(info, browse: on, comicsOff: comicsOff ?? l[i].comicsOff).copyWith(enabled: l[i].enabled);
+    _save(l);
   }
 
   /// (A built-in addon stays: it is turned off instead. A plugin repository's scripts leave this
@@ -1115,20 +1177,62 @@ class Addons {
   /// What a plugin repository's plugins found for [t]. They look titles up by name (and TMDB and
   /// IMDb ids), so a title needs one; a show, a season and an episode. Null when not covered.
   static Future<({List<AddonStream> streams, int torrents})?> _pluginStreams(Addon a, AddonTarget t, void Function(List<AddonStream>)? onSome) async {
-    final series = t.type == 'series';
     if (!t.typeOk(a.streamTypes)) return null;
+    final ask = await _pluginAsk(a.manifestUrl, t);
+    if (ask == null) return null;
+    List<AddonStream> streams(List<PluginHit> hits) => [
+      for (final h in hits)
+        if (_playsHere(h)) pluginStream(a, h),
+    ];
+    // one of its plugins' own titles: that plugin alone, asked for it by its own id
+    final hits = ask.plugin != null
+        ? await PluginRepos.findFor(a.manifestUrl, ask.query, only: ask.plugin)
+        : await PluginRepos.find(a.manifestUrl, ask.query, onSome: onSome == null ? null : (l) => onSome(streams(l)));
+    return (streams: streams(hits), torrents: 0);
+  }
+
+  /// What the plugins of the repository at [repo] are asked for [t]: one of its plugins' own
+  /// titles (from its catalogs) by its own id, that plugin alone ([plugin]); anything else as
+  /// [_pluginQuery] says, every plugin. Null when it can't be asked.
+  static Future<({Map<String, Object?> query, String? plugin})?> _pluginAsk(String repo, AddonTarget t) async {
+    // (an episode of its own goes by its own id; a show of its own whose episodes came from TMDB,
+    // by the show's and TMDB's numbers)
+    final own = PluginCatalogs.unwrap(repo, t.video) ?? PluginCatalogs.unwrap(repo, t.raw);
+    if (own != null) {
+      final series = t.type == 'series';
+      return (
+        query: <String, Object?>{
+          'ownId': own.own,
+          'type': series ? 'tv' : 'movie',
+          'isTv': series,
+          'season': series ? t.season : null,
+          'episode': series ? t.episode : null,
+          'title': t.title,
+          'year': t.year,
+          'tmdbId': t.tmdb,
+          'imdbId': t.imdb,
+        },
+        plugin: own.plugin,
+      );
+    }
+    final q = await _pluginQuery(t);
+    return q == null ? null : (query: q, plugin: null);
+  }
+
+  /// (the Linux build's mpv has no DASH: a manifest it can't open isn't offered)
+  static bool _playsHere(PluginHit h) => !(h.stream.type == 'dash' && Platform.isLinux);
+
+  /// What plugins are asked for [t] (the plugin contract's query: plugins/README.md). Null when
+  /// it can't be asked: no title known, or a show's episode without its numbers.
+  static Future<Map<String, Object?>?> _pluginQuery(AddonTarget t) async {
+    final series = t.type == 'series';
     // (an addon title's episode: where IMDb counts it, which sites go by, when known)
     final season = t.imdbSeason ?? t.season, episode = t.imdbEpisode ?? t.episode;
     if (series && (season == null || episode == null)) return null;
     final meta = t.tmdb == null ? null : await getTmdbMetadata('${t.tmdb}', series);
     final title = meta != null && meta.title.isNotEmpty ? meta.title : t.title;
     if (title == null || title.trim().isEmpty) return null;
-    // (the Linux build's mpv has no DASH: a manifest it can't open isn't offered)
-    List<AddonStream> streams(List<PluginHit> hits) => [
-      for (final h in hits)
-        if (!(h.stream.type == 'dash' && Platform.isLinux)) pluginStream(a, h),
-    ];
-    final hits = await PluginRepos.find(a.manifestUrl, onSome: onSome == null ? null : (l) => onSome(streams(l)), {
+    return {
       'tmdbId': t.tmdb,
       'imdbId': meta?.imdbId ?? t.imdb,
       'type': series ? 'tv' : 'movie',
@@ -1140,13 +1244,13 @@ class Addons {
       'year': meta?.year ?? t.year,
       'season': series ? season : null,
       'episode': series ? episode : null,
-    });
-    return (streams: streams(hits), torrents: 0);
+    };
   }
 
   /// A plugin's link as a stream: the plugin's name, then its quality, server and language.
+  /// [ref]: which plugin and link it stands for in a watch party (the one found, unless said).
   @visibleForTesting
-  static AddonStream pluginStream(Addon a, PluginHit h) {
+  static AddonStream pluginStream(Addon a, PluginHit h, {PluginRef? ref}) {
     final s = h.stream;
     final what = [if (s.quality != 'Auto') s.quality, if (s.server != 'Server') s.server, ?s.audio].join(' · ');
     final description = [if (what.isNotEmpty) what, if (s.label case final l? when l.trim().isNotEmpty) l.trim()].join('\n');
@@ -1158,7 +1262,39 @@ class Addons {
       description: description,
       headers: s.headers,
       hls: s.type == 'hls',
+      plugin: ref ?? PluginRef.of(a.manifestUrl, h),
     );
+  }
+
+  /// A watch party's guest: the host's plugin stream [p] found again on this device. Only which
+  /// plugin and which of its links travel, never the host's link (a plugin's links are often only
+  /// good for whoever asked): that plugin runs here, even when its repository isn't one of your
+  /// addons, and its links come back most like the host's first (the same server, quality,
+  /// label, language). When it finds nothing here, the repository's other plugins are asked
+  /// until one finds something. Empty when nothing is found.
+  static Future<List<AddonPick>> pluginAgain(AddonPick p, {int most = 6}) async {
+    final ref = p.stream.plugin;
+    if (ref == null) return const [];
+    final ({Map<String, Object?> query, String? plugin})? asked;
+    try {
+      asked = await _pluginAsk(ref.repo, p.target);
+    } catch (_) {
+      return const [];
+    }
+    if (asked == null) return const [];
+    Future<List<PluginHit>> ask({String? only, String? except}) async {
+      try {
+        return (await PluginRepos.findFor(ref.repo, asked!.query, only: only, except: except)).where(_playsHere).toList();
+      } catch (_) {
+        return const []; // (the repository couldn't be read)
+      }
+    }
+
+    var hits = await ask(only: ref.id);
+    // (a plugin's own title is only its own to find)
+    if (hits.isEmpty && asked.plugin == null) hits = await ask(except: ref.id);
+    // (each keeps the host's ref: what the room says is playing stays the same thing here)
+    return [for (final h in closestHits(ref, hits).take(most)) AddonPick(pluginStream(p.stream.addon, h, ref: ref), p.target)];
   }
 
   /// A Knaben result as a stream, written the way Torrentio writes its own (the release's name,

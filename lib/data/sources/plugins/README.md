@@ -9,8 +9,9 @@ sandbox and asks it for streams with your other addons. The app ships no plugins
 * The repository as an addon: `Addons.install`, `Addons.streams` in [`../addons.dart`](../addons.dart).
 * Title helpers every plugin can call: [`assets/plugins/helpers.js`](../../../../assets/plugins/helpers.js).
 * A working example: [`example/`](example).
-* Tests: `test/dpad/t4_journeys_plugins_test.dart` (a stand-in engine) and
-  `test/dpad/t4_journeys_plugins_engine_test.dart` (the real one, where its library is built).
+* Tests: `test/dpad/t4_journeys_plugins_test.dart` (a stand-in engine), `t4_journeys_plugin_catalogs_test.dart`
+  (plugins that list titles), `t4_journeys_party_plugins_test.dart` (watch parties) and
+  `test/dpad/t4_journeys_plugins_engine_test.dart` (the real engine, where its library is built).
 
 ## For users
 
@@ -106,6 +107,14 @@ Links play the way an addon's do: return direct stream URLs (not pages with a pl
 need not end in `.m3u8` then), and drop expired signed URLs. The Linux build's player has no DASH: a `dash` link
 isn't offered there.
 
+In a watch party the host's link is never shared: a plugin's links are often only good for whoever asked. The
+room gets which plugin found it and which of its links it was (its place in the list, `server`, `quality`,
+`label`, `audio`, `type`). Each guest runs that plugin on their own device, even when the repository isn't one
+of their addons (its list and that one script are fetched and kept in memory, never installed), and plays the
+link most like the host's: the same language first, then label, server and quality. When the plugin finds
+nothing there, the repository's other plugins are asked until one does. So keep the order and names of your
+links steady from one run to the next.
+
 ## Matching titles
 
 Do not write your own matching. `searchBest(query, search, get)` runs the site's search with each string from
@@ -153,6 +162,36 @@ matching page, picks the film's links or the season and episode, and resolves th
 dropped). They run on `assets/plugins/vega_runtime.js` (the real axios and cheerio, `URL` polyfills and the adapter),
 in the same sandbox and with the same limits as other plugins. Providers that need a browser challenge
 (`openWebView`) find nothing. Details, and how to rebuild the runtime: [tool/vega_runtime/README.md](../../../../tool/vega_runtime/README.md).
+
+## Plugins that list titles
+
+Some plugins also list titles to browse, the way a Stremio metadata addon does. VyseTV shows them like one
+([`plugin_catalogs.dart`](plugin_catalogs.dart)): their catalogs are rows on Home, catalogs on Discover and a search,
+their titles open on their own pages (details, seasons, episodes), and they play from the same plugin, asked for
+their own ids. Which plugins' catalogs show is picked per repository in Settings → Addons → *Catalogs to browse*: a
+scraper list's are on when it is added, a Vega provider's off (a repository of them can list hundreds). A title goes
+by `pl:<repository key>:<plugin id>:<its own id>`.
+
+* **Vega providers**: each provider's `dist/<value>/catalog.js` (`catalog`: `[{ title, filter }]`, `genres`) is read
+  when it is installed, on its own without the runtime. A catalog's page is `getPosts({ filter, page })`, a genre's the
+  genre's filter, a search `getSearchPosts`; a title's page is `getMeta` (a show's seasons from its `linkList`, each
+  season's episodes from `getEpisodes` or its `directLinks`). A title's own id is its page's link, an episode's
+  `<link>|<season>|<episode>`.
+* **Scraper lists**: an entry that names `catalogs` (`[{ id, name, type, extra }]`, `type` `movie`, or `tv` for shows;
+  `extra` may name `search` and `genre` with its `options`) lists titles with its script's `getCatalog(args)`. VyseTV
+  asks it both ways scripts are written: Stremio's (`{ type, id, extra: { search, skip, genre } }`, answered
+  `{ metas: [...] }`) and the paged one (`{ catalogId, type, pageToken }`, answered `{ items: [...], nextPageToken }`).
+  An entry whose `resources` name `meta` gives a title's details with `getMeta({ id, type })` (answered `{ meta }`, with
+  its `videos`); without it, a title's page comes from TMDB when TMDB knows it, else from its catalog. Its
+  `getStreams(id, mediaType, season, episode)` is then also asked with the title's own id (or its episode's) in place of
+  a TMDB id.
+* **Comics**: a Vega provider whose manifest entry's `type` is `comic` (or a scraper whose types say `manga` or
+  `comic`) lists comics, not videos ([`data/manga/plugin_comics.dart`](../../manga/plugin_comics.dart)). It is never
+  asked for a video's streams and its catalogs never reach Home: the Manga section has a shelf of each one's first list
+  (See all opens all its lists), and its search joins the Manga search. A series' details and chapters come from
+  `getMeta` (its `linkList`: `directLinks`, or `getEpisodes` for an `episodesLink`), a chapter's pages from `getPages`
+  (else `getStream`): `[{ link | imageUrl, index, headers }]`, read in the Manga reader with their headers. Comic
+  plugins are on until turned off in *Catalogs to browse* (marked *In Manga*).
 
 ## Try a plugin without the app
 

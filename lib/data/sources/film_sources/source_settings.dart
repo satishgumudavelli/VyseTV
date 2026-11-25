@@ -8,12 +8,12 @@ import 'film_sources.dart';
 List<String> _ids(String raw) => [for (final s in raw.split(',')) if (s.trim().isNotEmpty) s.trim()];
 
 /// Every source in your order. Ones the saved order doesn't know yet (added by an update) go
-/// to the end, in their default order.
+/// right after the source they follow in the default order (Cinejoy under Movy).
 List<FilmSource> orderedFilmSources() {
   final byId = {for (final s in filmSources) s.id: s};
   final out = <FilmSource>[for (final id in _ids(AppSettings.sourceOrder.value)) ?byId[id]];
-  for (final s in filmSources) {
-    if (!out.contains(s)) out.add(s);
+  for (final (i, s) in filmSources.indexed) {
+    if (!out.contains(s)) out.insert(i == 0 ? 0 : out.indexOf(filmSources[i - 1]) + 1, s);
   }
   return out;
 }

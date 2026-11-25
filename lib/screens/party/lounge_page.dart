@@ -209,7 +209,13 @@ class _LoungePageState extends State<LoungePage> {
         _soon?.cancel();
         _soon = Timer(const Duration(milliseconds: 400), _refreshDetail);
       case 'removed':
-        _toast(context, e.banned ? 'You were banned from this lounge.' : 'A moderator took your seat.', icon: Icons.block_rounded);
+        _toast(
+          context,
+          e.banned
+              ? 'You were banned from this lounge.'
+              : (e.quiet ? 'No message from you in 24 hours, so your seat went back.' : 'A moderator took your seat.'),
+          icon: e.quiet ? Icons.event_seat_rounded : Icons.block_rounded,
+        );
         _stopListening();
         setState(() => _lines.clear());
         unawaited(Lounges.refresh());
@@ -768,7 +774,7 @@ class _LoungePageState extends State<LoungePage> {
                 ],
                 const SizedBox(height: 14),
                 const Text(
-                  'Take a seat to read and post. Messages go after 24 hours. A seat you don\'t use for 3 days goes to someone else.',
+                  'Take a seat to read and post. Messages go after 24 hours, and so does your seat if you send nothing in that time.',
                   style: TextStyle(fontSize: 12.5, height: 1.4, color: VyseColors.textFaint),
                 ),
                 const SizedBox(height: 18),
@@ -811,7 +817,7 @@ class _LoungePageState extends State<LoungePage> {
           child: PartyChatList(
             lines: _lines,
             scroll: _scroll,
-            intro: '${about}Messages go after 24 hours. Only people with a seat can read them.',
+            intro: '${about}Messages go after 24 hours. Only people with a seat can read them, and a seat goes back after 24 hours without a message.',
             onMenu: _messageMenu,
             loadingOlder: _loadingOlder,
           ),

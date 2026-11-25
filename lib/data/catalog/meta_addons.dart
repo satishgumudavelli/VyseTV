@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../net.dart';
 import '../sources/addons.dart';
+import '../sources/plugins/plugin_catalogs.dart';
 import 'tmdb.dart';
 
 const _ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
@@ -346,7 +347,8 @@ abstract final class MetaAddons {
   static Future<List<Media>> page(Addon a, AddonCatalog c, {String? genre, String? search, int skip = 0}) {
     final url = catalogUrl(a, c, genre: genre, search: search, skip: skip);
     return _memo(url, () async {
-      final j = await _get(url);
+      // (a plugin repository's: its plugin asked, answering the same way)
+      final j = a.plugins ? await PluginCatalogs.page(a, c, genre: genre, search: search, skip: skip) : await _get(url);
       final metas = j is Map && j['metas'] is List ? j['metas'] as List : const [];
       final shape = [for (final x in metas) if (x is Map && x['posterShape'] is String) x['posterShape'] as String].firstOrNull;
       if (shape != null) _shapes['${a.manifestUrl}|${c.type}|${c.id}'] = shape == 'square' || shape == 'landscape' ? shape : 'poster';
@@ -414,7 +416,7 @@ abstract final class MetaAddons {
     var answered = false;
     for (final a in _metaSources(m)) {
       try {
-        final j = await _get('${a.base}/meta/${segment(type)}/${segment(m.addonId!)}.json');
+        final j = a.plugins ? await PluginCatalogs.meta(a, type, m.addonId!) : await _get('${a.base}/meta/${segment(type)}/${segment(m.addonId!)}.json');
         answered = true;
         final raw = j is Map ? j['meta'] : null;
         if (raw is Map && raw.isNotEmpty) return _parse(raw, m, a);
