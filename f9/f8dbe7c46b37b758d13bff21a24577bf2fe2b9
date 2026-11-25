@@ -1,0 +1,19 @@
+lib/data/net.dart
+  s_6b5edf213815c6::t_de5305db88a143 28-30,34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f9f8dbe7c46b37b758d13bff21a24577bf2fe2b9",
+  "prompts": {},
+  "sessions": {
+    "s_6b5edf213815c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa121762-b913-499d-b35f-d129928fc0a6",
+        "model": "unknown"
+      },
+      "human_author": "satish.gumudavelli <satish.gumudavelli@kitchen365.com>"
+    }
+  }
+}
